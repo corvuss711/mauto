@@ -1,466 +1,318 @@
-import { ArrowRight, BarChart2, Cpu, Smartphone, Users, Zap, Globe, TrendingUp, Sparkles, Play } from "lucide-react";
-import { Button } from "./button";
-import { useEffect, useState, Fragment } from "react";
 import { motion } from "framer-motion";
+import { Button } from "./button";
+import { ArrowRight, Play, Globe, CheckCircle } from "lucide-react";
 
 export function Hero() {
-  // Mobile-first optimization: Defer ALL visual effects on mobile
-  const [visualsOn, setVisualsOn] = useState(false);
-  const [currentStats, setCurrentStats] = useState({ clients: 200, years: 15, solutions: 50 });
-  const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    // Detect mobile
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-
-    // On mobile: delay visuals much longer, on desktop: faster
-    const visualDelay = isMobile ? 2000 : 100;
-    const timer = setTimeout(() => setVisualsOn(true), visualDelay);
-
-    // Skip animations entirely on mobile for faster LCP
-    if (!isMobile) {
-      const animateStats = () => {
-        const targetStats = { clients: 200, years: 15, solutions: 50 };
-        let frame = 0;
-        const animate = () => {
-          frame++;
-          if (frame <= 15) { // Further reduced frames for mobile
-            setCurrentStats({
-              clients: Math.floor((targetStats.clients * frame) / 15),
-              years: Math.floor((targetStats.years * frame) / 15),
-              solutions: Math.floor((targetStats.solutions * frame) / 15)
-            });
-            requestAnimationFrame(animate);
-          }
-        };
-        setTimeout(() => requestAnimationFrame(animate), 1000);
-      };
-      animateStats();
-    } else {
-      // On mobile: set stats immediately, no animation
-      setCurrentStats({ clients: 200, years: 15, solutions: 50 });
-    }
-
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener('resize', checkMobile);
-    };
-  }, [isMobile]);
-
   return (
-    <>
-      <style>{`
-        /* Make hero content-height on medium/tablet portraits (and phone desktop-site widths ~980px) */
-        @media (orientation: portrait) and (min-width: 768px) and (max-width: 1100px) {
-          section#home.hero-section {
-            min-height: auto !important;
-            height: auto !important;
-            padding-top: 2.5rem !important;  /* ~py-10 */
-            padding-bottom: 2.5rem !important;
-          }
-        }
-      `}</style>
-      <section
-        id="home"
-        className="hero-section relative overflow-hidden min-h-[80vh] sm:min-h-[85vh] md:min-h-[90vh] lg:min-h-[100vh] flex items-center bg-gradient-to-br from-slate-50 via-white to-orange-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800 py-12 sm:py-10 md:py-12 lg:py-20 xl:py-36"
+    <div className="relative min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/30 overflow-hidden">
+      {/* Navigation Header */}
+      <motion.header 
+        className="relative z-50 w-full px-6 py-4 lg:px-8 lg:py-6"
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6 }}
       >
-        {/* Dynamic Background Elements - Skip on mobile for LCP */}
-        {visualsOn && !isMobile && (
-          <div className="absolute inset-0 overflow-hidden">
-            <motion.div
-              className="absolute top-20 left-10 w-72 h-72 bg-gradient-to-br from-orange-400/20 to-yellow-400/10 rounded-full blur-3xl"
-              animate={{
-                scale: [1, 1.2, 1],
-                opacity: [0.3, 0.6, 0.3],
-                x: [0, 30, 0],
-                y: [0, -20, 0]
-              }}
-              transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
-            />
-            <motion.div
-              className="absolute top-40 right-20 w-96 h-96 bg-gradient-to-br from-purple-400/15 to-pink-400/10 rounded-full blur-3xl"
-              animate={{
-                scale: [1.2, 1, 1.2],
-                opacity: [0.2, 0.5, 0.2],
-                x: [0, -40, 0],
-                y: [0, 30, 0]
-              }}
-              transition={{ duration: 10, repeat: Infinity, ease: "easeInOut", delay: 2 }}
-            />
-            <motion.div
-              className="absolute bottom-20 left-1/4 w-64 h-64 bg-gradient-to-br from-blue-400/20 to-cyan-400/10 rounded-full blur-3xl"
-              animate={{
-                scale: [1, 1.3, 1],
-                opacity: [0.25, 0.45, 0.25],
-                rotate: [0, 180, 360]
-              }}
-              transition={{ duration: 12, repeat: Infinity, ease: "easeInOut", delay: 4 }}
-            />
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+          <motion.div 
+            className="flex items-center space-x-2"
+            whileHover={{ scale: 1.05 }}
+            transition={{ type: "spring", stiffness: 400, damping: 10 }}
+          >
+            <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center">
+              <Globe className="w-6 h-6 text-white" />
+            </div>
+            <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              Manacle
+            </span>
+          </motion.div>
+          
+          <nav className="hidden lg:flex items-center space-x-8">
+            {["Solutions", "Features", "Pricing", "About", "Contact"].map((item) => (
+              <motion.a
+                key={item}
+                href={`#${item.toLowerCase()}`}
+                className="text-slate-600 hover:text-blue-600 font-medium transition-colors duration-200"
+                whileHover={{ y: -2 }}
+                transition={{ type: "spring", stiffness: 400, damping: 10 }}
+              >
+                {item}
+              </motion.a>
+            ))}
+          </nav>
 
-            {/* Floating Icons */}
-            <motion.div
-              className="absolute bottom-1/3 right-16 p-2 bg-white/8 dark:bg-black/8 backdrop-blur-xl rounded-lg border border-white/15 hidden xl:block"
-              animate={{
-                y: [0, 6, 0],
-                rotate: [0, -2, 0]
-              }}
-              transition={{ duration: 9, repeat: Infinity, ease: "easeInOut", delay: 1 }}
-            >
-              <Globe className="w-5 h-5 text-blue-500" />
-            </motion.div>
-
-
+          <div className="flex items-center space-x-4">
+            <Button variant="ghost" className="hidden sm:flex">
+              Sign In
+            </Button>
+            <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white">
+              Get Started
+            </Button>
           </div>
-        )}
-
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 lp:pl-16 relative z-10">
-          <div className="grid md:grid-cols-2 lg:grid-cols-2 gap-4 sm:gap-6 md:gap-8 lg:gap-12 xl:gap-16 items-center py-4 sm:py-6 md:py-8 lg:py-4">
-
-            {/* Left Content */}
-            <motion.div
-              className="text-center md:text-left lg:text-left space-y-2 md:space-y-3 lg:space-y-4 order-1 md:order-1 lg:order-1 md:pr-4 lg:pr-8 xl:pr-12"
-              initial={{ opacity: 0, x: -50 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 1, ease: "easeOut" }}
-            >
-              {/* Badge */}
-              <motion.div
-                className="inline-flex items-center gap-2 px-4 md:px-4 py-2 md:py-1.5 bg-gradient-to-r from-orange-500/10 to-yellow-500/10 border border-orange-500/20 rounded-full text-orange-600 dark:text-orange-400 font-medium backdrop-blur-sm text-sm md:text-sm mb-4 md:mb-3 mt-4 md:mt-0"
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.2, duration: 0.8 }}
-              >
-                <Sparkles className="w-4 h-4 md:w-4 md:h-4" />
-                Trusted by 27+ Leading Companies
-              </motion.div>
-
-              {/* Main Heading */}
-              <motion.h1
-                className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-black leading-[1.1] sm:leading-[1.1] md:leading-[1.1] lg:leading-[1.1] xl:leading-[1.1] text-center md:text-left lg:text-left tracking-tight mt-2 sm:mt-3 md:mt-4"
-                initial={!isMobile ? { opacity: 0, y: 20 } : { opacity: 1, y: 0 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={!isMobile ? { delay: 0.2, duration: 0.8 } : { duration: 0 }}
-              >
-                <span className="bg-gradient-to-r from-orange-500 via-yellow-400 to-orange-500 bg-clip-text text-transparent bg-size-200 animate-gradient-x">
-                  Transform
-                </span>
-                <br />
-                <span className="text-foreground">Your Business</span>
-                <br />
-                <span className="text-foreground/80 text-xl sm:text-2xl md:text-3xl lg:text-4xl xl:text-5xl">
-                  with Technology
-                </span>
-              </motion.h1>
-
-              {/* Subtitle */}
-              <motion.p
-                className="text-base sm:text-lg md:text-lg lg:text-xl text-foreground/70 max-w-2xl leading-[1.4] md:leading-[1.5] text-center md:text-left lg:text-left px-2 md:px-0 mt-2 sm:mt-3 md:mt-4"
-                initial={!isMobile ? { opacity: 0, y: 20 } : { opacity: 1, y: 0 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={!isMobile ? { delay: 0.4, duration: 0.8 } : { duration: 0 }}
-              >
-                Empowering businesses across all industries with cutting-edge
-                <span className="text-orange-500 font-semibold"> SFA, ERP, CRM, HRMS</span> and
-                <span className="text-purple-500 font-semibold"> AI-driven solutions</span>.
-                Scale your operations, boost efficiency, and drive growth.
-              </motion.p>
-
-              {/* Stats */}
-              <motion.div
-                className="flex flex-row sm:flex-row gap-3 sm:gap-4 lg:gap-6 py-1 sm:py-2 md:py-3 justify-center md:justify-start lg:justify-start md:ml-2 lg:ml-4 mt-2 sm:mt-3 md:mt-4"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.8, duration: 0.8 }}
-              >
-                <div className="text-center md:text-left lg:text-left flex-1 sm:flex-none">
-                  <div className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-orange-500">{currentStats.clients}+</div>
-                  <div className="text-xs sm:text-sm text-foreground/60">Happy Customers</div>
-                </div>
-                <div className="text-center md:text-left lg:text-left flex-1 sm:flex-none">
-                  <div className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-purple-500">{currentStats.years}+</div>
-                  <div className="text-xs sm:text-sm text-foreground/60">Years Experience</div>
-                </div>
-                <div className="text-center md:text-left lg:text-left flex-1 sm:flex-none">
-                  <div className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-blue-500">{currentStats.solutions}+</div>
-                  <div className="text-xs sm:text-sm text-foreground/60">Solutions</div>
-                </div>
-              </motion.div>
-
-              {/* CTA Buttons */}
-              <motion.div
-                className="flex flex-col sm:flex-row gap-3 md:gap-4 pt-1 sm:pt-2 md:pt-4 justify-center md:justify-start lg:justify-start items-center md:ml-2 lg:ml-4"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 1, duration: 0.8 }}
-              >
-
-
-                {/* <div className="group relative">
-                <div className="absolute inset-0 bg-gradient-to-r from-orange-500 to-yellow-500 rounded-xl blur-sm group-hover:blur-md transition-all duration-300 opacity-60 group-hover:opacity-90"></div>
-                <a href="/auto-site">
-                  <button className="relative px-4 sm:px-5 md:px-4 lg:px-8 py-2.5 sm:py-3 md:py-2.5 lg:py-4 bg-gradient-to-r from-orange-500 to-yellow-500 hover:from-yellow-500 hover:to-orange-500 text-white font-semibold text-sm sm:text-base md:text-sm lg:text-lg rounded-lg md:rounded-lg lg:rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-[1.02] group-hover:-translate-y-0.5 active:scale-[0.98] flex items-center justify-center gap-2 md:gap-2 lg:gap-3 w-auto whitespace-nowrap">
-                    Build your free website
-                    <ArrowRight className="w-4 h-4 md:w-4 md:h-4 lg:w-5 lg:h-5 group-hover:translate-x-1 transition-transform duration-300" />
-                  </button>
-                </a>
-              </div> */}
-
-                <div className="group relative">
-                  <div className="absolute inset-0 bg-gradient-to-r from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-600 rounded-xl blur-sm group-hover:blur-md transition-all duration-300 opacity-60 group-hover:opacity-90"></div>
-                  <a href="/contact-us">
-                    <button className="relative px-4 sm:px-5 md:px-4 lg:px-8 py-2.5 sm:py-3 md:py-2.5 lg:py-4 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-800 dark:text-white font-semibold text-sm sm:text-base md:text-sm lg:text-lg rounded-lg md:rounded-lg lg:rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-[1.02] group-hover:-translate-y-0.5 active:scale-[0.98] border border-slate-200 dark:border-slate-600 flex items-center justify-center gap-2 md:gap-2 lg:gap-3 w-auto whitespace-nowrap">
-                      <Users className="w-4 h-4 md:w-4 md:h-4 lg:w-5 lg:h-5" />
-                      Talk to Expert
-                    </button>
-                  </a>
-                </div>
-              </motion.div>
-            </motion.div>
-
-            {/* Right Visual */}
-            <motion.div
-              className="flex justify-center md:justify-end lg:justify-end order-2 md:order-2 lg:order-2 mt-4 sm:mt-6 md:mt-0"
-              initial={{ opacity: 0, x: 50 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.3, duration: 1 }}
-            >
-              <div className="relative w-full max-w-sm md:max-w-xs lg:max-w-lg">
-                {/* Main Device */}
-                <motion.div
-                  className="relative w-52 h-[320px] sm:w-60 sm:h-[380px] md:w-64 md:h-[400px] lg:w-80 lg:h-[600px] mx-auto bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900 rounded-[1.5rem] sm:rounded-[2rem] md:rounded-[2.5rem] lg:rounded-[3rem] shadow-2xl border-3 sm:border-4 md:border-4 lg:border-8 border-slate-300 dark:border-slate-700 overflow-hidden"
-                  animate={{
-                    y: [0, -15, 0],
-                    rotateY: [0, 3, 0, -3, 0],
-                    x: [0, 5, 0, -5, 0]
-                  }}
-                  transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
-                >
-                  {/* Screen Content */}
-                  <div className="absolute inset-1.5 md:inset-2 lg:inset-4 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-black rounded-[1.5rem] md:rounded-[1.8rem] lg:rounded-[2rem] overflow-hidden">
-                    {/* Status Bar */}
-                    <div className="flex justify-between items-center p-2.5 md:p-3 lg:p-4 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
-                      <div className="flex items-center gap-2">
-                        <div className="w-5 h-5 md:w-6 md:h-6 bg-orange-500 rounded-lg flex items-center justify-center">
-                          <span className="text-white text-xs font-bold">M</span>
-                        </div>
-                        <div>
-                          <div className="text-xs md:text-sm font-semibold text-slate-800 dark:text-slate-200">Manacle Technologies Pvt Ltd</div>
-                        </div>
-                      </div>
-                      <div className="w-4 h-4 md:w-5 md:h-5 text-slate-600 dark:text-slate-400">
-                        <svg fill="currentColor" viewBox="0 0 20 20">
-                          <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
-                          <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
-                        </svg>
-                      </div>
-                    </div>
-
-                    {/* Tab Navigation */}
-                    <div className="flex bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
-                      <div className="flex-1 py-2 md:py-3 text-center">
-                        <div className="text-xs md:text-sm font-semibold text-orange-500 border-b-2 border-orange-500 pb-1">Performance</div>
-                      </div>
-                      <div className="flex-1 py-2 md:py-3 text-center">
-                        <div className="text-xs md:text-sm text-slate-500 dark:text-slate-400">Product View</div>
-                      </div>
-                      <div className="flex-1 py-2 md:py-3 text-center">
-                        <div className="text-xs md:text-sm text-slate-500 dark:text-slate-400">Analysis</div>
-                      </div>
-                    </div>
-
-                    {/* Main Content */}
-                    <div className="p-1.5 sm:p-2 md:p-3 lg:p-5 space-y-1.5 sm:space-y-2 md:space-y-3 lg:space-y-4 bg-slate-50 dark:bg-slate-900">
-                      {/* Employee Card */}
-                      <motion.div
-                        className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg p-2 sm:p-3 md:p-4 text-white relative overflow-hidden"
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 1.2, duration: 0.8 }}
-                      >
-                        <div className="flex items-center gap-2 sm:gap-3">
-                          <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-white rounded-full flex items-center justify-center">
-                            <svg className="w-4 h-4 sm:w-6 sm:h-6 md:w-7 md:h-7 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-                            </svg>
-                          </div>
-                          <div className="flex-1">
-                            <div className="text-xs sm:text-sm md:text-base font-semibold text-blue-200">Shashank Satyam</div>
-                            <div className="text-[10px] sm:text-xs text-blue-100">Technical Support Engineer</div>
-                          </div>
-                          <div className="text-[10px] sm:text-xs text-blue-100">1:23:21</div>
-                        </div>
-                      </motion.div>
-
-                      {/* MTP Alert */}
-                      <motion.div
-                        className="bg-white dark:bg-slate-800 rounded-lg p-2 md:p-3 border border-slate-200 dark:border-slate-700"
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 1.4, duration: 0.8 }}
-                      >
-                        <div className="text-xs md:text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">No MTP Filled!!</div>
-                        <div className="flex justify-between text-xs text-blue-400">
-                          <span>riding two-wheeler</span>
-                          <span>Please wear a ma...</span>
-                        </div>
-                      </motion.div>
-
-                      {/* Chart Section */}
-                      <motion.div
-                        className="bg-white dark:bg-slate-800 rounded-lg p-2 md:p-3 border border-slate-200 dark:border-slate-700"
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 1.6, duration: 0.8 }}
-                      >
-                        {/* Chart Grid */}
-                        <div className="space-y-1 md:space-y-2">
-                          {/* Y-axis labels and grid lines */}
-                          {[1.2, 0.8, 0.4, 0.0, -0.4, -0.8, -1.2].map((value, i) => (
-                            <div key={i} className="flex items-center">
-                              <div className="w-6 text-xs text-slate-500 text-right">{value}</div>
-                              <div className="flex-1 ml-2 border-b border-slate-200 dark:border-slate-600 h-4 md:h-5"></div>
-                              <div className="w-6 text-xs text-slate-500 text-left">{value}</div>
-                            </div>
-                          ))}
-
-                          {/* X-axis dates */}
-                          <div className="flex justify-between mt-2 px-6">
-                            {['2025-05-01', '2025-05-02', '2025-05-03', '2025-05-04', '2025-05-05'].map((date, i) => (
-                              <div key={i} className="text-xs text-slate-500 transform -rotate-45 origin-left">{date}</div>
-                            ))}
-                          </div>
-
-                          {/* Legend */}
-                          <div className="flex gap-4 mt-2 px-2">
-                            <div className="flex items-center gap-1">
-                              <div className="w-3 h-2 bg-red-500"></div>
-                              <span className="text-xs text-slate-600 dark:text-slate-400">Target</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <div className="w-3 h-2 bg-blue-600"></div>
-                              <span className="text-xs text-slate-600 dark:text-slate-400">Achievements</span>
-                            </div>
-                          </div>
-                        </div>
-                      </motion.div>
-
-                      {/* Sales Metrics */}
-                      <motion.div
-                        className="grid grid-cols-3 gap-2 md:gap-3"
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 1.8, duration: 0.8 }}
-                      >
-                        <div className="bg-white dark:bg-slate-800 rounded-lg p-2 md:p-3 border border-slate-200 dark:border-slate-700 text-center relative">
-                          <div className="w-8 h-8 md:w-10 md:h-10 mx-auto mb-1 bg-blue-100 rounded-lg flex items-center justify-center relative">
-                            <svg className="w-4 h-4 md:w-5 md:h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                              <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" />
-                            </svg>
-                            <div className="absolute -top-1 -right-1 w-4 h-4 bg-orange-500 rounded-full flex items-center justify-center">
-                              <span className="text-xs text-white font-bold">0</span>
-                            </div>
-                          </div>
-                          <div className="text-sm md:text-base font-bold text-orange-500">0.0</div>
-                          <div className="text-xs text-slate-600 dark:text-slate-400">Pri. Sale</div>
-                        </div>
-
-                        <div className="bg-white dark:bg-slate-800 rounded-lg p-2 md:p-3 border border-slate-200 dark:border-slate-700 text-center relative">
-                          <div className="w-8 h-8 md:w-10 md:h-10 mx-auto mb-1 bg-blue-100 rounded-lg flex items-center justify-center relative">
-                            <svg className="w-4 h-4 md:w-5 md:h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                              <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z" />
-                            </svg>
-                            <div className="absolute -top-1 -right-1 w-4 h-4 bg-orange-500 rounded-full flex items-center justify-center">
-                              <span className="text-xs text-white font-bold">0</span>
-                            </div>
-                          </div>
-                          <div className="text-sm md:text-base font-bold text-orange-500">0.0</div>
-                          <div className="text-xs text-slate-600 dark:text-slate-400">Sec. Sale</div>
-                        </div>
-
-                        <div className="bg-white dark:bg-slate-800 rounded-lg p-2 md:p-3 border border-slate-200 dark:border-slate-700 text-center relative">
-                          <div className="w-8 h-8 md:w-10 md:h-10 mx-auto mb-1 bg-blue-100 rounded-lg flex items-center justify-center relative">
-                            <svg className="w-4 h-4 md:w-5 md:h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                              <path d="M10.394 2.08a1 1 0 00-.788 0l-7 3a1 1 0 000 1.84L5.25 8.051a.999.999 0 01.356-.257l4-1.714a1 1 0 11.788 1.838L7.667 9.088l1.94.831a1 1 0 00.787 0l7-3a1 1 0 000-1.838l-7-3zM3.31 9.397L5 10.12v4.102a8.969 8.969 0 00-1.05-.174 1 1 0 01-.89-.89 11.115 11.115 0 01.25-3.762zM9.3 16.573A9.026 9.026 0 007 14.935v-3.957l1.818.78a3 3 0 002.364 0l5.508-2.361a11.026 11.026 0 01.25 3.762 1 1 0 01-.89.89 8.968 8.968 0 00-5.75 2.524z" />
-                            </svg>
-                            <div className="absolute -top-1 -right-1 w-4 h-4 bg-orange-500 rounded-full flex items-center justify-center">
-                              <span className="text-xs text-white font-bold">0</span>
-                            </div>
-                          </div>
-                          <div className="text-sm md:text-base font-bold text-orange-500">0</div>
-                          <div className="text-xs text-slate-600 dark:text-slate-400">New Outlet</div>
-                        </div>
-                      </motion.div>
-
-                      {/* Recent Module Access */}
-                      <motion.div
-                        className="bg-white dark:bg-slate-800 rounded-lg p-2 md:p-3 border border-slate-200 dark:border-slate-700"
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 2.0, duration: 0.8 }}
-                      >
-                        <div className="text-xs md:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Recent Module Access</div>
-                        <div className="flex gap-2 md:gap-3">
-                          <div className="flex-1 bg-purple-50 dark:bg-purple-900/20 rounded-lg p-2 flex items-center gap-2">
-                            <div className="w-8 h-8 bg-purple-500 rounded-lg flex items-center justify-center">
-                              <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-                              </svg>
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-xs font-medium text-purple-700 dark:text-purple-300 truncate">Employee</div>
-                              <div className="text-xs text-purple-600 dark:text-purple-400">2 min ago</div>
-                            </div>
-                          </div>
-
-                          <div className="flex-1 bg-blue-50 dark:bg-blue-900/20 rounded-lg p-2 flex items-center gap-2">
-                            <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center">
-                              <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                              </svg>
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-xs font-medium text-blue-700 dark:text-blue-300 truncate">Reports</div>
-                              <div className="text-xs text-blue-600 dark:text-blue-400">5 min ago</div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Quick Actions */}
-                        <div className="mt-2 md:mt-3 flex gap-2">
-                          <button className="flex-1 bg-gradient-to-r from-orange-500 to-yellow-500 text-white text-xs py-1.5 rounded-md font-medium">
-                            Check In
-                          </button>
-                          <button className="flex-1 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs py-1.5 rounded-md font-medium">
-                            View Tasks
-                          </button>
-                        </div>
-                      </motion.div>
-                    </div>
-                  </div>
-                </motion.div>
-
-                {/* Additional Floating Icons */}
-                <motion.div
-                  className="absolute top-10 md:top-12 lg:top-16 -left-6 md:-left-8 lg:-left-12 w-12 h-12 md:w-16 md:h-16 lg:w-20 lg:h-20 bg-white/8 dark:bg-black/8 backdrop-blur-xl rounded-lg md:rounded-xl lg:rounded-2xl border border-white/15 items-center justify-center hidden md:flex"
-                  animate={{
-                    y: [0, -15, 0],
-                    rotate: [0, 5, 0]
-                  }}
-                  transition={{ duration: 10, repeat: Infinity, ease: "easeInOut", delay: 1 }}
-                >
-                  <Smartphone className="w-6 h-6 md:w-8 md:h-8 lg:w-10 lg:h-10 text-blue-500" />
-                </motion.div>
-
-
-              </div>
-            </motion.div>
-          </div>
-
-
         </div>
-      </section>
-    </>
+      </motion.header>
+
+      {/* Main Hero Content */}
+      <motion.main 
+        className="relative z-10 flex flex-col items-center justify-center min-h-[calc(100vh-120px)] px-6 py-20 lg:px-8 lg:py-32"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.6 }}
+      >
+        {/* Background Decorative Elements */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <motion.div
+            className="absolute top-20 left-10 w-72 h-72 bg-gradient-to-br from-blue-400/20 to-purple-400/20 rounded-full blur-3xl"
+            animate={{
+              scale: [1, 1.2, 1],
+              opacity: [0.2, 0.4, 0.2],
+              x: [0, 30, 0],
+              y: [0, -20, 0]
+            }}
+            transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+          />
+          <motion.div
+            className="absolute top-40 right-20 w-96 h-96 bg-gradient-to-br from-purple-400/15 to-pink-400/15 rounded-full blur-3xl"
+            animate={{
+              scale: [1.2, 1, 1.2],
+              opacity: [0.15, 0.3, 0.15],
+              x: [0, -40, 0],
+              y: [0, 30, 0]
+            }}
+            transition={{ duration: 10, repeat: Infinity, ease: "easeInOut", delay: 2 }}
+          />
+          <motion.div
+            className="absolute bottom-20 left-1/4 w-64 h-64 bg-gradient-to-br from-cyan-400/20 to-blue-400/20 rounded-full blur-3xl"
+            animate={{
+              scale: [1, 1.3, 1],
+              opacity: [0.2, 0.35, 0.2],
+              rotate: [0, 180, 360]
+            }}
+            transition={{ duration: 12, repeat: Infinity, ease: "easeInOut", delay: 4 }}
+          />
+        </div>
+        {/* Hero Headline */}
+        <motion.h1 
+          className="text-4xl sm:text-5xl lg:text-7xl font-bold text-center text-slate-900 max-w-6xl leading-tight"
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, delay: 0.2 }}
+        >
+          Empowering Businesses with{" "}
+          <span className="bg-gradient-to-r from-blue-600 via-purple-600 to-cyan-600 bg-clip-text text-transparent">
+            Smarter Software Solutions
+          </span>
+        </motion.h1>
+
+        {/* Subheadline */}
+        <motion.p 
+          className="mt-6 text-xl sm:text-2xl text-slate-600 text-center max-w-4xl leading-relaxed"
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, delay: 0.4 }}
+        >
+          Your one-stop solution for CRM, ERP, HRMS, SFA, and more. 
+          <span className="font-semibold text-slate-700"> Transform your business operations</span> with our comprehensive suite of enterprise software.
+        </motion.p>
+
+        {/* CTA Buttons */}
+        <motion.div 
+          className="mt-10 flex flex-col sm:flex-row items-center gap-4"
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, delay: 0.6 }}
+        >
+          <motion.div
+            whileHover={{ scale: 1.05, y: -2 }}
+            whileTap={{ scale: 0.95 }}
+            transition={{ type: "spring", stiffness: 400, damping: 10 }}
+          >
+            <Button size="lg" className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-8 py-4 text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300">
+              <Play className="w-5 h-5 mr-2" />
+              Start Free Trial
+            </Button>
+          </motion.div>
+          
+          <motion.div
+            whileHover={{ scale: 1.05, y: -2 }}
+            whileTap={{ scale: 0.95 }}
+            transition={{ type: "spring", stiffness: 400, damping: 10 }}
+          >
+            <Button variant="outline" size="lg" className="border-2 border-slate-300 hover:border-blue-500 text-slate-700 hover:text-blue-600 px-8 py-4 text-lg font-semibold transition-all duration-300">
+              Explore Solutions
+              <ArrowRight className="w-5 h-5 ml-2" />
+            </Button>
+          </motion.div>
+        </motion.div>
+
+        {/* Trust Indicators */}
+        <motion.div 
+          className="mt-12 flex flex-wrap items-center justify-center gap-8 text-slate-500"
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, delay: 0.8 }}
+        >
+          <div className="flex items-center space-x-2">
+            <CheckCircle className="w-5 h-5 text-green-500" />
+            <span className="font-medium">Trusted by 10,000+ companies</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <CheckCircle className="w-5 h-5 text-green-500" />
+            <span className="font-medium">99.9% uptime guarantee</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <CheckCircle className="w-5 h-5 text-green-500" />
+            <span className="font-medium">24/7 expert support</span>
+          </div>
+        </motion.div>
+      </motion.main>
+
+      {/* Hero Visual / Illustration */}
+      <motion.section 
+        className="relative z-10 px-6 lg:px-8 pb-20"
+        initial={{ opacity: 0, y: 50 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.8, delay: 0.4 }}
+      >
+        <div className="max-w-7xl mx-auto">
+          <div className="relative bg-gradient-to-br from-white/80 to-blue-50/80 backdrop-blur-sm rounded-3xl p-8 lg:p-12 shadow-2xl border border-white/20">
+            {/* Dashboard Mockup */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+              <div className="bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl p-6 text-white">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xl font-semibold">Revenue Growth</h3>
+                  <div className="w-6 h-6 bg-white/20 rounded-full flex items-center justify-center">
+                    <div className="w-3 h-3 bg-white rounded-full"></div>
+                  </div>
+                </div>
+                <div className="text-3xl font-bold">+24.5%</div>
+                <div className="text-blue-100 text-sm">vs last month</div>
+              </div>
+              
+              <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-6 text-white">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xl font-semibold">Active Users</h3>
+                  <div className="w-6 h-6 bg-white/20 rounded-full flex items-center justify-center">
+                    <div className="w-3 h-3 bg-white rounded-full"></div>
+                  </div>
+                </div>
+                <div className="text-3xl font-bold">2,847</div>
+                <div className="text-emerald-100 text-sm">+12% this week</div>
+              </div>
+              
+              <div className="bg-gradient-to-br from-orange-500 to-red-600 rounded-2xl p-6 text-white">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xl font-semibold">Conversion Rate</h3>
+                  <div className="w-6 h-6 bg-white/20 rounded-full flex items-center justify-center">
+                    <div className="w-3 h-3 bg-white rounded-full"></div>
+                  </div>
+                </div>
+                <div className="text-3xl font-bold">8.9%</div>
+                <div className="text-orange-100 text-sm">+2.1% improvement</div>
+              </div>
+            </div>
+
+            {/* Chart Visualization */}
+            <div className="bg-white rounded-2xl p-6 shadow-lg">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-semibold text-slate-800">Business Performance Overview</h3>
+                <div className="flex space-x-2">
+                  <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                  <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
+                  <div className="w-3 h-3 bg-cyan-500 rounded-full"></div>
+                </div>
+              </div>
+              
+              {/* Simplified Chart Bars */}
+              <div className="flex items-end justify-between h-32 space-x-2">
+                {[60, 80, 45, 90, 75, 85, 70].map((height, index) => (
+                  <motion.div
+                    key={index}
+                    className="bg-gradient-to-t from-blue-500 to-purple-500 rounded-t-lg flex-1"
+                    initial={{ height: 0 }}
+                    animate={{ height: `${height}%` }}
+                    transition={{ duration: 1, delay: 0.5 + index * 0.1 }}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </motion.section>
+
+      {/* Interactive Service Tiles */}
+      <motion.section 
+        className="relative z-10 px-6 lg:px-8 pb-32"
+        initial={{ opacity: 0, y: 50 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.8, delay: 0.6 }}
+      >
+        <div className="max-w-7xl mx-auto">
+          <motion.h2 
+            className="text-3xl lg:text-4xl font-bold text-center text-slate-900 mb-16"
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.8 }}
+          >
+            Our Complete Solution Suite
+          </motion.h2>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[
+              { title: "CRM", description: "Customer Relationship Management", color: "from-blue-500 to-cyan-500" },
+              { title: "ERP", description: "Enterprise Resource Planning", color: "from-purple-500 to-pink-500" },
+              { title: "HRMS", description: "Human Resource Management", color: "from-emerald-500 to-teal-500" },
+              { title: "SFA", description: "Sales Force Automation", color: "from-orange-500 to-red-500" },
+              { title: "Analytics", description: "Business Intelligence", color: "from-indigo-500 to-blue-500" },
+              { title: "Security", description: "Enterprise-grade Protection", color: "from-green-500 to-emerald-500" }
+            ].map((service, index) => (
+              <motion.div
+                key={service.title}
+                className="group relative bg-white rounded-2xl p-8 shadow-lg hover:shadow-2xl transition-all duration-500 cursor-pointer border border-slate-100 hover:border-transparent overflow-hidden"
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.9 + index * 0.1 }}
+                whileHover={{ 
+                  y: -8,
+                  scale: 1.02
+                }}
+              >
+                {/* Gradient Overlay on Hover */}
+                <div className={`absolute inset-0 bg-gradient-to-br ${service.color} opacity-0 group-hover:opacity-10 transition-opacity duration-500`} />
+                
+                {/* Service Icon */}
+                <div className={`relative z-10 w-16 h-16 bg-gradient-to-br ${service.color} rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300`}>
+                  <div className="w-8 h-8 bg-white rounded-lg"></div>
+                </div>
+                
+                {/* Service Content */}
+                <div className="relative z-10">
+                  <h3 className="text-xl font-bold text-slate-900 mb-3 group-hover:text-slate-800 transition-colors duration-300">
+                    {service.title}
+                  </h3>
+                  <p className="text-slate-600 leading-relaxed group-hover:text-slate-700 transition-colors duration-300">
+                    {service.description}
+                  </p>
+                  
+                  {/* Hover Description Reveal */}
+                  <div className="mt-4 text-sm text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                    Streamline operations, boost productivity, and drive growth with our enterprise-grade {service.title.toLowerCase()} solution.
+                  </div>
+                </div>
+                
+                {/* Arrow Indicator */}
+                <motion.div
+                  className="absolute bottom-6 right-6 text-slate-400 group-hover:text-blue-600 transition-colors duration-300"
+                  initial={{ x: 0 }}
+                  whileHover={{ x: 5 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 10 }}
+                >
+                  <ArrowRight className="w-5 h-5" />
+                </motion.div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </motion.section>
+    </div>
   );
 }

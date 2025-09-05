@@ -6,45 +6,50 @@ import { useRef } from "react";
 import { CompactSolutions } from "./compact-solutions";
 import { useNavigate } from "react-router-dom";
 
-// Load Fredoka font (modern Gen Z style)
+// Load Fredoka font (modern Gen Z style) - Optimized for performance
 if (typeof document !== 'undefined') {
   const link = document.createElement('link');
-  link.href = 'https://fonts.googleapis.com/css2?family=Fredoka:wght@300;400;500;600;700&display=swap';
-  link.rel = 'stylesheet';
+  link.href = 'https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500&display=swap';
+  link.rel = 'preload';
+  link.as = 'style';
+  link.onload = function () { this.rel = 'stylesheet'; };
   document.head.appendChild(link);
 }
 
 export function Hero() {
-  const { theme } = useTheme();
   const navigate = useNavigate();
   const ref = useRef(null);
-  // Prefer a lighter animation path on small portrait phones for smoothness
-  const isMobilePortrait = typeof window !== 'undefined'
-    ? window.matchMedia('(max-width: 480px) and (orientation: portrait)').matches
-    : false;
-  // On small-and-up (tablets/medium/large), slightly slow background animations for a smoother feel
-  const desktopSlowFactor = typeof window !== 'undefined' && window.matchMedia('(min-width: 640px)').matches ? 1.25 : 1;
-  const { scrollYProgress } = useScroll({
-    target: ref,
-    offset: ["start end", "end start"]
-  });
 
-  const y = useTransform(scrollYProgress, [0, 1], [100, -100]);
-  const opacity = useTransform(scrollYProgress, [0, 0.2, 0.8, 1], [0, 1, 1, 0]);
+  // Optimize for mobile performance
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
+
+  // Reduce scroll calculations on mobile
+  const scrollConfig = isMobile
+    ? { target: ref, offset: ["start end", "end start"], throttle: 16 }
+    : { target: ref, offset: ["start end", "end start"] };
+
+  const { scrollYProgress } = useScroll(scrollConfig);
+
+  // Disable expensive transforms on mobile
+  const y = isMobile ? null : useTransform(scrollYProgress, [0, 1], [100, -100]);
+  const opacity = isMobile ? null : useTransform(scrollYProgress, [0, 0.2, 0.8, 1], [0, 1, 1, 0]);
 
   return (
-    <div ref={ref} className={`relative min-h-[600px] md:min-h-[700px] lg:min-h-screen bg-gradient-to-br from-orange-50/80 via-yellow-50/60 to-blue-50/70 dark:from-slate-900 dark:via-slate-800 dark:to-indigo-900/40 overflow-hidden`}>
-      {/* Enhanced Light Theme Background Layers */}
-      <div className="absolute inset-0 bg-gradient-to-tr from-orange-100/40 via-transparent to-blue-100/30 dark:opacity-0" />
-      <div className="absolute inset-0 bg-gradient-to-bl from-yellow-100/30 via-transparent to-indigo-100/40 dark:opacity-0" />
-      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-orange-50/50 to-transparent dark:opacity-0" />
+    <div ref={ref} className={`relative min-h-[600px] md:min-h-[700px] lg:min-h-screen bg-gradient-to-br from-orange-50/80 via-yellow-50/60 to-blue-50/70 dark:from-slate-900 dark:via-slate-800 dark:to-indigo-900/40 overflow-hidden will-change-transform`} style={{ contain: 'layout style paint' }}>
+      {/* Enhanced Light Theme Background Layers - Optimized for mobile */}
+      <div className="absolute inset-0 bg-gradient-to-tr from-orange-100/40 via-transparent to-blue-100/30 dark:opacity-0 hidden sm:block" />
+      <div className="absolute inset-0 bg-gradient-to-bl from-yellow-100/30 via-transparent to-indigo-100/40 dark:opacity-0 hidden sm:block" />
+      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-orange-50/50 to-transparent dark:opacity-0 hidden sm:block" />
 
-      {/* Radial gradients for depth */}
-      <div className="absolute top-0 left-0 w-full h-full bg-gradient-radial from-orange-200/20 via-transparent to-transparent dark:opacity-0" style={{ background: 'radial-gradient(circle at 20% 30%, rgba(251, 146, 60, 0.15) 0%, transparent 50%)' }} />
-      <div className="absolute top-0 right-0 w-full h-full bg-gradient-radial from-blue-200/20 via-transparent to-transparent dark:opacity-0" style={{ background: 'radial-gradient(circle at 80% 20%, rgba(147, 197, 253, 0.15) 0%, transparent 50%)' }} />
-      <div className="absolute bottom-0 left-1/2 w-full h-full bg-gradient-radial from-yellow-200/15 via-transparent to-transparent dark:opacity-0" style={{ background: 'radial-gradient(circle at 50% 80%, rgba(254, 240, 138, 0.12) 0%, transparent 50%)' }} />
-      {/* Professional Space-Type Orbital Background */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      {/* Simplified mobile background */}
+      <div className="absolute inset-0 bg-gradient-to-br from-orange-100/30 to-blue-100/20 dark:opacity-0 sm:hidden" style={{ willChange: 'auto' }} />
+
+      {/* Radial gradients for depth - Hidden on mobile */}
+      <div className="absolute top-0 left-0 w-full h-full bg-gradient-radial from-orange-200/20 via-transparent to-transparent dark:opacity-0 hidden sm:block" style={{ background: 'radial-gradient(circle at 20% 30%, rgba(251, 146, 60, 0.15) 0%, transparent 50%)' }} />
+      <div className="absolute top-0 right-0 w-full h-full bg-gradient-radial from-blue-200/20 via-transparent to-transparent dark:opacity-0 hidden sm:block" style={{ background: 'radial-gradient(circle at 80% 20%, rgba(147, 197, 253, 0.15) 0%, transparent 50%)' }} />
+      <div className="absolute bottom-0 left-1/2 w-full h-full bg-gradient-radial from-yellow-200/15 via-transparent to-transparent dark:opacity-0 hidden sm:block" style={{ background: 'radial-gradient(circle at 50% 80%, rgba(254, 240, 138, 0.12) 0%, transparent 50%)' }} />
+      {/* Professional Space-Type Orbital Background - Disabled on mobile for performance */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none hidden sm:block">
         {/* Central Data Core - Hidden on mobile */}
         <motion.div
           className="absolute left-1/2 transform -translate-x-1/2 w-32 h-32 hidden sm:block"
@@ -57,15 +62,25 @@ export function Hero() {
           <div className="absolute inset-8 bg-gradient-to-br from-white/20 to-orange-200/20 dark:from-white/10 dark:to-orange-200/10 rounded-full" />
         </motion.div>
 
-        {/* Simplified mobile core */}
-        <motion.div
+        {/* Simplified mobile core - CSS animation for better performance */}
+        <div
           className="absolute left-1/2 transform -translate-x-1/2 w-16 h-16 sm:hidden"
-          style={{ top: 'calc(50% + 40px)' }}
-          animate={{ rotate: [0, 360] }}
-          transition={{ duration: 60, repeat: Infinity, ease: "linear" }}
+          style={{
+            top: 'calc(50% + 40px)',
+            animation: 'mobile-core-rotate 60s linear infinite',
+            transform: 'translateX(-50%) translate3d(0, 0, 0)'
+          }}
         >
-          <div className="w-full h-full bg-gradient-to-br from-orange-500/15 to-yellow-400/15 rounded-full blur-lg" />
-        </motion.div>
+          <div className="w-full h-full bg-gradient-to-br from-orange-500/12 to-yellow-400/12 rounded-full blur-md" />
+        </div>
+
+        {/* CSS keyframe for mobile core */}
+        <style jsx>{`
+          @keyframes mobile-core-rotate {
+            from { transform: translateX(-50%) translate3d(0, 0, 0) rotate(0deg); }
+            to { transform: translateX(-50%) translate3d(0, 0, 0) rotate(360deg); }
+          }
+        `}</style>
 
         {/* Orbital Ring 1 - Inner - Hidden on mobile */}
         <motion.div
@@ -1251,27 +1266,35 @@ export function Hero() {
           />
         ))}
 
-        {/* Simplified particles for mobile */}
-        {[...Array(4)].map((_, i) => (
-          <motion.div
+        {/* Simplified particles for mobile - CSS animations for better performance */}
+        {[...Array(3)].map((_, i) => (
+          <div
             key={`mobile-particle-${i}`}
-            className={`absolute w-1 h-1 rounded-full sm:hidden ${i % 2 === 0 ? 'bg-orange-400/60' : 'bg-blue-400/50'}`}
+            className={`absolute w-1 h-1 rounded-full sm:hidden ${i % 2 === 0 ? 'bg-orange-400/50' : 'bg-blue-400/40'}`}
             style={{
-              left: `${20 + (i * 20) % 60}%`,
-              top: `${30 + (i * 15) % 40}%`
-            }}
-            animate={{
-              y: [0, -15, 0],
-              opacity: [0.4, 0.8, 0.4]
-            }}
-            transition={{
-              duration: 8,
-              repeat: Infinity,
-              ease: "easeInOut",
-              delay: i * 2
+              left: `${25 + (i * 25) % 50}%`,
+              top: `${35 + (i * 20) % 30}%`,
+              animation: `float-${i} ${6 + i * 2}s ease-in-out infinite`,
+              animationDelay: `${i * 1}s`
             }}
           />
         ))}
+
+        {/* CSS keyframes for mobile particles - Hardware accelerated */}
+        <style jsx>{`
+          @keyframes float-0 {
+            0%, 100% { transform: translate3d(0, 0px, 0); opacity: 0.4; }
+            50% { transform: translate3d(0, -10px, 0); opacity: 0.7; }
+          }
+          @keyframes float-1 {
+            0%, 100% { transform: translate3d(0, 0px, 0); opacity: 0.3; }
+            50% { transform: translate3d(0, -12px, 0); opacity: 0.6; }
+          }
+          @keyframes float-2 {
+            0%, 100% { transform: translate3d(0, 0px, 0); opacity: 0.5; }
+            50% { transform: translate3d(0, -8px, 0); opacity: 0.8; }
+          }
+        `}</style>
 
         {/* Light Theme Floating Geometric Shapes - Hidden on mobile */}
         <motion.div
@@ -1328,27 +1351,39 @@ export function Hero() {
           />
         ))}
 
-        {/* Simplified dots for mobile */}
-        {[...Array(6)].map((_, i) => (
-          <motion.div
+        {/* Simplified dots for mobile - CSS animations */}
+        {[...Array(4)].map((_, i) => (
+          <div
             key={`mobile-dot-${i}`}
-            className={`absolute rounded-full dark:opacity-0 sm:hidden ${i % 2 === 0 ? 'w-2 h-2 bg-orange-400/50' : 'w-3 h-3 bg-blue-400/40'}`}
+            className={`absolute rounded-full dark:opacity-0 sm:hidden ${i % 2 === 0 ? 'w-2 h-2 bg-orange-400/40' : 'w-2 h-2 bg-blue-400/35'}`}
             style={{
-              left: `${15 + (i * 15) % 70}%`,
-              top: `${20 + (i * 20) % 60}%`
-            }}
-            animate={{
-              y: [0, -20, 0],
-              opacity: [0.3, 0.7, 0.3]
-            }}
-            transition={{
-              duration: 10,
-              repeat: Infinity,
-              ease: "easeInOut",
-              delay: i * 1.5
+              left: `${20 + (i * 20) % 60}%`,
+              top: `${25 + (i * 25) % 50}%`,
+              animation: `dot-float-${i} ${8 + i}s ease-in-out infinite`,
+              animationDelay: `${i * 0.8}s`
             }}
           />
         ))}
+
+        {/* CSS keyframes for mobile dots - Hardware accelerated */}
+        <style jsx>{`
+          @keyframes dot-float-0 {
+            0%, 100% { transform: translate3d(0, 0px, 0); opacity: 0.3; }
+            50% { transform: translate3d(0, -15px, 0); opacity: 0.6; }
+          }
+          @keyframes dot-float-1 {
+            0%, 100% { transform: translate3d(0, 0px, 0); opacity: 0.25; }
+            50% { transform: translate3d(0, -18px, 0); opacity: 0.55; }
+          }
+          @keyframes dot-float-2 {
+            0%, 100% { transform: translate3d(0, 0px, 0); opacity: 0.35; }
+            50% { transform: translate3d(0, -12px, 0); opacity: 0.65; }
+          }
+          @keyframes dot-float-3 {
+            0%, 100% { transform: translate3d(0, 0px, 0); opacity: 0.3; }
+            50% { transform: translate3d(0, -16px, 0); opacity: 0.6; }
+          }
+        `}</style>
 
         {/* Additional Larger Floating Dots - Hidden on mobile */}
         {[...Array(8)].map((_, i) => (
@@ -1419,10 +1454,10 @@ export function Hero() {
       {/* Main Hero Content */}
       <motion.main
         className="relative z-10 flex flex-col items-center justify-center min-h-[600px] md:min-h-[700px] lg:min-h-screen px-6 pt-20 pb-8 lg:px-8 lg:pt-32 lg:pb-12"
-        style={{ paddingTop: '120px' }}
+        style={{ paddingTop: '120px', willChange: 'opacity' }}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ duration: 0.3, ease: "easeOut" }}
+        transition={{ duration: isMobile ? 0.2 : 0.3, ease: "easeOut" }}
       >
         {/* Animated Strip Lines */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -1469,9 +1504,10 @@ export function Hero() {
         {/* Hero Headline */}
         <motion.h1
           className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold text-center text-slate-900 dark:text-slate-100 max-w-6xl leading-tight"
-          initial={{ opacity: 0, y: 20 }}
+          style={{ willChange: 'opacity, transform' }}
+          initial={{ opacity: 0, y: isMobile ? 10 : 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.1, ease: "easeOut" }}
+          transition={{ duration: isMobile ? 0.3 : 0.5, delay: isMobile ? 0.05 : 0.1, ease: "easeOut" }}
         >
           The Connection That Counts
           <br />
@@ -1483,9 +1519,10 @@ export function Hero() {
         {/* Subheadline */}
         <motion.p
           className="mt-6 text-xl sm:text-2xl md:text-2xl text-slate-600 dark:text-slate-300 text-center max-w-4xl leading-relaxed"
-          initial={{ opacity: 0, y: 15 }}
+          style={{ willChange: 'opacity, transform' }}
+          initial={{ opacity: 0, y: isMobile ? 8 : 15 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.2, ease: "easeOut" }}
+          transition={{ duration: isMobile ? 0.25 : 0.4, delay: isMobile ? 0.1 : 0.2, ease: "easeOut" }}
         >
           Your one-stop solution for CRM, ERP, HRMS, SFA, and more.
           <span className="font-semibold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent"> Transform your business operations</span> with our comprehensive suite of enterprise software.
@@ -1494,14 +1531,16 @@ export function Hero() {
         {/* CTA Buttons */}
         <motion.div
           className="mt-10 flex flex-col sm:flex-row items-center gap-4"
-          initial={{ opacity: 0, y: 15 }}
+          style={{ willChange: 'opacity, transform' }}
+          initial={{ opacity: 0, y: isMobile ? 8 : 15 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.3, ease: "easeOut" }}
+          transition={{ duration: isMobile ? 0.25 : 0.4, delay: isMobile ? 0.15 : 0.3, ease: "easeOut" }}
         >
           <motion.div
-            whileHover={{ scale: 1.05, y: -2 }}
+            whileHover={isMobile ? {} : { scale: 1.05, y: -2 }}
             whileTap={{ scale: 0.95 }}
             transition={{ type: "spring", stiffness: 400, damping: 10 }}
+            style={{ willChange: 'transform' }}
           >
             <Button
               size="lg"
@@ -1514,9 +1553,10 @@ export function Hero() {
           </motion.div>
 
           <motion.div
-            whileHover={{ scale: 1.05, y: -2 }}
+            whileHover={isMobile ? {} : { scale: 1.05, y: -2 }}
             whileTap={{ scale: 0.95 }}
             transition={{ type: "spring", stiffness: 400, damping: 10 }}
+            style={{ willChange: 'transform' }}
           >
             <Button
               variant="outline"
@@ -1533,9 +1573,10 @@ export function Hero() {
         {/* Trust Indicators */}
         <motion.div
           className="mt-12 flex flex-wrap items-center justify-center gap-8 text-slate-500 dark:text-slate-400"
-          initial={{ opacity: 0, y: 10 }}
+          style={{ willChange: 'opacity, transform' }}
+          initial={{ opacity: 0, y: isMobile ? 5 : 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.4, ease: "easeOut" }}
+          transition={{ duration: isMobile ? 0.2 : 0.3, delay: isMobile ? 0.2 : 0.4, ease: "easeOut" }}
         >
           <div className="flex items-center space-x-2">
             <CheckCircle className="w-5 h-5 text-green-500" />
@@ -1675,11 +1716,13 @@ export function Hero() {
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-4 md:gap-6 relative z-10">
                     <motion.div
                       className="text-center p-2 sm:p-3 md:p-6 bg-gradient-to-br from-green-500/10 to-emerald-500/10 dark:from-green-400/20 dark:to-emerald-400/20 rounded-lg sm:rounded-xl md:rounded-2xl border border-green-200/40 sm:border-green-200/50 dark:border-green-600/30"
-                      animate={isMobilePortrait ? undefined : { boxShadow: [
-                        "0 0 20px rgba(34, 197, 94, 0.2)",
-                        "0 0 30px rgba(34, 197, 94, 0.4)",
-                        "0 0 20px rgba(34, 197, 94, 0.2)"
-                      ] }}
+                      animate={isMobilePortrait ? undefined : {
+                        boxShadow: [
+                          "0 0 20px rgba(34, 197, 94, 0.2)",
+                          "0 0 30px rgba(34, 197, 94, 0.4)",
+                          "0 0 20px rgba(34, 197, 94, 0.2)"
+                        ]
+                      }}
                       transition={isMobilePortrait ? undefined : { duration: 3, repeat: Infinity }}
                     >
                       <motion.p
@@ -1694,11 +1737,13 @@ export function Hero() {
 
                     <motion.div
                       className="text-center p-2 sm:p-3 md:p-6 bg-gradient-to-br from-blue-500/10 to-cyan-500/10 dark:from-blue-400/20 dark:to-cyan-400/20 rounded-lg sm:rounded-xl md:rounded-2xl border border-blue-200/40 sm:border-blue-200/50 dark:border-blue-600/30"
-                      animate={isMobilePortrait ? undefined : { boxShadow: [
-                        "0 0 20px rgba(59, 130, 246, 0.2)",
-                        "0 0 30px rgba(59, 130, 246, 0.4)",
-                        "0 0 20px rgba(59, 130, 246, 0.2)"
-                      ] }}
+                      animate={isMobilePortrait ? undefined : {
+                        boxShadow: [
+                          "0 0 20px rgba(59, 130, 246, 0.2)",
+                          "0 0 30px rgba(59, 130, 246, 0.4)",
+                          "0 0 20px rgba(59, 130, 246, 0.2)"
+                        ]
+                      }}
                       transition={isMobilePortrait ? undefined : { duration: 3, repeat: Infinity, delay: 1 }}
                     >
                       <motion.p
@@ -1713,11 +1758,13 @@ export function Hero() {
 
                     <motion.div
                       className="text-center p-2 sm:p-3 md:p-6 bg-gradient-to-br from-purple-500/10 to-violet-500/10 dark:from-purple-400/20 dark:to-violet-400/20 rounded-lg sm:rounded-xl md:rounded-2xl border border-purple-200/40 sm:border-purple-200/50 dark:border-purple-600/30"
-                      animate={isMobilePortrait ? undefined : { boxShadow: [
-                        "0 0 20px rgba(147, 51, 234, 0.2)",
-                        "0 0 30px rgba(147, 51, 234, 0.4)",
-                        "0 0 20px rgba(147, 51, 234, 0.2)"
-                      ] }}
+                      animate={isMobilePortrait ? undefined : {
+                        boxShadow: [
+                          "0 0 20px rgba(147, 51, 234, 0.2)",
+                          "0 0 30px rgba(147, 51, 234, 0.4)",
+                          "0 0 20px rgba(147, 51, 234, 0.2)"
+                        ]
+                      }}
                       transition={isMobilePortrait ? undefined : { duration: 3, repeat: Infinity, delay: 2 }}
                     >
                       <motion.p
@@ -1732,11 +1779,13 @@ export function Hero() {
 
                     <motion.div
                       className="text-center p-2 sm:p-3 md:p-6 bg-gradient-to-br from-orange-500/10 to-red-500/10 dark:from-orange-400/20 dark:to-red-400/20 rounded-lg sm:rounded-xl md:rounded-2xl border border-orange-200/40 sm:border-orange-200/50 dark:border-orange-600/30"
-                      animate={isMobilePortrait ? undefined : { boxShadow: [
-                        "0 0 20px rgba(249, 115, 22, 0.2)",
-                        "0 0 30px rgba(249, 115, 22, 0.4)",
-                        "0 0 20px rgba(249, 115, 22, 0.2)"
-                      ] }}
+                      animate={isMobilePortrait ? undefined : {
+                        boxShadow: [
+                          "0 0 20px rgba(249, 115, 22, 0.2)",
+                          "0 0 30px rgba(249, 115, 22, 0.4)",
+                          "0 0 20px rgba(249, 115, 22, 0.2)"
+                        ]
+                      }}
                       transition={isMobilePortrait ? undefined : { duration: 3, repeat: Infinity, delay: 0.5 }}
                     >
                       <motion.p

@@ -12,7 +12,7 @@ if (typeof document !== 'undefined') {
   link.href = 'https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500&display=swap';
   link.rel = 'preload';
   link.as = 'style';
-  link.onload = function () { this.rel = 'stylesheet'; };
+  link.onload = function (this: HTMLLinkElement) { this.rel = 'stylesheet'; };
   document.head.appendChild(link);
 }
 
@@ -22,13 +22,15 @@ export function Hero() {
 
   // Optimize for mobile performance
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
+  const isMobilePortrait = typeof window !== 'undefined' && window.innerHeight > window.innerWidth && window.innerWidth <= 768;
+  const desktopSlowFactor = 1;
 
   // Reduce scroll calculations on mobile
   const scrollConfig = isMobile
-    ? { target: ref, offset: ["start end", "end start"], throttle: 16 }
-    : { target: ref, offset: ["start end", "end start"] };
+    ? { target: ref, offset: "start end" }
+    : { target: ref, offset: "start end" };
 
-  const { scrollYProgress } = useScroll(scrollConfig);
+  const { scrollYProgress } = useScroll({ target: ref });
 
   // Disable expensive transforms on mobile
   const y = isMobile ? null : useTransform(scrollYProgress, [0, 1], [100, -100]);
@@ -75,7 +77,7 @@ export function Hero() {
         </div>
 
         {/* CSS keyframe for mobile core */}
-        <style jsx>{`
+        <style>{`
           @keyframes mobile-core-rotate {
             from { transform: translateX(-50%) translate3d(0, 0, 0) rotate(0deg); }
             to { transform: translateX(-50%) translate3d(0, 0, 0) rotate(360deg); }
@@ -1281,7 +1283,7 @@ export function Hero() {
         ))}
 
         {/* CSS keyframes for mobile particles - Hardware accelerated */}
-        <style jsx>{`
+        <style>{`
           @keyframes float-0 {
             0%, 100% { transform: translate3d(0, 0px, 0); opacity: 0.4; }
             50% { transform: translate3d(0, -10px, 0); opacity: 0.7; }
@@ -1366,7 +1368,7 @@ export function Hero() {
         ))}
 
         {/* CSS keyframes for mobile dots - Hardware accelerated */}
-        <style jsx>{`
+        <style>{`
           @keyframes dot-float-0 {
             0%, 100% { transform: translate3d(0, 0px, 0); opacity: 0.3; }
             50% { transform: translate3d(0, -15px, 0); opacity: 0.6; }

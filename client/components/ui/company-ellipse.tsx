@@ -8,7 +8,7 @@ interface ClientLogo {
     size: 'large' | 'medium' | 'small';
 }
 
-export function TrustedByCompanies() {
+export function CompanyEllipse() {
     const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
     const [isHovered, setIsHovered] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -615,7 +615,7 @@ export function TrustedByCompanies() {
                 </motion.div>
 
                 {/* Separated Stats Section - More spacing for large portraits */}
-                <motion.div
+                {/* <motion.div
                     className="text-center mt-8 sm:mt-16 xl:mt-24 mb-4"
                     initial={{ opacity: 0, y: 20 }}
                     whileInView={{ opacity: 1, y: 0 }}
@@ -633,10 +633,10 @@ export function TrustedByCompanies() {
                             <div className="text-xs text-foreground/60">Years Experience</div>
                         </div>
                     </div>
-                </motion.div>
+                </motion.div> */}
 
                 {/* Call to Action - Extra spacing for large portraits */}
-                <motion.div
+                {/* <motion.div
                     className="text-center mt-8 sm:mt-10 xl:mt-12"
                     initial={{ opacity: 0, y: 20 }}
                     whileInView={{ opacity: 1, y: 0 }}
@@ -666,7 +666,7 @@ export function TrustedByCompanies() {
                             </button>
                         </a>
                     </motion.div>
-                </motion.div>
+                </motion.div> */}
             </div>
 
         </motion.section>

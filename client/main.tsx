@@ -59,6 +59,7 @@ const Digital_Marketing = lazy(() => import('./pages/solutions/Digital_Marketing
 const Whatsapp_Ordering = lazy(() => import('./pages/solutions/Whatsapp_Ordering'));
 const FAQs = lazy(() => import('./pages/FAQs'));
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
+const DemoRequest = lazy(() => import('./pages/DemoRequest'));
 
 
 const queryClient = new QueryClient();
@@ -145,6 +146,7 @@ const App = () => (
             <Route path="/seminars-webinars" element={<SeminarsWebinars />} />
             <Route path="/faqs" element={<FAQs />} />
             <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+            <Route path="/demo-request" element={<DemoRequest />} />
             {/* Redirects */}
             <Route path="/sitemap" element={<Sitemap />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

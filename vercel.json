@@ -38,6 +38,10 @@
       "destination": "/index.html"
     },
     {
+      "source": "/demo-request",
+      "destination": "/index.html"
+    },
+    {
       "source": "/gallery",
       "destination": "/index.html"
     },

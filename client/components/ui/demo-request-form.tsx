@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "./button";
-import { ArrowRight, ArrowLeft, Check, Eye, EyeOff, Globe, Mail, Phone, Building, User, Lock, Star, ChevronDown, Users, Briefcase, Layers, MapPin } from "lucide-react";
+import { ArrowRight, ArrowLeft, Check, Eye, EyeOff, Globe, Mail, Phone, Building, User, Lock, Star, ChevronDown, Users, Briefcase, Layers, MapPin, X, CheckCircle, AlertCircle } from "lucide-react";
 import { TrustedByCompanies } from "./trusted-by-companies";
 import { CompanyEllipse } from "./company-ellipse";
 
@@ -345,10 +345,34 @@ export function DemoRequestForm() {
         return false;
     });
 
+    // Alert system state
+    const [alertConfig, setAlertConfig] = useState<{
+        show: boolean;
+        type: 'success' | 'error' | 'warning';
+        title: string;
+        message: string;
+    }>({
+        show: false,
+        type: 'success',
+        title: '',
+        message: ''
+    });
+
 
 
     // Debounced save handle
     const saveTimeoutRef = useRef<number | null>(null);
+
+    // Modern alert function
+    const showAlert = (type: 'success' | 'error' | 'warning', title: string, message: string) => {
+        setAlertConfig({ show: true, type, title, message });
+        // Auto-hide after 4 seconds for success/warning, keep error alerts open
+        if (type !== 'error') {
+            setTimeout(() => {
+                setAlertConfig(prev => ({ ...prev, show: false }));
+            }, 4000);
+        }
+    };
 
     // Save to localStorage function (guarded)
     const saveToLocalStorage = () => {
@@ -601,7 +625,7 @@ export function DemoRequestForm() {
 
     const handleSubmit = () => {
         if (formData.application_type === 0) {
-            alert("Please select an application type");
+            showAlert('warning', 'Application Type Required', 'Please select an application type to continue with your demo request.');
             return;
         }
 
@@ -616,7 +640,7 @@ export function DemoRequestForm() {
         clearForm();
 
         // Show success message
-        alert("🎉 Demo request submitted successfully! Form has been cleared.");
+        showAlert('success', 'Demo Request Submitted!', 'Your demo request has been submitted successfully. We will contact you soon. The form has been cleared for your convenience.');
     };
 
     const stepVariants = {
@@ -1772,6 +1796,103 @@ export function DemoRequestForm() {
                                 />
                             );
                         })}
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Modern Alert Component */}
+            <AnimatePresence>
+                {alertConfig.show && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+                        onClick={() => setAlertConfig(prev => ({ ...prev, show: false }))}
+                    >
+                        <motion.div
+                            initial={{ scale: 0.8, opacity: 0, y: 20 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.8, opacity: 0, y: 20 }}
+                            transition={{ type: "spring", duration: 0.5, bounce: 0.3 }}
+                            className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl border border-white/20 dark:border-slate-700/30 relative overflow-hidden"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            {/* Background decoration */}
+                            <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                                <div className={`absolute top-0 right-0 w-32 h-32 rounded-full blur-3xl opacity-20 ${alertConfig.type === 'success' ? 'bg-green-400' :
+                                        alertConfig.type === 'error' ? 'bg-red-400' : 'bg-orange-400'
+                                    }`}></div>
+                                <div className={`absolute bottom-0 left-0 w-24 h-24 rounded-full blur-2xl opacity-15 ${alertConfig.type === 'success' ? 'bg-emerald-400' :
+                                        alertConfig.type === 'error' ? 'bg-rose-400' : 'bg-amber-400'
+                                    }`}></div>
+                            </div>
+
+                            {/* Alert content */}
+                            <div className="flex items-start space-x-4 relative z-10">
+                                <motion.div
+                                    initial={{ scale: 0 }}
+                                    animate={{ scale: 1 }}
+                                    transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
+                                    className={`flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center ${alertConfig.type === 'success'
+                                            ? 'bg-gradient-to-br from-green-500 to-emerald-600' :
+                                            alertConfig.type === 'error'
+                                                ? 'bg-gradient-to-br from-red-500 to-rose-600' :
+                                                'bg-gradient-to-br from-orange-500 to-amber-600'
+                                        } shadow-lg`}
+                                >
+                                    {alertConfig.type === 'success' && <CheckCircle className="w-6 h-6 text-white" />}
+                                    {alertConfig.type === 'error' && <AlertCircle className="w-6 h-6 text-white" />}
+                                    {alertConfig.type === 'warning' && <AlertCircle className="w-6 h-6 text-white" />}
+                                </motion.div>
+
+                                <div className="flex-1 pt-1">
+                                    <motion.h3
+                                        initial={{ opacity: 0, y: 10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ delay: 0.3 }}
+                                        className="text-lg font-semibold text-gray-900 dark:text-white mb-2"
+                                    >
+                                        {alertConfig.title}
+                                    </motion.h3>
+                                    <motion.p
+                                        initial={{ opacity: 0, y: 10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ delay: 0.4 }}
+                                        className="text-gray-600 dark:text-gray-300 text-sm leading-relaxed"
+                                    >
+                                        {alertConfig.message}
+                                    </motion.p>
+                                </div>
+                            </div>
+
+                            {/* Action button for errors */}
+                            {alertConfig.type === 'error' && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: 0.5 }}
+                                    className="mt-6 flex justify-end"
+                                >
+                                    <Button
+                                        onClick={() => setAlertConfig(prev => ({ ...prev, show: false }))}
+                                        className="bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white px-6 py-2 rounded-lg text-sm font-medium shadow-lg hover:shadow-xl transition-all duration-200"
+                                    >
+                                        Got it
+                                    </Button>
+                                </motion.div>
+                            )}
+
+                            {/* Progress bar for auto-hide */}
+                            {alertConfig.type !== 'error' && (
+                                <motion.div
+                                    className="absolute bottom-0 left-0 h-1 bg-gradient-to-r from-orange-400 to-amber-500 rounded-b-2xl"
+                                    initial={{ width: '100%' }}
+                                    animate={{ width: '0%' }}
+                                    transition={{ duration: 4, ease: "linear" }}
+                                />
+                            )}
+                        </motion.div>
                     </motion.div>
                 )}
             </AnimatePresence>

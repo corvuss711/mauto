@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "./button";
 import { ArrowRight, ArrowLeft, Check, Eye, EyeOff, Globe, Mail, Phone, Building, User, Lock, Star, ChevronDown, Users, Briefcase, Layers, MapPin } from "lucide-react";
@@ -136,8 +136,8 @@ const testimonials = [
 // Stats data for the showcase
 const statsData = [
     { label: "Happy Customers", value: 250, suffix: "+", color: "from-blue-500 to-blue-600", bgColor: "from-blue-50 to-blue-100", darkBgColor: "from-blue-900/20 to-blue-800/20" },
-    { label: "Years Experience", value: 15, suffix: "+", color: "from-orange-500 to-orange-600", bgColor: "from-orange-50 to-orange-100", darkBgColor: "from-orange-900/30 to-orange-800/20" },
-    { label: "Success Rate", value: 99.9, suffix: "%", color: "from-green-500 to-green-600", bgColor: "from-green-50 to-green-100", darkBgColor: "from-orange-900/30 to-orange-800/20" },
+    { label: "Years Experience", value: 15, suffix: "+", color: "from-orange-500 to-orange-600", bgColor: "from-orange-50 to-orange-100", darkBgColor: "from-orange-900/20 to-orange-800/20" },
+    { label: "Success Rate", value: 99.9, suffix: "%", color: "from-green-500 to-green-600", bgColor: "from-green-50 to-green-100", darkBgColor: "from-orange-900/20 to-orange-800/20" },
     { label: "Support Availability", value: 24, suffix: "x7", color: "from-pink-500 to-pink-600", bgColor: "from-pink-50 to-pink-100", darkBgColor: "from-blue-900/20 to-blue-800/20" }
 ];
 
@@ -347,10 +347,34 @@ export function DemoRequestForm() {
 
 
 
-    // Save data whenever form data changes
-    // Save to localStorage function
+    // Debounced save handle
+    const saveTimeoutRef = useRef<number | null>(null);
+
+    // Save to localStorage function (guarded)
     const saveToLocalStorage = () => {
         if (typeof window !== 'undefined') {
+            // If form is effectively empty and on first step with no plan, don't persist
+            const isEmptyForm =
+                !formData.user_name &&
+                !formData.password &&
+                !formData.email &&
+                !formData.mobile &&
+                !formData.company_name &&
+                !formData.company_title &&
+                !formData.website &&
+                !formData.address &&
+                !formData.landline &&
+                !formData.contact_per_name &&
+                formData.application_type === 0 &&
+                !selectedPlan &&
+                currentStep === 1;
+
+            if (isEmptyForm) {
+                localStorage.removeItem('demoFormData');
+                localStorage.removeItem('demoFormStep');
+                localStorage.removeItem('demoFormPlan');
+                return;
+            }
             localStorage.setItem('demoFormData', JSON.stringify(formData));
             localStorage.setItem('demoFormStep', currentStep.toString());
             if (selectedPlan) {
@@ -372,7 +396,11 @@ export function DemoRequestForm() {
         }
 
         setSelectedPlan(planName);
-        setTimeout(saveToLocalStorage, 100);
+        // Only persist when a plan is actually selected; avoid re-creating cleared keys
+        if (planName) {
+            if (saveTimeoutRef.current) window.clearTimeout(saveTimeoutRef.current);
+            saveTimeoutRef.current = window.setTimeout(saveToLocalStorage, 100);
+        }
 
         // Auto-scroll to pricing section on selection for large portraits
         if (planName) {
@@ -417,11 +445,7 @@ export function DemoRequestForm() {
         return () => clearTimeout(timer);
     }, [testimonialIndex]);
 
-    // Clear confetti localStorage on refresh for testing
-    useEffect(() => {
-        localStorage.removeItem('demoFormHasSelected');
-        setHasSelectedBefore(false);
-    }, []);
+    // Note: remove any test-only localStorage clearing on mount
 
     const handleInputChange = (field: keyof FormData, value: string | number) => {
         const prevApplicationType = formData.application_type;
@@ -465,8 +489,9 @@ export function DemoRequestForm() {
             }
         }
 
-        // Save to localStorage after state update
-        setTimeout(saveToLocalStorage, 100);
+        // Save to localStorage after state update (debounced)
+        if (saveTimeoutRef.current) window.clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = window.setTimeout(saveToLocalStorage, 120);
     };
 
     const validateStep1 = (): boolean => {
@@ -540,6 +565,16 @@ export function DemoRequestForm() {
     };
 
     const clearForm = () => {
+        // Cancel any pending debounced saves to avoid re-creating keys
+        if (saveTimeoutRef.current) {
+            window.clearTimeout(saveTimeoutRef.current);
+            saveTimeoutRef.current = null;
+        }
+        localStorage.removeItem('demoFormData');
+        localStorage.removeItem('demoFormStep');
+        localStorage.removeItem('demoFormPlan');
+        localStorage.removeItem('demoFormHasSelected');
+
         setFormData({
             user_name: "",
             password: "",
@@ -556,11 +591,11 @@ export function DemoRequestForm() {
         handlePlanSelection(null);
         setCurrentStep(1);
         setErrors({});
-        // Clear localStorage
-        localStorage.removeItem('demoFormData');
-        localStorage.removeItem('demoFormStep');
-        localStorage.removeItem('demoFormPlan');
-        localStorage.removeItem('demoFormHasSelected');
+        // Ensure nothing persists immediately after
+        if (saveTimeoutRef.current) {
+            window.clearTimeout(saveTimeoutRef.current);
+            saveTimeoutRef.current = null;
+        }
         setHasSelectedBefore(false);
     };
 
@@ -577,13 +612,11 @@ export function DemoRequestForm() {
 
         console.log("Form Data:", JSON.stringify(submissionData, null, 2));
 
-        // Show success message
-        alert("🎉 Demo request submitted successfully! Form will be cleared now.");
+        // Clear form immediately on submission
+        clearForm();
 
-        // Clear form after successful submission with a slight delay for better UX
-        setTimeout(() => {
-            clearForm();
-        }, 500);
+        // Show success message
+        alert("🎉 Demo request submitted successfully! Form has been cleared.");
     };
 
     const stepVariants = {
@@ -1248,14 +1281,14 @@ export function DemoRequestForm() {
                                                     >
                                                         {pricingData[formData.application_type as keyof typeof pricingData].title}
                                                     </motion.h3>
-                                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6 xl:gap-5 lg:items-end mt-6 lg:mt-8 xl:mt-6 transform-gpu">
+                                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-4 lg:gap-6 xl:gap-5 lg:items-end mt-6 lg:mt-8 xl:mt-6 transform-gpu">
                                                         {pricingData[formData.application_type as keyof typeof pricingData].tiers.map((tier, index) => (
                                                             <motion.div
                                                                 key={tier.name}
                                                                 className={`group relative p-4 lg:p-5 xl:p-4 mx-1 ${tier.popular ? 'pt-6 lg:pt-8 xl:pt-6 pb-5 lg:pb-6 xl:pb-5 lg:min-h-[380px] xl:min-h-[340px] min-h-[320px]' : 'pt-5 lg:pt-6 xl:pt-5 pb-5 lg:pb-6 xl:pb-5 min-h-[320px] lg:min-h-[350px] xl:min-h-[310px]'} flex flex-col rounded-2xl border-2 shadow-xl transition-all duration-300 ease-out cursor-pointer overflow-visible transform-gpu will-change-transform backdrop-blur-sm ${selectedPlan === tier.name
-                                                                    ? "border-gradient-to-r from-orange-400 via-amber-400 to-orange-500 bg-gradient-to-br from-orange-50 via-amber-50/80 to-yellow-50 dark:from-orange-900/40 dark:via-amber-900/30 dark:to-yellow-900/25 shadow-2xl shadow-orange-500/25 z-10 ring-2 ring-orange-400/50"
+                                                                    ? "border-gradient-to-r from-orange-400 via-amber-400 to-orange-500 bg-gradient-to-br dark:from-orange-900/40 dark:via-amber-900/30 dark:to-yellow-900/25 shadow-2xl shadow-orange-500/25 z-10 ring-2 ring-orange-400/50"
                                                                     : tier.popular
-                                                                        ? "border-gradient-to-r from-orange-400 to-amber-500 bg-gradient-to-br from-orange-50/90 via-amber-50/70 to-orange-50/90 dark:from-orange-900/25 dark:via-amber-900/20 dark:to-orange-900/25 shadow-orange-200/50 dark:shadow-orange-900/30"
+                                                                        ? "border-gradient-to-r from-orange-50/90 bg-gradient-to-br via-amber-50/70 to-amber-50/90 dark:from-orange-900/25 dark:via-amber-900/20 dark:to-orange-900/25 shadow-orange-200/50 dark:shadow-orange-900/30"
                                                                         : "border-gray-200 bg-gradient-to-br from-white via-gray-50/30 to-white dark:from-slate-800 dark:via-slate-700/50 dark:to-slate-800 dark:border-slate-600 shadow-gray-200/50 dark:shadow-slate-900/50"
                                                                     } hover:border-orange-300 dark:hover:border-orange-400 hover:shadow-xl hover:shadow-orange-500/20 dark:hover:shadow-orange-900/30`}
                                                                 initial={{

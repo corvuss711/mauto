@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "./button";
-import { ArrowRight, ArrowLeft, Check, Eye, EyeOff, Globe, Mail, Phone, Building, User, Lock, Star, ChevronDown, Users, Briefcase, Layers } from "lucide-react";
+import { ArrowRight, ArrowLeft, Check, Eye, EyeOff, Globe, Mail, Phone, Building, User, Lock, Star, ChevronDown, Users, Briefcase, Layers, MapPin } from "lucide-react";
 import { TrustedByCompanies } from "./trusted-by-companies";
 import { CompanyEllipse } from "./company-ellipse";
 
@@ -262,79 +262,147 @@ const StatCounter = ({ stat, index }: { stat: typeof statsData[0], index: number
 };
 
 export function DemoRequestForm() {
-    const [currentStep, setCurrentStep] = useState(1);
+    const [currentStep, setCurrentStep] = useState(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('demoFormStep');
+            const step = saved ? parseInt(saved) : 1;
+            return step >= 1 && step <= 3 ? step : 1;
+        }
+        return 1;
+    });
+    // Direction-aware animations: 1 forward, -1 backward
+    const [direction, setDirection] = useState<1 | -1>(1);
+    // Navigation lock during transitions to prevent stuck states
+    const [navLock, setNavLock] = useState(false);
+
     const [showPassword, setShowPassword] = useState(false);
     const [errors, setErrors] = useState<Partial<FormData>>({});
-    const [formData, setFormData] = useState<FormData>({
-        user_name: "",
-        password: "",
-        email: "",
-        mobile: "",
-        company_name: "",
-        company_title: "",
-        website: "",
-        address: "",
-        landline: "",
-        contact_per_name: "",
-        application_type: 0
+
+    const [formData, setFormData] = useState<FormData>(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('demoFormData');
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    return {
+                        user_name: parsed.user_name || "",
+                        password: parsed.password || "",
+                        email: parsed.email || "",
+                        mobile: parsed.mobile || "",
+                        company_name: parsed.company_name || "",
+                        company_title: parsed.company_title || "",
+                        website: parsed.website || "",
+                        address: parsed.address || "",
+                        landline: parsed.landline || "",
+                        contact_per_name: parsed.contact_per_name || "",
+                        application_type: parsed.application_type || 0
+                    };
+                } catch {
+                    return {
+                        user_name: "",
+                        password: "",
+                        email: "",
+                        mobile: "",
+                        company_name: "",
+                        company_title: "",
+                        website: "",
+                        address: "",
+                        landline: "",
+                        contact_per_name: "",
+                        application_type: 0
+                    };
+                }
+            }
+        }
+        return {
+            user_name: "",
+            password: "",
+            email: "",
+            mobile: "",
+            company_name: "",
+            company_title: "",
+            website: "",
+            address: "",
+            landline: "",
+            contact_per_name: "",
+            application_type: 0
+        };
     });
 
-    const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
+    const [selectedPlan, setSelectedPlan] = useState<string | null>(() => {
+        if (typeof window !== 'undefined') {
+            return localStorage.getItem('demoFormPlan') || null;
+        }
+        return null;
+    });
+
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const [showCelebration, setShowCelebration] = useState(false);
+    const [hasSelectedBefore, setHasSelectedBefore] = useState(() => {
+        if (typeof window !== 'undefined') {
+            return localStorage.getItem('demoFormHasSelected') === 'true';
+        }
+        return false;
+    });
 
-    // Load saved data on component mount
-    useEffect(() => {
-        const savedData = localStorage.getItem('demoFormData');
-        const savedStep = localStorage.getItem('demoFormStep');
-        const savedPlan = localStorage.getItem('demoFormPlan');
 
-        if (savedData) {
-            setFormData(JSON.parse(savedData));
-        }
-        if (savedStep) {
-            setCurrentStep(parseInt(savedStep));
-        }
-        if (savedPlan) {
-            setSelectedPlan(savedPlan);
-        }
-    }, []);
 
     // Save data whenever form data changes
-    useEffect(() => {
-        localStorage.setItem('demoFormData', JSON.stringify(formData));
-    }, [formData]);
+    // Save to localStorage function
+    const saveToLocalStorage = () => {
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('demoFormData', JSON.stringify(formData));
+            localStorage.setItem('demoFormStep', currentStep.toString());
+            if (selectedPlan) {
+                localStorage.setItem('demoFormPlan', selectedPlan);
+            } else {
+                localStorage.removeItem('demoFormPlan');
+            }
+        }
+    };
 
-    // Save current step
+    // Handle plan selection with localStorage
+    const handlePlanSelection = (planName: string | null) => {
+        // Trigger celebration only on first selection
+        if (planName && !hasSelectedBefore) {
+            setShowCelebration(true);
+            setHasSelectedBefore(true);
+            localStorage.setItem('demoFormHasSelected', 'true');
+            setTimeout(() => setShowCelebration(false), 2500);
+        }
+
+        setSelectedPlan(planName);
+        setTimeout(saveToLocalStorage, 100);
+
+        // Auto-scroll to pricing section on selection for large portraits
+        if (planName) {
+            setTimeout(() => {
+                const pricingSection = document.querySelector('[data-pricing-section]');
+                if (pricingSection) {
+                    const rect = pricingSection.getBoundingClientRect();
+                    const isLargePortrait = window.innerHeight > window.innerWidth && window.innerHeight > 800;
+
+                    if (isLargePortrait) {
+                        // Scroll to show caption and cards without needing additional scroll
+                        window.scrollTo({
+                            top: window.pageYOffset + rect.top - 80,
+                            behavior: 'smooth'
+                        });
+                    }
+                }
+            }, 150); // Small delay to allow for card animation
+        }
+    };
+
+    // Scroll to top when step changes
     useEffect(() => {
-        localStorage.setItem('demoFormStep', currentStep.toString());
+        window.scrollTo({
+            top: 0,
+            behavior: 'smooth'
+        });
     }, [currentStep]);
 
-    // Save selected plan
-    useEffect(() => {
-        if (selectedPlan) {
-            localStorage.setItem('demoFormPlan', selectedPlan);
-        } else {
-            localStorage.removeItem('demoFormPlan');
-        }
-    }, [selectedPlan]);
 
-    // Auto-scroll when pricing cards appear
-    useEffect(() => {
-        if (formData.application_type > 0) {
-            const timer = setTimeout(() => {
-                const element = document.querySelector('[data-dropdown-section]');
-                if (element) {
-                    const elementRect = element.getBoundingClientRect();
-                    const offset = window.innerHeight * 0.15;
-                    window.scrollTo({
-                        top: window.scrollY + elementRect.top - offset,
-                        behavior: 'smooth'
-                    });
-                }
-            }, 600);
-            return () => clearTimeout(timer);
-        }
-    }, [formData.application_type]);
 
     // Testimonial carousel state
     const [testimonialIndex, setTestimonialIndex] = useState(0);
@@ -349,7 +417,14 @@ export function DemoRequestForm() {
         return () => clearTimeout(timer);
     }, [testimonialIndex]);
 
+    // Clear confetti localStorage on refresh for testing
+    useEffect(() => {
+        localStorage.removeItem('demoFormHasSelected');
+        setHasSelectedBefore(false);
+    }, []);
+
     const handleInputChange = (field: keyof FormData, value: string | number) => {
+        const prevApplicationType = formData.application_type;
         setFormData(prev => ({ ...prev, [field]: value }));
         // Clear error when user starts typing
         if (errors[field]) {
@@ -358,14 +433,46 @@ export function DemoRequestForm() {
 
         // Reset selected plan when application type changes
         if (field === 'application_type') {
-            setSelectedPlan(null);
+            handlePlanSelection(null);
+            setIsDropdownOpen(false); // Close dropdown after selection
+
+            // Auto-scroll to pricing section when application type is first selected
+            if (prevApplicationType === 0 && typeof value === 'number' && value > 0) {
+                setTimeout(() => {
+                    // Find the step 3 container with the icon and solution selector
+                    const step3Container = document.querySelector('[data-step3-container]');
+
+                    if (step3Container) {
+                        const rect = step3Container.getBoundingClientRect();
+                        const isLargePortrait = window.innerHeight > window.innerWidth && window.innerHeight > 800;
+                        const isMobile = window.innerWidth < 768;
+
+                        // Calculate optimal scroll position to show icon, title, and cards
+                        let offsetTop = 60; // Default offset
+
+                        if (isLargePortrait) {
+                            offsetTop = 40; // Less offset for large portraits to show more content
+                        } else if (isMobile) {
+                            offsetTop = 80; // More offset for mobile for better spacing
+                        }
+
+                        window.scrollTo({
+                            top: window.pageYOffset + rect.top - offsetTop,
+                            behavior: 'smooth'
+                        });
+                    }
+                }, 300); // Wait for dropdown animation and pricing cards to appear
+            }
         }
+
+        // Save to localStorage after state update
+        setTimeout(saveToLocalStorage, 100);
     };
 
     const validateStep1 = (): boolean => {
         const newErrors: Partial<FormData> = {};
 
-        if (!formData.user_name.trim()) newErrors.user_name = "Username is required";
+        if (!formData.user_name?.trim()) newErrors.user_name = "Username is required";
         else if (formData.user_name.includes(' ')) newErrors.user_name = "Username cannot contain spaces";
 
         if (!formData.password) newErrors.password = "Password is required";
@@ -384,33 +491,52 @@ export function DemoRequestForm() {
     const validateStep2 = (): boolean => {
         const newErrors: Partial<FormData> = {};
 
-        if (!formData.company_name.trim()) newErrors.company_name = "Company name is required";
+        if (!formData.company_name?.trim()) newErrors.company_name = "Company name is required";
         else if (formData.company_name.includes(' ')) newErrors.company_name = "Company name cannot contain spaces";
 
-        if (!formData.company_title.trim()) newErrors.company_title = "Company title is required";
+        if (!formData.company_title?.trim()) newErrors.company_title = "Company title is required";
 
         if (!formData.website) newErrors.website = "Website is required";
         else if (!/^https?:\/\//.test(formData.website) && !/^www\./.test(formData.website)) {
             newErrors.website = "Website must start with http://, https://, or www.";
         }
 
-        if (!formData.address.trim()) newErrors.address = "Address is required";
-        if (!formData.contact_per_name.trim()) newErrors.contact_per_name = "Contact person name is required";
+        if (!formData.address?.trim()) newErrors.address = "Address is required";
+        if (!formData.contact_per_name?.trim()) newErrors.contact_per_name = "Contact person name is required";
 
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     };
 
     const handleNext = () => {
+        if (navLock) return;
         if (currentStep === 1 && validateStep1()) {
+            setDirection(1);
+            setNavLock(true);
             setCurrentStep(2);
+            saveToLocalStorage();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            setTimeout(() => setNavLock(false), 350);
         } else if (currentStep === 2 && validateStep2()) {
+            setDirection(1);
+            setNavLock(true);
             setCurrentStep(3);
+            saveToLocalStorage();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            setTimeout(() => setNavLock(false), 350);
         }
     };
 
     const handleBack = () => {
-        if (currentStep > 1) setCurrentStep(currentStep - 1);
+        if (navLock) return;
+        if (currentStep > 1) {
+            setDirection(-1);
+            setNavLock(true);
+            setCurrentStep(currentStep - 1);
+            saveToLocalStorage();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            setTimeout(() => setNavLock(false), 350);
+        }
     };
 
     const clearForm = () => {
@@ -427,13 +553,15 @@ export function DemoRequestForm() {
             contact_per_name: "",
             application_type: 0
         });
-        setSelectedPlan(null);
+        handlePlanSelection(null);
         setCurrentStep(1);
         setErrors({});
         // Clear localStorage
         localStorage.removeItem('demoFormData');
         localStorage.removeItem('demoFormStep');
         localStorage.removeItem('demoFormPlan');
+        localStorage.removeItem('demoFormHasSelected');
+        setHasSelectedBefore(false);
     };
 
     const handleSubmit = () => {
@@ -459,31 +587,18 @@ export function DemoRequestForm() {
     };
 
     const stepVariants = {
-        hidden: {
-            opacity: 0,
-            x: 100,
-            scale: 0.95
-        },
-        visible: {
+        enter: { opacity: 0, scale: 0.98 },
+        center: {
             opacity: 1,
-            x: 0,
             scale: 1,
-            transition: {
-                type: "spring",
-                stiffness: 100,
-                damping: 15,
-                duration: 0.6
-            }
+            transition: { duration: 0.25, ease: "easeOut" }
         },
         exit: {
             opacity: 0,
-            x: -100,
-            scale: 0.95,
-            transition: {
-                duration: 0.3
-            }
+            scale: 0.98,
+            transition: { duration: 0.2, ease: "easeIn" }
         }
-    };
+    } as const;
 
     const inputVariants = {
         hidden: {
@@ -539,18 +654,18 @@ export function DemoRequestForm() {
                 <div className="max-w-7xl mx-auto relative z-10">
                     {/* Progress Indicator */}
                     <motion.div
-                        className="mb-8 md:mb-12"
+                        className="mb-4 md:mb-6 lg:mb-8"
                         initial={{ opacity: 0, y: -20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.6 }}
                     >
-                        <div className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-sm rounded-xl md:rounded-2xl p-4 md:p-6 shadow-lg border border-white/20 dark:border-slate-700/20">
-                            <div className="flex items-center justify-center mb-4 md:mb-6">
+                        <div className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-sm rounded-lg md:rounded-xl p-3 md:p-4 shadow-lg border border-white/20 dark:border-slate-700/20">
+                            <div className="flex items-center justify-center mb-3 md:mb-4">
                                 <div className="flex items-center">
                                     {[1, 2, 3].map((step) => (
                                         <div key={step} className="flex items-center">
                                             <motion.div
-                                                className={`relative w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center text-sm font-semibold shadow-lg ${step <= currentStep
+                                                className={`relative w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center text-xs md:text-sm font-semibold shadow-md ${step <= currentStep
                                                     ? "bg-gradient-to-r from-orange-500 to-orange-600 text-white"
                                                     : "bg-white dark:bg-gray-700 text-gray-500 dark:text-gray-400 border-2 border-gray-200 dark:border-gray-600"
                                                     }`}
@@ -563,9 +678,9 @@ export function DemoRequestForm() {
                                                 transition={{ duration: 0.3, type: "spring", stiffness: 200 }}
                                             >
                                                 {step < currentStep ? (
-                                                    <Check className="w-5 h-5 md:w-6 md:h-6" />
+                                                    <Check className="w-4 h-4 md:w-5 md:h-5" />
                                                 ) : (
-                                                    <span className="text-sm md:text-base font-bold">{step}</span>
+                                                    <span className="text-xs md:text-sm font-bold">{step}</span>
                                                 )}
                                                 {step === currentStep && (
                                                     <motion.div
@@ -576,7 +691,7 @@ export function DemoRequestForm() {
                                                 )}
                                             </motion.div>
                                             {step < 3 && (
-                                                <div className="relative w-12 md:w-20 h-2 mx-2 md:mx-4 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden">
+                                                <div className="relative w-8 md:w-12 h-1.5 mx-2 md:mx-3 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden">
                                                     <motion.div
                                                         className="absolute top-0 left-0 h-full bg-gradient-to-r from-orange-500 to-orange-600 rounded-full"
                                                         initial={{ width: "0%" }}
@@ -589,9 +704,9 @@ export function DemoRequestForm() {
                                     ))}
                                 </div>
                             </div>
-                            <div className="text-center px-2">
+                            <div className="text-center px-1">
                                 <motion.h1
-                                    className="text-xl md:text-3xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 dark:from-white dark:to-gray-200 bg-clip-text text-transparent mb-2 md:mb-3"
+                                    className="text-lg md:text-2xl lg:text-3xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 dark:from-white dark:to-gray-200 bg-clip-text text-transparent mb-1 md:mb-2"
                                     key={currentStep}
                                     initial={{ opacity: 0, y: 10 }}
                                     animate={{ opacity: 1, y: 0 }}
@@ -600,25 +715,25 @@ export function DemoRequestForm() {
                                     Request Your Demo
                                 </motion.h1>
                                 <motion.p
-                                    className="text-gray-600 dark:text-gray-300 text-sm md:text-lg"
+                                    className="text-gray-600 dark:text-gray-300 text-xs md:text-sm lg:text-base"
                                     key={`subtitle-${currentStep}`}
                                     initial={{ opacity: 0 }}
                                     animate={{ opacity: 1 }}
                                     transition={{ duration: 0.5, delay: 0.2 }}
                                 >
-                                    {currentStep === 1 && "Let's start with your basic details"}
-                                    {currentStep === 2 && "Tell us about your company"}
-                                    {currentStep === 3 && "Choose your perfect solution"}
+                                    {currentStep === 1 && "Share your personal information to get started"}
+                                    {currentStep === 2 && "Provide your business details for a customized experience"}
+                                    {currentStep === 3 && "Select the solution that fits your needs best"}
                                 </motion.p>
                             </div>
                         </div>
                     </motion.div>
 
                     {/* Main Content */}
-                    <div className={`${currentStep === 3 ? 'max-w-7xl mx-auto' : 'max-w-7xl mx-auto grid grid-cols-1 xl:grid-cols-2 gap-6 lg:gap-8 items-stretch'}`}>
+                    <div className={`${currentStep === 3 ? 'max-w-7xl mx-auto mb-8 lg:mb-12 xl:mb-8' : 'max-w-7xl mx-auto grid grid-cols-1 xl:grid-cols-2 gap-6 lg:gap-8 items-stretch mb-12 lg:mb-16 xl:mb-20'} ${currentStep !== 3 ? 'lg:h-[85vh] xl:h-[88vh]' : ''}`}>
                         {/* Enhanced Form Section */}
                         <motion.div
-                            className={`bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl rounded-3xl p-8 md:p-10 shadow-2xl border border-white/20 dark:border-slate-700/30 relative overflow-hidden ${currentStep === 3 ? 'w-full col-span-2' : 'h-full flex flex-col'}`}
+                            className={`bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl rounded-3xl p-4 md:p-6 xl:p-4 shadow-2xl border border-white/20 dark:border-slate-700/30 relative overflow-visible ${currentStep === 3 ? 'w-full col-span-2' : 'h-full flex flex-col'}`}
                             initial={{ opacity: 0, x: -50 }}
                             animate={{ opacity: 1, x: 0 }}
                             transition={{ duration: 0.6 }}
@@ -636,14 +751,13 @@ export function DemoRequestForm() {
                                     <motion.div
                                         key="step1"
                                         variants={stepVariants}
-                                        initial="hidden"
-                                        animate="visible"
+                                        initial="enter"
+                                        animate="center"
                                         exit="exit"
-                                        transition={{ duration: 0.4 }}
                                     >
-                                        <div className="text-center mb-8">
+                                        <div className="text-center mb-4 lg:mb-6 xl:mb-4">
                                             <motion.div
-                                                className="relative w-16 h-16 bg-gradient-to-br from-orange-500 via-orange-400 to-amber-500 rounded-xl flex items-center justify-center mx-auto mb-5 shadow-xl"
+                                                className="relative w-12 h-12 lg:w-14 lg:h-14 xl:w-12 xl:h-12 bg-gradient-to-br from-orange-500 via-orange-400 to-amber-500 rounded-xl flex items-center justify-center mx-auto mb-3 lg:mb-4 xl:mb-3 shadow-xl"
                                                 whileHover={{ scale: 1.05, rotateY: 10 }}
                                                 initial={{ rotateX: -15 }}
                                                 animate={{ rotateX: 0 }}
@@ -651,11 +765,11 @@ export function DemoRequestForm() {
                                             >
                                                 <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-black/10 rounded-xl" />
                                                 <div className="absolute inset-0.5 bg-gradient-to-br from-white/30 to-transparent rounded-xl" />
-                                                <User className="w-7 h-7 text-white relative z-10 drop-shadow-lg" />
+                                                <User className="w-5 h-5 lg:w-6 lg:h-6 xl:w-5 xl:h-5 text-white relative z-10 drop-shadow-lg" />
                                                 <div className="absolute -inset-1 bg-gradient-to-r from-orange-400 to-amber-400 rounded-xl opacity-30 blur-md animate-pulse" />
                                             </motion.div>
                                             <motion.h2
-                                                className="text-2xl lg:text-3xl font-bold bg-gradient-to-r from-gray-800 via-gray-700 to-gray-800 dark:from-white dark:via-gray-100 dark:to-white bg-clip-text text-transparent mb-3"
+                                                className="text-xl lg:text-2xl xl:text-xl font-bold bg-gradient-to-r from-gray-800 via-gray-700 to-gray-800 dark:from-white dark:via-gray-100 dark:to-white bg-clip-text text-transparent mb-2 lg:mb-3 xl:mb-2"
                                                 initial={{ opacity: 0, y: 10 }}
                                                 animate={{ opacity: 1, y: 0 }}
                                                 transition={{ delay: 0.2 }}
@@ -663,17 +777,17 @@ export function DemoRequestForm() {
                                                 Personal Details
                                             </motion.h2>
                                             <motion.p
-                                                className="text-gray-600 dark:text-gray-300 text-sm lg:text-base leading-relaxed"
+                                                className="text-gray-600 dark:text-gray-300 text-sm lg:text-base xl:text-sm leading-relaxed"
                                                 initial={{ opacity: 0 }}
                                                 animate={{ opacity: 1 }}
                                                 transition={{ delay: 0.3 }}
                                             >
-                                                Let's start with your basic information
+                                                Create your account with some basic details
                                             </motion.p>
                                         </div>
-                                        <div className="space-y-4">
+                                        <div className="space-y-3 lg:space-y-4 xl:space-y-3 flex-1 min-h-0 px-1">
                                             <motion.div variants={inputVariants} transition={{ delay: 0.1 }}>
-                                                <label className="flex items-center text-sm font-semibold text-gray-700 dark:text-gray-200 mb-3">
+                                                <label className="flex items-center text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2 lg:mb-3 xl:mb-2">
                                                     <div className="w-5 h-5 rounded-md bg-gradient-to-r from-orange-400 to-amber-400 flex items-center justify-center mr-2 shadow-sm">
                                                         <User className="w-3 h-3 text-white" />
                                                     </div>
@@ -796,14 +910,13 @@ export function DemoRequestForm() {
                                     <motion.div
                                         key="step2"
                                         variants={stepVariants}
-                                        initial="hidden"
-                                        animate="visible"
+                                        initial="enter"
+                                        animate="center"
                                         exit="exit"
-                                        transition={{ duration: 0.4 }}
                                     >
-                                        <div className="text-center mb-8">
+                                        <div className="text-center mb-4 lg:mb-6 xl:mb-4">
                                             <motion.div
-                                                className="relative w-16 h-16 bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-600 rounded-xl flex items-center justify-center mx-auto mb-5 shadow-xl"
+                                                className="relative w-12 h-12 lg:w-14 lg:h-14 xl:w-12 xl:h-12 bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-600 rounded-xl flex items-center justify-center mx-auto mb-3 lg:mb-4 xl:mb-3 shadow-xl"
                                                 whileHover={{ scale: 1.05, rotateY: 10 }}
                                                 initial={{ rotateX: -15 }}
                                                 animate={{ rotateX: 0 }}
@@ -811,11 +924,11 @@ export function DemoRequestForm() {
                                             >
                                                 <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-black/10 rounded-xl" />
                                                 <div className="absolute inset-0.5 bg-gradient-to-br from-white/30 to-transparent rounded-xl" />
-                                                <Building className="w-7 h-7 text-white relative z-10 drop-shadow-lg" />
+                                                <Building className="w-5 h-5 lg:w-6 lg:h-6 xl:w-5 xl:h-5 text-white relative z-10 drop-shadow-lg" />
                                                 <div className="absolute -inset-1 bg-gradient-to-r from-blue-400 to-purple-400 rounded-xl opacity-30 blur-md animate-pulse" />
                                             </motion.div>
                                             <motion.h2
-                                                className="text-2xl lg:text-3xl font-bold bg-gradient-to-r from-gray-800 via-gray-700 to-gray-800 dark:from-white dark:via-gray-100 dark:to-white bg-clip-text text-transparent mb-3"
+                                                className="text-xl lg:text-2xl xl:text-xl font-bold bg-gradient-to-r from-gray-800 via-gray-700 to-gray-800 dark:from-white dark:via-gray-100 dark:to-white bg-clip-text text-transparent mb-2 lg:mb-3 xl:mb-2"
                                                 initial={{ opacity: 0, y: 10 }}
                                                 animate={{ opacity: 1, y: 0 }}
                                                 transition={{ delay: 0.2 }}
@@ -823,17 +936,17 @@ export function DemoRequestForm() {
                                                 Company Information
                                             </motion.h2>
                                             <motion.p
-                                                className="text-gray-600 dark:text-gray-300 text-sm lg:text-base leading-relaxed"
+                                                className="text-gray-600 dark:text-gray-300 text-sm lg:text-base xl:text-sm leading-relaxed"
                                                 initial={{ opacity: 0 }}
                                                 animate={{ opacity: 1 }}
                                                 transition={{ delay: 0.3 }}
                                             >
-                                                Share details about your business & organization
+                                                Help us understand your business to personalize your experience
                                             </motion.p>
                                         </div>
-                                        <div className="space-y-4">
+                                        <div className="space-y-3 lg:space-y-4 xl:space-y-3 flex-1 min-h-0 px-1">
                                             <motion.div variants={inputVariants} transition={{ delay: 0.1 }}>
-                                                <label className="flex items-center text-sm font-semibold text-gray-700 dark:text-gray-200 mb-3">
+                                                <label className="flex items-center text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2 lg:mb-3 xl:mb-2">
                                                     <div className="w-5 h-5 rounded-md bg-gradient-to-r from-blue-400 to-indigo-400 flex items-center justify-center mr-2 shadow-sm">
                                                         <Building className="w-3 h-3 text-white" />
                                                     </div>
@@ -863,86 +976,142 @@ export function DemoRequestForm() {
                                             </motion.div>
 
                                             <motion.div variants={inputVariants} transition={{ delay: 0.2 }}>
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                                <label className="flex items-center text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2 lg:mb-3 xl:mb-2">
+                                                    <div className="w-5 h-5 rounded-md bg-gradient-to-r from-blue-400 to-indigo-400 flex items-center justify-center mr-2 shadow-sm">
+                                                        <Building className="w-3 h-3 text-white" />
+                                                    </div>
                                                     Company Title
                                                 </label>
-                                                <input
-                                                    type="text"
-                                                    value={formData.company_title}
-                                                    onChange={(e) => handleInputChange("company_title", e.target.value)}
-                                                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 bg-white dark:bg-slate-700 border-gray-300 dark:border-slate-600 text-gray-900 dark:text-white ${errors.company_title ? "border-red-500" : ""
-                                                        }`}
-                                                    placeholder="Full company title (e.g., ABC Corp Pvt Ltd)"
-                                                />
+                                                <div className="relative group">
+                                                    <input
+                                                        type="text"
+                                                        value={formData.company_title}
+                                                        onChange={(e) => handleInputChange("company_title", e.target.value)}
+                                                        className={`w-full px-4 py-3.5 border-2 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border-gray-200 dark:border-slate-600 text-gray-900 dark:text-white transition-all duration-200 group-hover:border-blue-300 ${errors.company_title ? "border-red-400 focus:ring-red-500/20 focus:border-red-500" : ""
+                                                            }`}
+                                                        placeholder="Full company title (e.g., ABC Corp Pvt Ltd)"
+                                                    />
+                                                    <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-500/5 to-indigo-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" />
+                                                </div>
                                                 {errors.company_title && (
-                                                    <p className="text-red-500 text-sm mt-1">{errors.company_title}</p>
+                                                    <motion.p
+                                                        className="text-red-500 text-sm mt-2 flex items-center"
+                                                        initial={{ opacity: 0, x: -10 }}
+                                                        animate={{ opacity: 1, x: 0 }}
+                                                    >
+                                                        <div className="w-1 h-1 bg-red-500 rounded-full mr-2" />
+                                                        {errors.company_title}
+                                                    </motion.p>
                                                 )}
                                             </motion.div>
 
                                             <motion.div variants={inputVariants} transition={{ delay: 0.3 }}>
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                                    <Globe className="w-4 h-4 inline mr-2" />
+                                                <label className="flex items-center text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2 lg:mb-3 xl:mb-2">
+                                                    <div className="w-5 h-5 rounded-md bg-gradient-to-r from-blue-400 to-indigo-400 flex items-center justify-center mr-2 shadow-sm">
+                                                        <Globe className="w-3 h-3 text-white" />
+                                                    </div>
                                                     Website
                                                 </label>
-                                                <input
-                                                    type="url"
-                                                    value={formData.website}
-                                                    onChange={(e) => handleInputChange("website", e.target.value)}
-                                                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 bg-white dark:bg-slate-700 border-gray-300 dark:border-slate-600 text-gray-900 dark:text-white ${errors.website ? "border-red-500" : ""
-                                                        }`}
-                                                    placeholder="https://www.example.com"
-                                                />
+                                                <div className="relative group">
+                                                    <input
+                                                        type="url"
+                                                        value={formData.website}
+                                                        onChange={(e) => handleInputChange("website", e.target.value)}
+                                                        className={`w-full px-4 py-3.5 border-2 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border-gray-200 dark:border-slate-600 text-gray-900 dark:text-white transition-all duration-200 group-hover:border-blue-300 ${errors.website ? "border-red-400 focus:ring-red-500/20 focus:border-red-500" : ""
+                                                            }`}
+                                                        placeholder="https://www.example.com"
+                                                    />
+                                                    <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-500/5 to-indigo-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" />
+                                                </div>
                                                 {errors.website && (
-                                                    <p className="text-red-500 text-sm mt-1">{errors.website}</p>
+                                                    <motion.p
+                                                        className="text-red-500 text-sm mt-2 flex items-center"
+                                                        initial={{ opacity: 0, x: -10 }}
+                                                        animate={{ opacity: 1, x: 0 }}
+                                                    >
+                                                        <div className="w-1 h-1 bg-red-500 rounded-full mr-2" />
+                                                        {errors.website}
+                                                    </motion.p>
                                                 )}
                                             </motion.div>
 
                                             <motion.div variants={inputVariants} transition={{ delay: 0.4 }}>
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                                <label className="flex items-center text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2 lg:mb-3 xl:mb-2">
+                                                    <div className="w-5 h-5 rounded-md bg-gradient-to-r from-blue-400 to-indigo-400 flex items-center justify-center mr-2 shadow-sm">
+                                                        <MapPin className="w-3 h-3 text-white" />
+                                                    </div>
                                                     Address
                                                 </label>
-                                                <textarea
-                                                    value={formData.address}
-                                                    onChange={(e) => handleInputChange("address", e.target.value)}
-                                                    rows={3}
-                                                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 bg-white dark:bg-slate-700 border-gray-300 dark:border-slate-600 text-gray-900 dark:text-white resize-none ${errors.address ? "border-red-500" : ""
-                                                        }`}
-                                                    placeholder="Complete business address"
-                                                />
+                                                <div className="relative group">
+                                                    <textarea
+                                                        value={formData.address}
+                                                        onChange={(e) => handleInputChange("address", e.target.value)}
+                                                        rows={3}
+                                                        className={`w-full px-4 py-3.5 border-2 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border-gray-200 dark:border-slate-600 text-gray-900 dark:text-white resize-none transition-all duration-200 group-hover:border-blue-300 ${errors.address ? "border-red-400 focus:ring-red-500/20 focus:border-red-500" : ""
+                                                            }`}
+                                                        placeholder="Complete business address"
+                                                    />
+                                                    <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-500/5 to-indigo-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" />
+                                                </div>
                                                 {errors.address && (
-                                                    <p className="text-red-500 text-sm mt-1">{errors.address}</p>
+                                                    <motion.p
+                                                        className="text-red-500 text-sm mt-2 flex items-center"
+                                                        initial={{ opacity: 0, x: -10 }}
+                                                        animate={{ opacity: 1, x: 0 }}
+                                                    >
+                                                        <div className="w-1 h-1 bg-red-500 rounded-full mr-2" />
+                                                        {errors.address}
+                                                    </motion.p>
                                                 )}
                                             </motion.div>
 
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 lg:gap-4 xl:gap-3">
                                                 <motion.div variants={inputVariants} transition={{ delay: 0.5 }}>
-                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                                    <label className="flex items-center text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2 lg:mb-3 xl:mb-2">
+                                                        <div className="w-5 h-5 rounded-md bg-gradient-to-r from-blue-400 to-indigo-400 flex items-center justify-center mr-2 shadow-sm">
+                                                            <Phone className="w-3 h-3 text-white" />
+                                                        </div>
                                                         Landline (Optional)
                                                     </label>
-                                                    <input
-                                                        type="tel"
-                                                        value={formData.landline}
-                                                        onChange={(e) => handleInputChange("landline", e.target.value.replace(/\D/g, ''))}
-                                                        className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 bg-white dark:bg-slate-700 border-gray-300 dark:border-slate-600 text-gray-900 dark:text-white"
-                                                        placeholder="Landline number"
-                                                    />
+                                                    <div className="relative group">
+                                                        <input
+                                                            type="tel"
+                                                            value={formData.landline}
+                                                            onChange={(e) => handleInputChange("landline", e.target.value.replace(/\D/g, ''))}
+                                                            className="w-full px-4 py-3.5 border-2 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border-gray-200 dark:border-slate-600 text-gray-900 dark:text-white transition-all duration-200 group-hover:border-blue-300"
+                                                            placeholder="Landline number"
+                                                        />
+                                                        <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-500/5 to-indigo-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" />
+                                                    </div>
                                                 </motion.div>
 
                                                 <motion.div variants={inputVariants} transition={{ delay: 0.6 }}>
-                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                                        <User className="w-4 h-4 inline mr-2" />
+                                                    <label className="flex items-center text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2 lg:mb-3 xl:mb-2">
+                                                        <div className="w-5 h-5 rounded-md bg-gradient-to-r from-blue-400 to-indigo-400 flex items-center justify-center mr-2 shadow-sm">
+                                                            <User className="w-3 h-3 text-white" />
+                                                        </div>
                                                         Contact Person
                                                     </label>
-                                                    <input
-                                                        type="text"
-                                                        value={formData.contact_per_name}
-                                                        onChange={(e) => handleInputChange("contact_per_name", e.target.value)}
-                                                        className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 bg-white dark:bg-slate-700 border-gray-300 dark:border-slate-600 text-gray-900 dark:text-white ${errors.contact_per_name ? "border-red-500" : ""
-                                                            }`}
-                                                        placeholder="Full name of contact person"
-                                                    />
+                                                    <div className="relative group">
+                                                        <input
+                                                            type="text"
+                                                            value={formData.contact_per_name}
+                                                            onChange={(e) => handleInputChange("contact_per_name", e.target.value)}
+                                                            className={`w-full px-4 py-3.5 border-2 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border-gray-200 dark:border-slate-600 text-gray-900 dark:text-white transition-all duration-200 group-hover:border-blue-300 ${errors.contact_per_name ? "border-red-400 focus:ring-red-500/20 focus:border-red-500" : ""
+                                                                }`}
+                                                            placeholder="Full name of contact person"
+                                                        />
+                                                        <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-500/5 to-indigo-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" />
+                                                    </div>
                                                     {errors.contact_per_name && (
-                                                        <p className="text-red-500 text-sm mt-1">{errors.contact_per_name}</p>
+                                                        <motion.p
+                                                            className="text-red-500 text-sm mt-2 flex items-center"
+                                                            initial={{ opacity: 0, x: -10 }}
+                                                            animate={{ opacity: 1, x: 0 }}
+                                                        >
+                                                            <div className="w-1 h-1 bg-red-500 rounded-full mr-2" />
+                                                            {errors.contact_per_name}
+                                                        </motion.p>
                                                     )}
                                                 </motion.div>
                                             </div>
@@ -955,13 +1124,13 @@ export function DemoRequestForm() {
                                     <motion.div
                                         key="step3"
                                         variants={stepVariants}
-                                        initial="hidden"
-                                        animate="visible"
+                                        initial="enter"
+                                        animate="center"
                                         exit="exit"
-                                        transition={{ duration: 0.4 }}
                                         className="text-center"
+                                        data-step3-container
                                     >
-                                        <div className="text-center mb-8">
+                                        <div className="text-center mb-4 lg:mb-6 xl:mb-4">
                                             <AnimatePresence mode="wait">
                                                 {(() => {
                                                     const selected = applicationTypes.find(t => t.value === formData.application_type);
@@ -974,7 +1143,7 @@ export function DemoRequestForm() {
                                                             animate={{ opacity: 1, scale: 1, rotate: 0, y: 0 }}
                                                             exit={{ opacity: 0, scale: 0.85, rotate: 4, y: -4 }}
                                                             transition={{ type: 'spring', stiffness: 500, damping: 28, mass: 0.5 }}
-                                                            className={`w-14 h-14 md:w-16 md:h-16 bg-gradient-to-br ${gradient} rounded-xl flex items-center justify-center mx-auto mb-4 shadow-lg relative overflow-hidden`}
+                                                            className={`w-12 h-12 lg:w-14 lg:h-14 xl:w-12 xl:h-12 bg-gradient-to-br ${gradient} rounded-xl flex items-center justify-center mx-auto mb-3 lg:mb-4 xl:mb-3 shadow-lg relative overflow-hidden`}
                                                         >
                                                             {/* pulsing ring */}
                                                             <motion.div
@@ -991,16 +1160,16 @@ export function DemoRequestForm() {
                                                             />
                                                             {/* subtle inner glow */}
                                                             <div className="absolute inset-0 bg-[radial-gradient(circle_at_40%_35%,rgba(255,255,255,0.3),transparent_75%)]" />
-                                                            <IconComp className="w-7 h-7 md:w-8 md:h-8 text-white relative z-10 drop-shadow" />
+                                                            <IconComp className="w-5 h-5 lg:w-6 lg:h-6 xl:w-5 xl:h-5 text-white relative z-10 drop-shadow" />
                                                         </motion.div>
                                                     );
                                                 })()}
                                             </AnimatePresence>
-                                            <h2 className="text-xl md:text-2xl font-bold text-gray-800 dark:text-white mb-2 tracking-tight">
+                                            <h2 className="text-lg lg:text-xl xl:text-lg font-bold text-gray-800 dark:text-white mb-1 lg:mb-2 xl:mb-1 tracking-tight">
                                                 Choose Your Solution
                                             </h2>
-                                            <p className="text-gray-600 dark:text-gray-300 text-xs md:text-sm">
-                                                Select the perfect application type for your business needs
+                                            <p className="text-gray-600 dark:text-gray-300 text-xs lg:text-sm xl:text-xs">
+                                                Pick the solution that matches your business requirements
                                             </p>
                                         </div>
 
@@ -1009,16 +1178,16 @@ export function DemoRequestForm() {
                                             className="relative"
                                             data-dropdown-section
                                             animate={{
-                                                y: formData.application_type ? -20 : 0,
-                                                scale: formData.application_type ? 0.9 : 1,
-                                                marginBottom: isDropdownOpen ? 192 : (formData.application_type ? 32 : 48)
+                                                y: formData.application_type ? -12 : 0,
+                                                scale: formData.application_type ? 0.95 : 1,
+                                                marginBottom: isDropdownOpen ? 140 : (formData.application_type ? 20 : 32)
                                             }}
                                             transition={{ duration: 0.3, ease: "easeInOut" }}
                                         >
                                             <button
                                                 type="button"
                                                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                                                className="w-full px-4 py-4 text-lg border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 bg-white dark:bg-slate-700 border-gray-300 dark:border-slate-600 text-gray-900 dark:text-white flex items-center justify-between hover:border-orange-400 transition-colors"
+                                                className="w-full px-4 py-3 lg:py-4 xl:py-3 text-base lg:text-lg xl:text-base border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 bg-white dark:bg-slate-700 border-gray-300 dark:border-slate-600 text-gray-900 dark:text-white flex items-center justify-between hover:border-orange-400 transition-colors"
                                             >
                                                 <span className={formData.application_type === 0 ? 'text-gray-500 dark:text-gray-400' : ''}>
                                                     {formData.application_type === 0
@@ -1071,7 +1240,7 @@ export function DemoRequestForm() {
                                                     }}
                                                 >
                                                     <motion.h3
-                                                        className="text-lg font-medium mb-6 text-gray-800 dark:text-white"
+                                                        className="text-base lg:text-lg xl:text-base font-medium mb-3 lg:mb-4 xl:mb-3 text-gray-800 dark:text-white"
                                                         initial={{ opacity: 0, y: 10 }}
                                                         animate={{ opacity: 1, y: 0 }}
                                                         transition={{ delay: 0.15, duration: 0.3 }}
@@ -1079,93 +1248,102 @@ export function DemoRequestForm() {
                                                     >
                                                         {pricingData[formData.application_type as keyof typeof pricingData].title}
                                                     </motion.h3>
-                                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:items-end mt-8">
+                                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6 xl:gap-5 lg:items-end mt-6 lg:mt-8 xl:mt-6 transform-gpu">
                                                         {pricingData[formData.application_type as keyof typeof pricingData].tiers.map((tier, index) => (
                                                             <motion.div
                                                                 key={tier.name}
-                                                                className={`relative p-6 ${tier.popular ? 'pt-10 pb-8 lg:min-h-[420px] min-h-[350px]' : 'pt-8 pb-8 min-h-[350px]'} flex flex-col rounded-xl border-2 shadow-lg hover:shadow-2xl transition-all duration-300 cursor-pointer overflow-visible ${selectedPlan === tier.name
-                                                                    ? "border-orange-500 bg-gradient-to-br from-orange-50 to-yellow-50 dark:from-orange-900/30 dark:to-yellow-900/20 shadow-2xl transform scale-105"
+                                                                className={`group relative p-4 lg:p-5 xl:p-4 mx-1 ${tier.popular ? 'pt-6 lg:pt-8 xl:pt-6 pb-5 lg:pb-6 xl:pb-5 lg:min-h-[380px] xl:min-h-[340px] min-h-[320px]' : 'pt-5 lg:pt-6 xl:pt-5 pb-5 lg:pb-6 xl:pb-5 min-h-[320px] lg:min-h-[350px] xl:min-h-[310px]'} flex flex-col rounded-2xl border-2 shadow-xl transition-all duration-300 ease-out cursor-pointer overflow-visible transform-gpu will-change-transform backdrop-blur-sm ${selectedPlan === tier.name
+                                                                    ? "border-gradient-to-r from-orange-400 via-amber-400 to-orange-500 bg-gradient-to-br from-orange-50 via-amber-50/80 to-yellow-50 dark:from-orange-900/40 dark:via-amber-900/30 dark:to-yellow-900/25 shadow-2xl shadow-orange-500/25 z-10 ring-2 ring-orange-400/50"
                                                                     : tier.popular
-                                                                        ? "border-orange-500 bg-orange-50 dark:bg-orange-900/20"
-                                                                        : "border-gray-200 bg-white dark:bg-slate-800 dark:border-slate-600"
-                                                                    }`}
+                                                                        ? "border-gradient-to-r from-orange-400 to-amber-500 bg-gradient-to-br from-orange-50/90 via-amber-50/70 to-orange-50/90 dark:from-orange-900/25 dark:via-amber-900/20 dark:to-orange-900/25 shadow-orange-200/50 dark:shadow-orange-900/30"
+                                                                        : "border-gray-200 bg-gradient-to-br from-white via-gray-50/30 to-white dark:from-slate-800 dark:via-slate-700/50 dark:to-slate-800 dark:border-slate-600 shadow-gray-200/50 dark:shadow-slate-900/50"
+                                                                    } hover:border-orange-300 dark:hover:border-orange-400 hover:shadow-xl hover:shadow-orange-500/20 dark:hover:shadow-orange-900/30`}
                                                                 initial={{
                                                                     opacity: 0,
                                                                     y: 40,
-                                                                    scale: 0.9
+                                                                    scale: 0.9,
+                                                                    rotateX: 15
                                                                 }}
                                                                 animate={{
                                                                     opacity: selectedPlan && selectedPlan !== tier.name ? 0.7 : 1,
-                                                                    y: 0,
-                                                                    scale: selectedPlan === tier.name ? 1.05 : 1
+                                                                    y: selectedPlan === tier.name ? -4 : 0,
+                                                                    scale: selectedPlan === tier.name ? 1.02 : 1,
+                                                                    rotateX: 0,
+                                                                    boxShadow: selectedPlan === tier.name ?
+                                                                        "0 15px 30px -8px rgba(249, 115, 22, 0.2), 0 0 0 1px rgba(249, 115, 22, 0.2)" :
+                                                                        "0 10px 25px -3px rgba(0, 0, 0, 0.1)"
                                                                 }}
                                                                 transition={{
                                                                     delay: 0.2 + index * 0.1,
-                                                                    duration: 0.15,
-                                                                    ease: "easeOut"
+                                                                    duration: 0.4,
+                                                                    ease: "easeOut",
+                                                                    scale: { duration: 0.2, ease: "easeOut", delay: 0 }
                                                                 }}
-                                                                whileHover={{
-                                                                    scale: selectedPlan === tier.name ? 1.08 : 1.02,
-                                                                    y: -8,
-                                                                    rotateY: 2,
-                                                                    rotateX: 5
+                                                                whileTap={{
+                                                                    scale: 0.98,
+                                                                    transition: { duration: 0.1 }
                                                                 }}
-                                                                onClick={() => setSelectedPlan(selectedPlan === tier.name ? null : tier.name)}
+                                                                onClick={() => handlePlanSelection(selectedPlan === tier.name ? null : tier.name)}
                                                             >
-                                                                {/* Selection indicator */}
+                                                                {/* Enhanced gradient overlay with shimmer effect */}
+                                                                <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-orange-500/5 via-amber-500/10 to-yellow-500/5 dark:from-orange-400/10 dark:via-amber-400/15 dark:to-yellow-400/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+
+                                                                {/* Shimmer effect on hover */}
+                                                                <div className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none overflow-hidden">
+                                                                    <motion.div
+                                                                        className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent dark:via-white/10 -skew-x-12"
+                                                                        initial={{ x: '-100%' }}
+                                                                        animate={{ x: '200%' }}
+                                                                        transition={{ duration: 1.5, repeat: Infinity, repeatDelay: 2 }}
+                                                                    />
+                                                                </div>
+
+                                                                {/* Subtle border glow */}
+                                                                <div className={`absolute inset-0 rounded-2xl transition-opacity duration-300 pointer-events-none ${tier.popular || selectedPlan === tier.name ? 'opacity-100' : 'opacity-0 group-hover:opacity-60'}`}>
+                                                                    <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-orange-400/20 via-amber-400/30 to-orange-400/20 blur-sm" />
+                                                                </div>
+                                                                {/* Enhanced Selection indicator */}
                                                                 {selectedPlan === tier.name && (
                                                                     <motion.div
-                                                                        className="absolute top-2 right-2 w-8 h-8 bg-gradient-to-r from-green-500 to-green-600 rounded-full flex items-center justify-center shadow-lg z-10"
-                                                                        initial={{ scale: 0, rotate: -180 }}
-                                                                        animate={{ scale: 1, rotate: 0 }}
-                                                                        transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                                                                        className="absolute top-3 right-3 z-20"
+                                                                        initial={{ scale: 0, rotate: -180, opacity: 0 }}
+                                                                        animate={{ scale: 1, rotate: 0, opacity: 1 }}
+                                                                        transition={{ type: "spring", stiffness: 400, damping: 25, delay: 0.1 }}
                                                                     >
-                                                                        <Check className="w-5 h-5 text-white" />
+                                                                        {/* Pulsing ring */}
+                                                                        <motion.div
+                                                                            className="absolute inset-0 w-10 h-10 bg-gradient-to-r from-green-400 to-emerald-500 rounded-full opacity-30"
+                                                                            animate={{ scale: [1, 1.4, 1], opacity: [0.3, 0.1, 0.3] }}
+                                                                            transition={{ duration: 2, repeat: Infinity }}
+                                                                        />
+                                                                        <div className="relative w-10 h-10 bg-gradient-to-r from-green-500 to-emerald-600 rounded-full flex items-center justify-center shadow-xl border-2 border-white dark:border-slate-800">
+                                                                            <motion.div
+                                                                                initial={{ scale: 0 }}
+                                                                                animate={{ scale: 1 }}
+                                                                                transition={{ delay: 0.2, type: "spring", stiffness: 500 }}
+                                                                            >
+                                                                                <Check className="w-5 h-5 text-white font-bold" />
+                                                                            </motion.div>
+                                                                        </div>
                                                                     </motion.div>
                                                                 )}
 
-                                                                {/* Trophy animation for selected card */}
+                                                                {/* Gentle glow for selected card */}
                                                                 {selectedPlan === tier.name && (
                                                                     <motion.div
-                                                                        className="absolute inset-0 pointer-events-none"
+                                                                        className="absolute inset-0 pointer-events-none overflow-hidden rounded-2xl"
                                                                         initial={{ opacity: 0 }}
                                                                         animate={{ opacity: 1 }}
                                                                         transition={{ duration: 0.3 }}
                                                                     >
-                                                                        {/* Sparkles */}
-                                                                        {[...Array(8)].map((_, i) => (
-                                                                            <motion.div
-                                                                                key={i}
-                                                                                className="absolute w-2 h-2 bg-gradient-to-r from-yellow-400 to-orange-400 rounded-full"
-                                                                                style={{
-                                                                                    left: `${20 + (i * 10)}%`,
-                                                                                    top: `${15 + (i % 3) * 20}%`
-                                                                                }}
-                                                                                initial={{ scale: 0, opacity: 0 }}
-                                                                                animate={{
-                                                                                    scale: [0, 1, 0],
-                                                                                    opacity: [0, 1, 0],
-                                                                                    y: [0, -20, -40],
-                                                                                    rotate: [0, 180, 360]
-                                                                                }}
-                                                                                transition={{
-                                                                                    duration: 1.5,
-                                                                                    delay: i * 0.1,
-                                                                                    repeat: Infinity,
-                                                                                    repeatDelay: 2
-                                                                                }}
-                                                                            />
-                                                                        ))}
-
-                                                                        {/* Glow effect */}
+                                                                        {/* Subtle glow */}
                                                                         <motion.div
-                                                                            className="absolute inset-0 bg-gradient-to-r from-orange-400/20 to-yellow-400/20 rounded-xl"
+                                                                            className="absolute inset-0 bg-gradient-to-r from-orange-400/10 via-amber-400/15 to-orange-400/10 rounded-2xl"
                                                                             animate={{
-                                                                                opacity: [0.3, 0.6, 0.3],
-                                                                                scale: [1, 1.02, 1]
+                                                                                opacity: [0.1, 0.2, 0.1]
                                                                             }}
                                                                             transition={{
-                                                                                duration: 2,
+                                                                                duration: 3,
                                                                                 repeat: Infinity,
                                                                                 ease: "easeInOut"
                                                                             }}
@@ -1174,41 +1352,55 @@ export function DemoRequestForm() {
                                                                 )}
 
                                                                 {tier.popular && (
-                                                                    <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 z-10">
-                                                                        <motion.span
-                                                                            className="bg-gradient-to-r from-orange-500 to-orange-600 text-white px-4 py-1 rounded-full text-sm font-medium shadow-lg whitespace-nowrap"
+                                                                    <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 z-20">
+                                                                        <motion.div
+                                                                            className="relative"
                                                                             animate={selectedPlan === tier.name ? { scale: [1, 1.1, 1] } : {}}
-                                                                            transition={selectedPlan === tier.name ? { duration: 1, repeat: Infinity } : {}}
+                                                                            transition={selectedPlan === tier.name ? { duration: 2, repeat: Infinity } : {}}
                                                                         >
-                                                                            Most Popular
-                                                                        </motion.span>
+                                                                            {/* Glow effect behind badge */}
+                                                                            <div className="absolute inset-0 bg-gradient-to-r from-orange-400 to-amber-400 rounded-full blur-md opacity-60 animate-pulse" />
+                                                                            <span className="relative bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 text-white px-4 py-1.5 rounded-full text-sm font-bold shadow-xl whitespace-nowrap border border-orange-400/50 backdrop-blur-sm">
+                                                                                ⭐ Most Popular
+                                                                            </span>
+                                                                        </motion.div>
                                                                     </div>
                                                                 )}
 
                                                                 <div className="text-center mb-4 relative z-10">
-                                                                    <h4 className="text-xl font-semibold text-gray-800 dark:text-white mb-2">
+                                                                    <h4 className="text-xl font-bold text-gray-800 dark:text-white mb-3 tracking-tight">
                                                                         {tier.name}
                                                                     </h4>
-                                                                    <div className="text-3xl font-bold text-orange-600 dark:text-orange-400">
-                                                                        {tier.price}
-                                                                        <span className="text-lg text-gray-500 dark:text-gray-400">
-                                                                            {tier.period}
-                                                                        </span>
+                                                                    <div className="relative">
+                                                                        <div className="relative text-3xl font-black bg-gradient-to-r from-orange-600 via-amber-600 to-orange-700 dark:from-orange-400 dark:via-amber-400 dark:to-orange-500 bg-clip-text text-transparent">
+                                                                            {tier.price}
+                                                                            <span className="text-lg font-semibold text-gray-500 dark:text-gray-400 ml-1">
+                                                                                {tier.period}
+                                                                            </span>
+                                                                        </div>
                                                                     </div>
                                                                 </div>
-                                                                <ul className={`space-y-3 text-left ${!tier.popular ? 'flex-1' : ''}`}>
+                                                                <ul className={`space-y-3 text-left ${!tier.popular ? 'flex-1' : ''} relative z-10`}>
                                                                     {tier.features.map((feature, featureIndex) => (
-                                                                        <li key={featureIndex} className="flex items-center text-gray-600 dark:text-gray-300">
-                                                                            <Check className="w-4 h-4 text-green-500 mr-3 flex-shrink-0" />
-                                                                            {feature}
-                                                                        </li>
+                                                                        <motion.li
+                                                                            key={featureIndex}
+                                                                            className="flex items-center text-gray-700 dark:text-gray-200 font-medium"
+                                                                            initial={{ opacity: 0, x: -10 }}
+                                                                            animate={{ opacity: 1, x: 0 }}
+                                                                            transition={{ delay: 0.3 + featureIndex * 0.1 }}
+                                                                        >
+                                                                            <div className="w-5 h-5 rounded-full bg-gradient-to-r from-green-400 to-emerald-500 flex items-center justify-center mr-3 flex-shrink-0 shadow-sm">
+                                                                                <Check className="w-3 h-3 text-white font-bold" />
+                                                                            </div>
+                                                                            <span className="leading-relaxed">{feature}</span>
+                                                                        </motion.li>
                                                                     ))}
                                                                 </ul>
                                                             </motion.div>
                                                         ))}
                                                     </div>
 
-                                                    {/* Selection prompt */}
+                                                    {/* Enhanced Selection prompt */}
                                                     {formData.application_type > 0 && (
                                                         <motion.div
                                                             className="mt-8 text-center"
@@ -1216,20 +1408,31 @@ export function DemoRequestForm() {
                                                             animate={{ opacity: 1, y: 0 }}
                                                             transition={{ delay: 0.8 }}
                                                         >
-                                                            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-700">
-                                                                <p className="text-blue-800 dark:text-blue-200 font-medium">
-                                                                    Click on a plan to select it (optional) - You can choose during the demo!
-                                                                </p>
-                                                                {selectedPlan && (
-                                                                    <motion.p
-                                                                        className="text-green-700 dark:text-green-300 font-semibold mt-2"
-                                                                        initial={{ opacity: 0, scale: 0.9 }}
-                                                                        animate={{ opacity: 1, scale: 1 }}
-                                                                        transition={{ delay: 0.2 }}
-                                                                    >
-                                                                        Selected: {selectedPlan} Plan
-                                                                    </motion.p>
-                                                                )}
+                                                            <div className="relative bg-gradient-to-r from-blue-50 via-indigo-50/80 to-purple-50 dark:from-blue-900/25 dark:via-indigo-900/20 dark:to-purple-900/25 rounded-xl p-5 border border-blue-200/60 dark:border-blue-700/60 shadow-lg backdrop-blur-sm overflow-hidden">
+                                                                {/* Subtle animated background */}
+                                                                <div className="absolute inset-0 bg-gradient-to-r from-blue-400/5 via-indigo-400/10 to-purple-400/5 animate-pulse" />
+
+                                                                <div className="relative z-10">
+                                                                    <p className="text-blue-800 dark:text-blue-200 font-semibold text-lg mb-2">
+                                                                        🎆 Click on a plan to select it (optional)
+                                                                    </p>
+                                                                    <p className="text-blue-700 dark:text-blue-300 text-sm opacity-90">
+                                                                        You can always change your mind during the demo!
+                                                                    </p>
+
+                                                                    {selectedPlan && (
+                                                                        <motion.div
+                                                                            className="mt-4 p-3 bg-gradient-to-r from-green-100 to-emerald-100 dark:from-green-900/30 dark:to-emerald-900/30 rounded-lg border border-green-200 dark:border-green-700"
+                                                                            initial={{ opacity: 0, y: 10 }}
+                                                                            animate={{ opacity: 1, y: 0 }}
+                                                                            transition={{ delay: 0.2 }}
+                                                                        >
+                                                                            <p className="text-green-800 dark:text-green-200 font-semibold text-base flex items-center justify-center gap-2">
+                                                                                ✅ Selected: <span className="text-green-700 dark:text-green-300">{selectedPlan} Plan</span>
+                                                                            </p>
+                                                                        </motion.div>
+                                                                    )}
+                                                                </div>
                                                             </div>
                                                         </motion.div>
                                                     )}
@@ -1242,7 +1445,7 @@ export function DemoRequestForm() {
 
                             {/* Enhanced Navigation Buttons */}
                             <motion.div
-                                className="flex flex-col sm:flex-row justify-between gap-4 mt-10 pt-8 border-t border-gradient-to-r from-transparent via-gray-200 to-transparent dark:via-slate-600"
+                                className="flex flex-col sm:flex-row justify-between gap-3 lg:gap-4 xl:gap-3 mt-6 lg:mt-8 xl:mt-6 pt-4 lg:pt-6 xl:pt-4 border-t border-gradient-to-r from-transparent via-gray-200 to-transparent dark:via-slate-600 flex-shrink-0"
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: 0.5 }}
@@ -1256,7 +1459,7 @@ export function DemoRequestForm() {
                                         variant="outline"
                                         onClick={handleBack}
                                         disabled={currentStep === 1}
-                                        className="relative flex items-center justify-center gap-3 px-8 py-4 w-full sm:w-auto bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm border-2 border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700 hover:border-orange-300 dark:hover:border-orange-400 text-gray-700 dark:text-gray-200 hover:text-gray-700 dark:hover:text-gray-200 font-semibold rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed group"
+                                        className="relative flex items-center justify-center gap-2 lg:gap-3 xl:gap-2 px-6 lg:px-8 xl:px-6 py-3 lg:py-4 xl:py-3 w-full sm:w-auto bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm border-2 border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700 hover:border-orange-300 dark:hover:border-orange-400 text-gray-700 dark:text-gray-200 hover:text-gray-700 dark:hover:text-gray-200 font-semibold rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed group"
                                     >
                                         <div className="absolute inset-0 bg-gradient-to-r from-orange-500/5 to-amber-500/5 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                                         <ArrowLeft className="w-5 h-5 transition-transform group-hover:-translate-x-0.5" />
@@ -1272,7 +1475,7 @@ export function DemoRequestForm() {
                                     >
                                         <Button
                                             onClick={handleNext}
-                                            className="relative flex items-center justify-center gap-3 px-8 py-4 w-full sm:w-auto bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 hover:from-orange-600 hover:via-amber-600 hover:to-orange-700 text-white font-bold shadow-xl hover:shadow-2xl transition-all duration-300 rounded-xl group overflow-hidden"
+                                            className="relative flex items-center justify-center gap-2 lg:gap-3 xl:gap-2 px-6 lg:px-8 xl:px-6 py-3 lg:py-4 xl:py-3 w-full sm:w-auto bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 hover:from-orange-600 hover:via-amber-600 hover:to-orange-700 text-white font-bold shadow-xl hover:shadow-2xl transition-all duration-300 rounded-xl group overflow-hidden"
                                         >
                                             <div className="absolute inset-0 bg-gradient-to-r from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                                             <span className="relative z-10">Continue</span>
@@ -1288,13 +1491,13 @@ export function DemoRequestForm() {
                                         <Button
                                             onClick={handleSubmit}
                                             disabled={formData.application_type === 0}
-                                            className={`relative flex items-center justify-center gap-3 px-10 py-4 w-full sm:w-auto text-white font-bold shadow-xl hover:shadow-2xl transition-all duration-300 rounded-xl group overflow-hidden ${selectedPlan
+                                            className={`relative flex items-center justify-center gap-2 lg:gap-3 xl:gap-2 px-8 lg:px-10 xl:px-8 py-3 lg:py-4 xl:py-3 w-full sm:w-auto text-white font-bold shadow-xl hover:shadow-2xl transition-all duration-300 rounded-xl group overflow-hidden ${selectedPlan
                                                 ? "bg-gradient-to-r from-purple-500 via-fuchsia-500 to-purple-600 hover:from-purple-600 hover:via-fuchsia-600 hover:to-purple-700"
                                                 : "bg-gradient-to-r from-emerald-500 via-green-500 to-emerald-600 hover:from-emerald-600 hover:via-green-600 hover:to-emerald-700"
                                                 } disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed`}
                                         >
                                             <div className="absolute inset-0 bg-gradient-to-r from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                                            <span className="relative z-10">{selectedPlan ? `Submit with ${selectedPlan} Plan` : "Complete Demo Request"}</span>
+                                            <span className="relative z-10">{selectedPlan ? `Go with ${selectedPlan} Plan` : "Complete Demo Request"}</span>
                                             <Check className="w-5 h-5 relative z-10" />
                                         </Button>
                                     </motion.div>
@@ -1468,6 +1671,75 @@ export function DemoRequestForm() {
             <div className="bg-transparent">
                 <CompanyEllipse />
             </div>
+
+            {/* Celebration Popper Effect - Full Screen */}
+            <AnimatePresence>
+                {showCelebration && (
+                    <motion.div
+                        className="fixed inset-0 pointer-events-none z-50 overflow-hidden"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.3 }}
+                    >
+                        {/* Confetti fountain from bottom center */}
+                        {[...Array(80)].map((_, i) => {
+                            const angle = (Math.random() - 0.5) * Math.PI; // Random angle between -90° to 90°
+                            const velocity = 400 + Math.random() * 600; // Faster velocity
+                            const xDistance = Math.sin(angle) * velocity;
+                            const yDistance = Math.cos(angle) * velocity;
+
+                            // Random colors
+                            const colors = [
+                                'bg-red-500', 'bg-blue-500', 'bg-green-500', 'bg-yellow-400', 'bg-purple-500',
+                                'bg-pink-500', 'bg-orange-500', 'bg-cyan-500', 'bg-lime-500', 'bg-indigo-500',
+                                'bg-rose-500', 'bg-emerald-500', 'bg-amber-500', 'bg-teal-500', 'bg-violet-500'
+                            ];
+                            const randomColor = colors[Math.floor(Math.random() * colors.length)];
+
+                            // Random shapes
+                            const shapeType = i % 3;
+                            let shapeClass = '';
+
+                            if (shapeType === 0) {
+                                // Circle
+                                shapeClass = 'rounded-full';
+                            } else if (shapeType === 1) {
+                                // Square
+                                shapeClass = 'rounded-none';
+                            } else {
+                                // Triangle (using clip-path)
+                                shapeClass = 'rounded-none';
+                            }
+
+                            return (
+                                <motion.div
+                                    key={i}
+                                    className={`absolute w-3 h-3 ${randomColor} ${shapeClass}`}
+                                    style={{
+                                        left: '50%',
+                                        bottom: '0px',
+                                        transform: 'translateX(-50%)',
+                                        clipPath: shapeType === 2 ? 'polygon(50% 0%, 0% 100%, 100% 100%)' : 'none'
+                                    }}
+                                    animate={{
+                                        x: [0, xDistance],
+                                        y: [0, -yDistance, -yDistance + 300], // Faster arc motion
+                                        rotate: [0, 720 * (Math.random() > 0.5 ? 1 : -1)], // More rotation
+                                        scale: [1, 1, 0],
+                                        opacity: [1, 1, 0]
+                                    }}
+                                    transition={{
+                                        duration: 1.2 + Math.random() * 0.8, // Faster duration
+                                        delay: Math.random() * 0.2, // Less delay
+                                        ease: "easeOut"
+                                    }}
+                                />
+                            );
+                        })}
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </>
     );
 }

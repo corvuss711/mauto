@@ -13,7 +13,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import mysql from 'mysql2';
-import { RowDataPacket, ResultSetHeader } from 'mysql2';
+import { RowDataPacket, ResultSetHeader } from 'mysql2'; // Import the new route handler
 
 function parseMysqlUrl(url?: string) {
     if (!url) throw new Error('Missing MYSQL_URL');
@@ -110,6 +110,33 @@ function isAuth(req, res, next) {
     console.warn('[AUTH] Unauthorized - session id:', (req as any).sessionID, 'user:', (req as any).user);
     return res.status(401).json({ error: 'Unauthorized' });
 }
+
+async function handleGetPlans(req: express.Request, res: express.Response) {
+  try {
+    console.log('📤 Proxying request to external API:', req.body);
+
+    const response = await fetch('http://122.176.112.254/www-demo-msell-in/public/api/get-plan', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(req.body)
+    });
+
+    const data = await response.json();
+    console.log('📊 External API response:', data);
+
+    res.status(response.status).json(data);
+  } catch (error) {
+    console.error('❌ Error proxying to external API:', error);
+    res.status(500).json({
+      response: false,
+      error: 'Failed to fetch plans from external API',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+};
+
 
 // Google OAuth Strategy for serverless
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
@@ -739,6 +766,8 @@ app.post('/api/times-edited', async (req, res) => {
         res.json({ success: true, times_edited: timesEdited });
     } catch (e) { res.status(500).json({ error: 'Failed to check times_edited' }); }
 });
+
+app.post("/api/get-plan", handleGetPlans);
 
 // Upload (dynamic folders + both field names)
 app.post('/api/upload-logo', (req, res, next) => {

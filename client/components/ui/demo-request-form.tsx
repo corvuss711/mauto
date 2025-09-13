@@ -2007,7 +2007,7 @@ export function DemoRequestForm() {
 
                                                                 <div className="relative z-10">
                                                                     <p className="text-blue-800 dark:text-blue-200 font-semibold text-lg mb-2">
-                                                                        🎆 Click on a plan to select it (optional)
+                                                                         Click on a plan to select it (optional)
                                                                     </p>
                                                                     <p className="text-blue-700 dark:text-blue-300 text-sm opacity-90">
                                                                         You can always change your mind during the demo!

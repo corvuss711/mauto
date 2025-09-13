@@ -553,11 +553,9 @@ export function DemoRequestForm() {
         setPlansError(null);
 
         try {
-            console.log('🚀 Fetching plans for application type:', applicationType);
             const requestBody = {
                 application_type: applicationType.toString()
             };
-            console.log('📤 Request body:', requestBody);
 
             const response = await fetch('/api/get-plan', {
                 method: 'POST',
@@ -567,29 +565,22 @@ export function DemoRequestForm() {
                 body: JSON.stringify(requestBody)
             });
 
-            console.log('📡 Response status:', response.status);
-            console.log('📡 Response ok:', response.ok);
-
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
 
             const data: ApiResponse = await response.json();
-            console.log('📊 API Response:', data);
 
             if (data.response && data.data && Object.keys(data.data).length > 0) {
-                console.log('✅ Successfully loaded plans from API');
                 setPlans(data.data);
                 setPlansError(null);
             } else {
-                console.log('⚠️ API returned empty data');
                 // No plans available for this application type
                 setPlans({});
                 setPlansError("No plans available for the selected application type");
             }
         } catch (error) {
-            console.error('❌ Error fetching plans:', error);
-            console.log('🔄 Falling back to static data for application type:', applicationType);
+            console.error('Error fetching plans:', error);
             // Use fallback data when API fails
             const fallbackPlans: { [key: string]: Plan } = {};
             Object.keys(fallbackPricingData).forEach(key => {
@@ -597,7 +588,6 @@ export function DemoRequestForm() {
                     fallbackPlans[key] = fallbackPricingData[parseInt(key)];
                 }
             });
-            console.log('📦 Fallback plans loaded:', fallbackPlans);
             setPlans(fallbackPlans);
             setPlansError("Using offline data - API unavailable");
         } finally {
@@ -847,10 +837,10 @@ export function DemoRequestForm() {
     const validateStep1 = (): boolean => {
         const newErrors: Partial<FormData> = {};
 
-        if (!formData.company_name?.trim()) newErrors.company_name = "Company name is required";
-        else if (formData.company_name.includes(' ')) newErrors.company_name = "Company name cannot contain spaces";
+        if (!formData.company_name?.trim()) newErrors.company_name = "Company Code is required";
+        else if (formData.company_name.includes(' ')) newErrors.company_name = "Company Code cannot contain spaces";
 
-        if (!formData.company_title?.trim()) newErrors.company_title = "Company title is required";
+        if (!formData.company_title?.trim()) newErrors.company_title = "Company Name is required";
 
         if (!formData.website) newErrors.website = "Website is required";
         else if (!/^https?:\/\//.test(formData.website) && !/^www\./.test(formData.website)) {
@@ -959,8 +949,6 @@ export function DemoRequestForm() {
             ...formData,
             selected_plan: selectedPlan
         };
-
-        console.log("Form Data:", JSON.stringify(submissionData, null, 2));
 
         // Clear form immediately on submission
         clearForm();
@@ -2084,13 +2072,26 @@ export function DemoRequestForm() {
                                         <Button
                                             onClick={handleSubmit}
                                             disabled={formData.application_type === 0}
-                                            className={`relative flex items-center justify-center gap-2 lg:gap-3 xl:gap-2 px-8 lg:px-10 xl:px-8 py-3 lg:py-4 xl:py-3 w-full sm:w-auto text-white font-bold shadow-xl hover:shadow-2xl transition-all duration-300 rounded-xl group overflow-hidden ${selectedPlan
-                                                ? "bg-gradient-to-r from-purple-500 via-fuchsia-500 to-purple-600 hover:from-purple-600 hover:via-fuchsia-600 hover:to-purple-700"
-                                                : "bg-gradient-to-r from-emerald-500 via-green-500 to-emerald-600 hover:from-emerald-600 hover:via-green-600 hover:to-emerald-700"
-                                                } disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed`}
+                                            className={`relative flex items-center justify-center gap-2 lg:gap-3 xl:gap-2 px-8 lg:px-10 xl:px-8 py-3 lg:py-4 xl:py-3 w-full sm:w-auto text-white font-bold shadow-xl hover:shadow-2xl transition-all duration-300 rounded-xl group overflow-hidden ${(() => {
+                                                const hasPlansData = Object.keys(plans).length > 0;
+                                                return (hasPlansData && selectedPlan)
+                                                    ? "bg-gradient-to-r from-purple-500 via-fuchsia-500 to-purple-600 hover:from-purple-600 hover:via-fuchsia-600 hover:to-purple-700"
+                                                    : "bg-gradient-to-r from-emerald-500 via-green-500 to-emerald-600 hover:from-emerald-600 hover:via-green-600 hover:to-emerald-700";
+                                            })()} disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed`}
                                         >
                                             <div className="absolute inset-0 bg-gradient-to-r from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                                            <span className="relative z-10">{selectedPlan ? `Go with ${selectedPlan} Plan` : "Complete Demo Request"}</span>
+                                            <span className="relative z-10">
+                                                {(() => {
+                                                    // Check if there's plan data available (not empty response)
+                                                    const hasPlansData = Object.keys(plans).length > 0;
+                                                    
+                                                    if (hasPlansData && selectedPlan) {
+                                                        return `Go with ${selectedPlan} Plan`;
+                                                    } else {
+                                                        return "Complete Demo Request";
+                                                    }
+                                                })()}
+                                            </span>
                                             <Check className="w-5 h-5 relative z-10" />
                                         </Button>
                                     </motion.div>

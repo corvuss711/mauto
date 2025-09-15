@@ -21,7 +21,8 @@ import {
   Linkedin,
   Star,
   ChevronDown,
-  Check
+  Check,
+  Calendar
 } from "lucide-react";
 import { Header } from "../components/ui/header";
 import { ThemeProvider } from "../components/ui/theme-provider";
@@ -40,12 +41,16 @@ export function ContactUs() {
     message: "",
     companyName: "",
     solutionType: "Web Design & Development",
+    preferredDate: "",
+    preferredTime: "",
     privacyPolicy: false,
   });
 
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isTimeDropdownOpen, setIsTimeDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const timeDropdownRef = useRef<HTMLDivElement>(null);
 
   // Solution type options
   const solutionOptions = [
@@ -56,6 +61,27 @@ export function ContactUs() {
     "Distributor Management Solution",
     "Purchase Order Management",
     "Other"
+  ];
+
+  // Time slots options (10 AM to 6 PM)
+  const timeSlots = [
+    "10:00 AM",
+    "10:30 AM",
+    "11:00 AM",
+    "11:30 AM",
+    "12:00 PM",
+    "12:30 PM",
+    "01:00 PM",
+    "01:30 PM",
+    "02:00 PM",
+    "02:30 PM",
+    "03:00 PM",
+    "03:30 PM",
+    "04:00 PM",
+    "04:30 PM",
+    "05:00 PM",
+    "05:30 PM",
+    "06:00 PM"
   ];
 
   // Testimonial carousel state
@@ -102,6 +128,9 @@ export function ContactUs() {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsDropdownOpen(false);
       }
+      if (timeDropdownRef.current && !timeDropdownRef.current.contains(event.target as Node)) {
+        setIsTimeDropdownOpen(false);
+      }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
@@ -144,6 +173,15 @@ export function ContactUs() {
     // Clear error when user selects
     if (errors.solutionType) {
       setErrors((prev) => ({ ...prev, solutionType: "" }));
+    }
+  };
+
+  const handleTimeSelect = (time: string) => {
+    setFormData((prev) => ({ ...prev, preferredTime: time }));
+    setIsTimeDropdownOpen(false);
+    // Clear error when user selects
+    if (errors.preferredTime) {
+      setErrors((prev) => ({ ...prev, preferredTime: "" }));
     }
   };
 
@@ -205,15 +243,17 @@ export function ContactUs() {
       phone: formData.phone,
       company_name: formData.companyName,
       solution_type: formData.solutionType,
+      preferred_date: formData.preferredDate,
+      preferred_time: formData.preferredTime,
       message: formData.message,
       subject: 'New Lead from the Site',
-      formatted_message: `New lead from the site:\n\nName: ${formData.fullName}\nEmail: ${formData.email}\nPhone: ${formData.phone}\nCompany Name: ${formData.companyName}\nQuery Solution: ${formData.solutionType}\nMessage: ${formData.message}`
+      formatted_message: `New lead from the site:\n\nName: ${formData.fullName}\nEmail: ${formData.email}\nPhone: ${formData.phone}\nCompany Name: ${formData.companyName}\nQuery Solution: ${formData.solutionType}${formData.preferredDate ? `\nPreferred Date: ${formData.preferredDate}` : ''}${formData.preferredTime ? `\nPreferred Time: ${formData.preferredTime}` : ''}\nMessage: ${formData.message}`
     };
 
     try {
       const serviceId = import.meta.env.VITE_EMAILJS_SERVICE_ID;
       const templateId = import.meta.env.VITE_EMAILJS_TEMPLATE_ID;
-      const userId = import.meta.env.VITE_EMAILJS_USER_ID;
+      const publicKey = import.meta.env.VITE_EMAILJS_PUBLIC_KEY;
 
       // console.log(serviceId, templateId, userId);
 
@@ -221,7 +261,7 @@ export function ContactUs() {
         serviceId,
         templateId,
         templateParams,
-        userId
+        publicKey
       );
       setIsSubmitted(true);
       setFormData({
@@ -232,6 +272,8 @@ export function ContactUs() {
         message: "",
         companyName: "",
         solutionType: "",
+        preferredDate: "",
+        preferredTime: "",
         privacyPolicy: false,
       });
       setTimeout(() => {
@@ -502,6 +544,84 @@ export function ContactUs() {
                             <p className="mt-2 text-sm text-red-500 flex items-center gap-2">
                               <span className="w-4 h-4 rounded-full bg-red-500 flex items-center justify-center text-white text-xs">!</span>
                               {errors.solutionType}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Preferred Meeting Date and Time */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div>
+                          <label className="block text-lg font-bold mb-3">
+                            Preferred Meeting Date
+                          </label>
+                          <div className="relative">
+                            <Input
+                              name="preferredDate"
+                              type="date"
+                              value={formData.preferredDate}
+                              onChange={handleChange}
+                              min={new Date().toISOString().split('T')[0]}
+                              className={`w-full px-6 py-4 pr-12 text-lg bg-secondary/50 border rounded-lg focus:outline-none focus:ring-2 transition-all duration-300 [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full ${errors.preferredDate
+                                ? 'border-red-500 focus:ring-red-500 bg-red-50/10'
+                                : 'border-glass-border focus:ring-primary'
+                                }`}
+                            />
+                            <Calendar className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-foreground/60 pointer-events-none" />
+                          </div>
+                          {errors.preferredDate && (
+                            <p className="mt-2 text-sm text-red-500 flex items-center gap-2">
+                              <span className="w-4 h-4 rounded-full bg-red-500 flex items-center justify-center text-white text-xs">!</span>
+                              {errors.preferredDate}
+                            </p>
+                          )}
+                        </div>
+                        <div>
+                          <label className="block text-lg font-bold mb-3">
+                            Preferred Meeting Time
+                          </label>
+                          <div className="custom-dropdown" ref={timeDropdownRef}>
+                            <div
+                              className={`w-full px-6 h-[56px] text-lg leading-[1.75rem] bg-secondary/50 border rounded-lg focus:outline-none focus:ring-2 transition-all duration-300 cursor-pointer flex items-center justify-between dropdown-trigger ${errors.preferredTime
+                                ? 'border-red-500 focus:ring-red-500 bg-red-50/10'
+                                : 'border-glass-border focus:ring-primary'
+                                }`}
+                              onClick={() => setIsTimeDropdownOpen(!isTimeDropdownOpen)}
+                              tabIndex={0}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  setIsTimeDropdownOpen(!isTimeDropdownOpen);
+                                }
+                              }}
+                            >
+                              <span className={formData.preferredTime ? '' : 'custom-dropdown-placeholder'}>
+                                {formData.preferredTime || 'Select preferred time'}
+                              </span>
+                              <Clock className={`w-5 h-5 text-foreground/60 custom-dropdown-chevron ${isTimeDropdownOpen ? 'open' : ''}`} />
+                            </div>
+
+                            {isTimeDropdownOpen && (
+                              <div className="custom-dropdown-content max-h-60 overflow-y-auto">
+                                {timeSlots.map((time) => (
+                                  <div
+                                    key={time}
+                                    className={`custom-dropdown-option ${formData.preferredTime === time ? 'selected' : ''}`}
+                                    onClick={() => handleTimeSelect(time)}
+                                  >
+                                    <span>{time}</span>
+                                    {formData.preferredTime === time && (
+                                      <Check className="w-4 h-4 text-primary" />
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          {errors.preferredTime && (
+                            <p className="mt-2 text-sm text-red-500 flex items-center gap-2">
+                              <span className="w-4 h-4 rounded-full bg-red-500 flex items-center justify-center text-white text-xs">!</span>
+                              {errors.preferredTime}
                             </p>
                           )}
                         </div>

@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import express from "express";
 import cors from "cors";
-import { handleDemo, handleGetPlans } from "./routes/demo";
+import { handleDemo, handleGetPlans, handleProcessPayment } from "./routes/demo";
 import {
   handleSaveCompanyDetails,
   handleGenerateSite,
@@ -156,10 +156,10 @@ export function createServer() {
     res.json({ message: "Hello from Express server v2!" });
   });
 
-  app.get("/api/demo", handleDemo);
+  // API Routes
+  app.post("/api/demo", handleDemo);
   app.post("/api/get-plan", handleGetPlans);
-
-  // Google auth routes
+  app.post("/api/process-payment", handleProcessPayment);  // Google auth routes
   app.get('/api/auth/google', (req, res, next) => {
     if (!GOOGLE_CLIENT_ID) return res.status(500).json({ error: 'Google OAuth not configured' });
     const callbackURL = `${req.protocol}://${req.get('host')}/api/auth/google/callback`;

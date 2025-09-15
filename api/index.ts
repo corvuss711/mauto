@@ -113,7 +113,7 @@ function isAuth(req, res, next) {
 
 async function handleGetPlans(req: express.Request, res: express.Response) {
   try {
-    console.log('📤 Proxying request to external API:', req.body);
+    // console.log('📤 Proxying request to external API:', req.body);
 
     const response = await fetch('http://122.176.112.254/www-demo-msell-in/public/api/get-plan', {
       method: 'POST',
@@ -124,7 +124,7 @@ async function handleGetPlans(req: express.Request, res: express.Response) {
     });
 
     const data = await response.json();
-    console.log('📊 External API response:', data);
+    // console.log('📊 External API response:', data);
 
     res.status(response.status).json(data);
   } catch (error) {
@@ -132,6 +132,31 @@ async function handleGetPlans(req: express.Request, res: express.Response) {
     res.status(500).json({
       response: false,
       error: 'Failed to fetch plans from external API',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+};
+
+async function handleProcessPayment(req: express.Request, res: express.Response) {
+  try {
+
+    const response = await fetch('http://122.176.112.254/www-demo-msell-in/public/api/process-payment', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(req.body)
+    });
+
+    const data = await response.json();
+
+
+    res.status(response.status).json(data);
+  } catch (error) {
+
+    res.status(500).json({
+      response: false,
+      error: 'Failed to process payment via external API',
       message: error instanceof Error ? error.message : 'Unknown error'
     });
   }
@@ -768,6 +793,7 @@ app.post('/api/times-edited', async (req, res) => {
 });
 
 app.post("/api/get-plan", handleGetPlans);
+ app.post("/api/process-payment", handleProcessPayment);
 
 // Upload (dynamic folders + both field names)
 app.post('/api/upload-logo', (req, res, next) => {

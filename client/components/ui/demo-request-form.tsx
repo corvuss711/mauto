@@ -580,7 +580,6 @@ export function DemoRequestForm() {
                 setPlansError("No plans available for the selected application type");
             }
         } catch (error) {
-            console.error('Error fetching plans:', error);
             // Use fallback data when API fails
             const fallbackPlans: { [key: string]: Plan } = {};
             Object.keys(fallbackPricingData).forEach(key => {
@@ -663,6 +662,23 @@ export function DemoRequestForm() {
         title: '',
         message: ''
     });
+
+    // API submission states
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [submissionResult, setSubmissionResult] = useState<{
+        success: boolean;
+        message: string;
+        showResultPage: boolean;
+    }>({
+        success: false,
+        message: '',
+        showResultPage: false
+    });
+
+    // Function to close result page
+    const closeResultPage = () => {
+        setSubmissionResult({ success: false, message: '', showResultPage: false });
+    };
 
 
 
@@ -939,22 +955,149 @@ export function DemoRequestForm() {
         setHasSelectedBefore(false);
     };
 
-    const handleSubmit = () => {
-        if (formData.application_type === 0) {
-            showAlert('warning', 'Application Type Required', 'Please select an application type to continue with your demo request.');
+    const handleSubmit = async () => {
+        if (!selectedPlan) {
+            showAlert('warning', 'Plan Selection Required', 'Please select a pricing plan to continue with your demo request.');
             return;
         }
 
-        const submissionData = {
-            ...formData,
-            selected_plan: selectedPlan
-        };
+        setIsSubmitting(true);
 
-        // Clear form immediately on submission
-        clearForm();
+        try {
+            // Get the selected plan details
+            const currentPlans = getCurrentPricingData();
+            if (!currentPlans) {
+                throw new Error('No plans available');
+            }
 
-        // Show success message
-        showAlert('success', 'Demo Request Submitted!', 'Your demo request has been submitted successfully. We will contact you soon. The form has been cleared for your convenience.');
+            const selectedPlanData = currentPlans.tiers.find(plan => plan.name === selectedPlan);
+
+            if (!selectedPlanData) {
+                throw new Error('Selected plan data not found');
+            }
+
+            // Find the correct plan based on selected plan name (Silver/Gold/Platinum)
+            const planEntry = Object.entries(plans).find(([key, plan]) => {
+                // Match plan name with selected plan (case-insensitive)
+                return plan.plan_name.toLowerCase().includes(selectedPlan.toLowerCase()) ||
+                    selectedPlan.toLowerCase().includes(plan.plan_name.toLowerCase());
+            });
+
+            if (!planEntry) {
+                throw new Error(`Plan not found for selected plan: ${selectedPlan}`);
+            }
+
+            const [planKey, planData] = planEntry;
+
+            // Find the specific plan detail for the selected tenure
+            const planDetail = planData.plan_details.find(detail => detail.duration === selectedTenure);
+
+            if (!planDetail) {
+                throw new Error(`Plan detail not found for tenure: ${selectedTenure} in plan: ${planData.plan_name}`);
+            }
+
+            // Prepare the API request body with correct IDs from get-plan API response
+            const requestBody = {
+                company_name: formData.company_name,
+                company_title: formData.company_title,
+                user_name: formData.user_name,
+                password: formData.password,
+                website: formData.website,
+                email: formData.email,
+                state_code: null, // Default state code as per your example
+                address: formData.address,
+                contact_per_name: formData.contact_per_name,
+                landline: "", // Not collected in form
+                mobile: formData.mobile,
+                application_type: formData.application_type,
+                pricing_id: planDetail.id, // ID from plan_details array for selected tenure
+                plan_id: planData.plan_id, // Plan ID (silver/gold/platinum from get-plan API)
+                num_users: selectedPlanData.minUsers // Using minimum users from selected plan
+            };
+
+            // Debug logging for frontend
+            // console.log('🔍 Frontend Debug - Selected Plan Mapping:');
+            // console.log('Selected Plan Name:', selectedPlan);
+            // console.log('Selected Tenure:', selectedTenure);
+            // console.log('Found Plan Data:', planData.plan_name);
+            // console.log('Plan ID (from get-plan API):', planData.plan_id);
+            // console.log('Plan Detail ID (pricing_id):', planDetail.id);
+            // console.log('Plan Detail Duration:', planDetail.duration);
+            // console.log('Final Request Body:', requestBody);
+
+            // Make the API call through our proxy
+            const response = await fetch('/api/process-payment', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(requestBody)
+            });
+
+            let responseData;
+            const contentType = response.headers.get('content-type');
+
+            try {
+                if (contentType && contentType.includes('application/json')) {
+                    responseData = await response.json();
+                } else {
+                    // Handle non-JSON responses (HTML error pages, etc.)
+                    const textResponse = await response.text();
+                    throw new Error('Server returned invalid response format');
+                }
+            } catch (parseError) {
+                throw new Error('Invalid response format from server');
+            }
+
+            // Check for success conditions - either response.response === true OR success keywords in message
+            const isSuccessResponse = responseData.response === true ||
+                (responseData.message && (
+                    responseData.message.toLowerCase().includes('payment successful') ||
+                    responseData.message.toLowerCase().includes('created') ||
+                    responseData.message.toLowerCase().includes('success')
+                ));
+
+            if (response.ok && isSuccessResponse) {
+                // Success
+                // Use the actual success message from API and append hardcoded message
+                const apiMessage = responseData.message &&
+                    (responseData.message.toLowerCase().includes('payment successful') ||
+                        responseData.message.toLowerCase().includes('created') ||
+                        responseData.message.toLowerCase().includes('success'))
+                    ? responseData.message
+                    : 'Demo request submitted successfully!';
+
+                const successMessage = apiMessage + '\n\nOur team will connect with you shortly and your credentials will be shared via email within 24 hours.';
+
+                setSubmissionResult({
+                    success: true,
+                    message: successMessage,
+                    showResultPage: true
+                });
+
+                // Clear form after successful submission
+                clearForm();
+            } else {
+                // Failure
+                const failureMessage = responseData.message || 'Failed to submit demo request. Please try again.';
+
+                setSubmissionResult({
+                    success: false,
+                    message: failureMessage,
+                    showResultPage: true
+                });
+            }
+        } catch (error) {
+            const networkErrorMessage = 'Network error occurred. Please check your connection and try again.';
+
+            setSubmissionResult({
+                success: false,
+                message: networkErrorMessage,
+                showResultPage: true
+            });
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     const stepVariants = {
@@ -991,6 +1134,68 @@ export function DemoRequestForm() {
 
     return (
         <>
+            {/* Result Page */}
+            {submissionResult.showResultPage && (
+                <div className="fixed inset-0 bg-gradient-to-br from-orange-50 via-yellow-50/80 to-blue-50 dark:from-slate-900 dark:via-slate-800 dark:to-indigo-900/50 z-50 flex items-center justify-center p-4">
+                    <motion.div
+                        initial={{ scale: 0.8, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        transition={{ duration: 0.5, ease: "easeOut" }}
+                        className="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl p-8 max-w-md w-full text-center"
+                    >
+                        {submissionResult.success ? (
+                            <>
+                                <motion.div
+                                    initial={{ scale: 0 }}
+                                    animate={{ scale: 1 }}
+                                    transition={{ delay: 0.2, duration: 0.3, type: "spring" }}
+                                    className="w-20 h-20 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-6"
+                                >
+                                    <CheckCircle className="w-10 h-10 text-green-600 dark:text-green-400" />
+                                </motion.div>
+                                <h1 className="text-2xl font-bold text-green-600 dark:text-green-400 mb-4">
+                                    Success!
+                                </h1>
+                                <p className="text-gray-600 dark:text-gray-300 mb-6">
+                                    {submissionResult.message}
+                                </p>
+                            </>
+                        ) : (
+                            <>
+                                <motion.div
+                                    initial={{ scale: 0 }}
+                                    animate={{ scale: 1 }}
+                                    transition={{ delay: 0.2, duration: 0.3, type: "spring" }}
+                                    className="w-20 h-20 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-6"
+                                >
+                                    <AlertCircle className="w-10 h-10 text-red-600 dark:text-red-400" />
+                                </motion.div>
+                                <h1 className="text-2xl font-bold text-red-600 dark:text-red-400 mb-4">
+                                    Failure
+                                </h1>
+                                <p className="text-gray-600 dark:text-gray-300 mb-6">
+                                    {submissionResult.message}
+                                </p>
+                            </>
+                        )}
+                        <Button
+                            onClick={() => {
+                                if (submissionResult.success) {
+                                    // Navigate to home page
+                                    window.location.href = '/';
+                                } else {
+                                    // Just close the modal for failures
+                                    closeResultPage();
+                                }
+                            }}
+                            className="w-full bg-gradient-to-r from-orange-500 to-yellow-500 hover:from-orange-600 hover:to-yellow-600 text-white font-semibold py-3 rounded-xl"
+                        >
+                            {submissionResult.success ? 'Return to Home' : 'Close'}
+                        </Button>
+                    </motion.div>
+                </div>
+            )}
+
             <div className="min-h-screen bg-gradient-to-br from-orange-50 via-yellow-50/80 to-blue-50 dark:from-slate-900 dark:via-slate-800 dark:to-indigo-900/50 py-8 px-4 relative overflow-hidden">
                 {/* Enhanced Background decoration */}
                 <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -1913,7 +2118,7 @@ export function DemoRequestForm() {
                                                                                 >
                                                                                     {/* Glow effect behind badge */}
                                                                                     <div className="absolute inset-0 bg-gradient-to-r from-orange-400 to-amber-400 rounded-full blur-md opacity-60 animate-pulse" />
-                                                                                    <span className="relative bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 text-white px-4 py-1.5 rounded-full text-sm font-bold shadow-xl whitespace-nowrap border border-orange-400/50 backdrop-blur-sm">
+                                                                                    <span className="relative bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 text-white px-4 py-1.5 md:px-3 md:py-1 rounded-full text-sm md:text-xs font-bold shadow-xl whitespace-nowrap border border-orange-400/50 backdrop-blur-sm">
                                                                                         ⭐ Most Popular
                                                                                     </span>
                                                                                 </motion.div>
@@ -2071,28 +2276,19 @@ export function DemoRequestForm() {
                                     >
                                         <Button
                                             onClick={handleSubmit}
-                                            disabled={formData.application_type === 0}
-                                            className={`relative flex items-center justify-center gap-2 lg:gap-3 xl:gap-2 px-8 lg:px-10 xl:px-8 py-3 lg:py-4 xl:py-3 w-full sm:w-auto text-white font-bold shadow-xl hover:shadow-2xl transition-all duration-300 rounded-xl group overflow-hidden ${(() => {
-                                                const hasPlansData = Object.keys(plans).length > 0;
-                                                return (hasPlansData && selectedPlan)
-                                                    ? "bg-gradient-to-r from-purple-500 via-fuchsia-500 to-purple-600 hover:from-purple-600 hover:via-fuchsia-600 hover:to-purple-700"
-                                                    : "bg-gradient-to-r from-emerald-500 via-green-500 to-emerald-600 hover:from-emerald-600 hover:via-green-600 hover:to-emerald-700";
-                                            })()} disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed`}
+                                            disabled={!selectedPlan || isSubmitting}
+                                            className="relative flex items-center justify-center gap-2 lg:gap-3 xl:gap-2 px-8 lg:px-10 xl:px-8 py-3 lg:py-4 xl:py-3 w-full sm:w-auto text-white font-bold shadow-xl hover:shadow-2xl transition-all duration-300 rounded-xl group overflow-hidden bg-gradient-to-r from-emerald-500 via-green-500 to-emerald-600 hover:from-emerald-600 hover:via-green-600 hover:to-emerald-700 disabled:from-gray-400 disabled:via-gray-500 disabled:to-gray-600 disabled:cursor-not-allowed disabled:shadow-none"
                                         >
-                                            <div className="absolute inset-0 bg-gradient-to-r from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                                            <div className="absolute inset-0 bg-gradient-to-r from-white/20 to-transparent opacity-0 group-hover:opacity-100 group-disabled:opacity-0 transition-opacity duration-300" />
                                             <span className="relative z-10">
-                                                {(() => {
-                                                    // Check if there's plan data available (not empty response)
-                                                    const hasPlansData = Object.keys(plans).length > 0;
-
-                                                    if (hasPlansData && selectedPlan) {
-                                                        return `Go with ${selectedPlan} Plan`;
-                                                    } else {
-                                                        return "Complete Demo Request";
-                                                    }
-                                                })()}
+                                                {isSubmitting ? 'Processing...' : 'Complete Demo Request'}
                                             </span>
-                                            <Check className="w-5 h-5 relative z-10" />
+                                            {isSubmitting ? (
+                                                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full relative z-10"
+                                                    style={{ animation: 'spin 0.8s linear infinite' }} />
+                                            ) : (
+                                                <Check className="w-5 h-5 relative z-10" />
+                                            )}
                                         </Button>
                                     </motion.div>
                                 )}

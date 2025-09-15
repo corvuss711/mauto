@@ -12,7 +12,13 @@ export default defineConfig(({ mode }) => ({
     allowedHosts: [
       '0e7949daa008.ngrok-free.app' // your ngrok host
     ],
-
+    proxy: {
+      '/api/get-plan': {
+        target: 'http://122.176.112.254/www-demo-msell-in/public',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, '/api')
+      }
+    }
   },
   build: {
     outDir: "build",

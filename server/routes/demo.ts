@@ -10,7 +10,7 @@ export const handleDemo: RequestHandler = (req, res) => {
 
 export const handleGetPlans: RequestHandler = async (req, res) => {
   try {
-    console.log('📤 Proxying request to external API:', req.body);
+    // console.log('📤 Proxying request to external API:', req.body);
 
     const response = await fetch('http://122.176.112.254/www-demo-msell-in/public/api/get-plan', {
       method: 'POST',
@@ -21,14 +21,39 @@ export const handleGetPlans: RequestHandler = async (req, res) => {
     });
 
     const data = await response.json();
-    console.log('📊 External API response:', data);
+    // console.log('📊 External API response:', data);
 
     res.status(response.status).json(data);
   } catch (error) {
-    console.error('❌ Error proxying to external API:', error);
+
     res.status(500).json({
       response: false,
       error: 'Failed to fetch plans from external API',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+};
+
+export const handleProcessPayment: RequestHandler = async (req, res) => {
+  try {
+
+    const response = await fetch('http://122.176.112.254/www-demo-msell-in/public/api/process-payment', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(req.body)
+    });
+
+    const data = await response.json();
+
+
+    res.status(response.status).json(data);
+  } catch (error) {
+
+    res.status(500).json({
+      response: false,
+      error: 'Failed to process payment via external API',
       message: error instanceof Error ? error.message : 'Unknown error'
     });
   }

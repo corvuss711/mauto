@@ -139,6 +139,7 @@ async function handleGetPlans(req: express.Request, res: express.Response) {
 
 async function handleProcessPayment(req: express.Request, res: express.Response) {
   try {
+    console.log(req.body)
 
     const response = await fetch('http://122.176.112.254/www-demo-msell-in/public/api/process-payment', {
       method: 'POST',

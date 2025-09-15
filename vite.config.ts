@@ -17,6 +17,11 @@ export default defineConfig(({ mode }) => ({
         target: 'http://122.176.112.254/www-demo-msell-in/public',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, '/api')
+      },
+      '/api/process-payment': {
+        target: 'http://122.176.112.254/www-demo-msell-in/public',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, '/api')
       }
     }
   },

@@ -112,109 +112,109 @@ function isAuth(req, res, next) {
 }
 
 async function handleGetPlans(req: express.Request, res: express.Response) {
-  try {
-    // console.log('📤 Proxying request to external API:', req.body);
+    try {
+        // console.log('📤 Proxying request to external API:', req.body);
 
-    const response = await fetch('http://122.176.112.254/www-demo-msell-in/public/api/get-plan', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(req.body)
-    });
+        const response = await fetch('http://122.176.112.254/www-demo-msell-in/public/api/get-plan', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(req.body)
+        });
 
-    const data = await response.json();
-    // console.log('📊 External API response:', data);
+        const data = await response.json();
+        // console.log('📊 External API response:', data);
 
-    res.status(response.status).json(data);
-  } catch (error) {
-    console.error('❌ Error proxying to external API:', error);
-    res.status(500).json({
-      response: false,
-      error: 'Failed to fetch plans from external API',
-      message: error instanceof Error ? error.message : 'Unknown error'
-    });
-  }
+        res.status(response.status).json(data);
+    } catch (error) {
+        console.error('❌ Error proxying to external API:', error);
+        res.status(500).json({
+            response: false,
+            error: 'Failed to fetch plans from external API',
+            message: error instanceof Error ? error.message : 'Unknown error'
+        });
+    }
 };
 
 async function handleProcessPayment(req: express.Request, res: express.Response) {
-  try {
-    console.log(req.body)
+    try {
+        console.log(req.body)
 
-    const response = await fetch('http://122.176.112.254/www-demo-msell-in/public/api/process-payment', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(req.body)
-    });
+        const response = await fetch('http://122.176.112.254/www-demo-msell-in/public/api/process-payment', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(req.body)
+        });
 
-    const data = await response.json();
+        const data = await response.json();
 
 
-    res.status(response.status).json(data);
-  } catch (error) {
+        res.status(response.status).json(data);
+    } catch (error) {
 
-    res.status(500).json({
-      response: false,
-      error: 'Failed to process payment via external API',
-      message: error instanceof Error ? error.message : 'Unknown error'
-    });
-  }
+        res.status(500).json({
+            response: false,
+            error: 'Failed to process payment via external API',
+            message: error instanceof Error ? error.message : 'Unknown error'
+        });
+    }
 };
 
 async function handleOtpRequest(req: express.Request, res: express.Response) {
-  try {
-    // Validate required fields
-    const { mobile, request_type } = req.body;
-    
-    if (!mobile) {
-      return res.status(400).json({
-        success: false,
-        error: 'Missing mobile number',
-        message: 'Mobile number is required'
-      });
-    }
-    
-    if (!request_type || !['SENT', 'VALIDATE'].includes(request_type)) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid request type',
-        message: 'request_type must be either SENT or VALIDATE'
-      });
-    }
+    try {
+        // Validate required fields
+        const { mobile, request_type } = req.body;
 
-    const response = await fetch('http://122.176.112.254/www-demo-msell-in/public/api/otp_send_status', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(req.body)
-    });
+        if (!mobile) {
+            return res.status(400).json({
+                success: false,
+                error: 'Missing mobile number',
+                message: 'Mobile number is required'
+            });
+        }
 
-    let data;
-    const contentType = response.headers.get('content-type');
-    
-    if (contentType && contentType.includes('application/json')) {
-      data = await response.json();
-    } else {
-      const textResponse = await response.text();
-      data = {
-        success: false,
-        error: 'Invalid response format from external API',
-        message: 'External API returned non-JSON response',
-        rawResponse: textResponse
-      };
+        if (!request_type || !['SENT', 'VALIDATE'].includes(request_type)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid request type',
+                message: 'request_type must be either SENT or VALIDATE'
+            });
+        }
+
+        const response = await fetch('http://122.176.112.254/www-demo-msell-in/public/api/otp_send_status', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(req.body)
+        });
+
+        let data;
+        const contentType = response.headers.get('content-type');
+
+        if (contentType && contentType.includes('application/json')) {
+            data = await response.json();
+        } else {
+            const textResponse = await response.text();
+            data = {
+                success: false,
+                error: 'Invalid response format from external API',
+                message: 'External API returned non-JSON response',
+                rawResponse: textResponse
+            };
+        }
+
+        res.status(response.status).json(data);
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: 'Failed to process OTP request via external API',
+            message: error instanceof Error ? error.message : 'Unknown error'
+        });
     }
-
-    res.status(response.status).json(data);
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: 'Failed to process OTP request via external API',
-      message: error instanceof Error ? error.message : 'Unknown error'
-    });
-  }
 }
 
 // Google OAuth Strategy for serverless

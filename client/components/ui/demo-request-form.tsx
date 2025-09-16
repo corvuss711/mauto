@@ -727,19 +727,27 @@ export function DemoRequestForm() {
 
             const data = await response.json();
             console.log('[OTP Send] Response data:', data);
-            
+
+            // Handle cases where HTTP status is not OK but response contains error details
+            if (!response.ok && data && (data.message || data.error)) {
+                console.log('[OTP Send] HTTP error with message:', data.message || data.error);
+                const errorMessage = data.message || data.error || data.msg || 'Failed to send OTP. Please try again.';
+                showAlert('error', 'OTP Send Failed', errorMessage);
+                return;
+            }
+
             if (data.success === true || data.response === true) {
                 const isResend = isOtpSent; // Check if this is a resend operation
                 console.log('[OTP Send] Success - OTP', isResend ? 'resent' : 'sent', 'successfully');
-                
+
                 setIsOtpSent(true);
                 setCanResendOtp(false);
                 setOtpCountdown(30);
                 setOtpSentMessage(isResend ? 'OTP resent successfully to your mobile number' : 'OTP sent successfully to your mobile number');
                 setOtpVerificationMessage(''); // Clear any previous verification message
-                
+
                 console.log('[OTP Send] State updated - isOtpSent: true, countdown: 30, canResendOtp: false');
-                
+
                 // Start countdown timer
                 if (otpCountdownRef.current) clearInterval(otpCountdownRef.current);
                 otpCountdownRef.current = setInterval(() => {
@@ -753,15 +761,23 @@ export function DemoRequestForm() {
                         return prev - 1;
                     });
                 }, 1000);
-                
+
                 // No modal alert for success - using inline message instead
             } else {
                 console.log('[OTP Send] Failed - Server response indicates failure:', data.message);
-                showAlert('error', 'OTP Send Failed', data.message || 'Failed to send OTP. Please try again.');
+                // Improved error message handling - check multiple possible message fields
+                const errorMessage = data.message || data.error || data.msg || 
+                    (data.success === false ? 'Failed to send OTP. Please try again.' : 'Failed to send OTP. Please try again.');
+                showAlert('error', 'OTP Send Failed', errorMessage);
             }
         } catch (error) {
             console.error('[OTP Send] Network error:', error);
-            showAlert('error', 'Network Error', 'Failed to send OTP. Please check your connection and try again.');
+            // Check if the error has response data with a message
+            if (error instanceof Error && error.message.includes('Failed to fetch')) {
+                showAlert('error', 'Network Error', 'Failed to send OTP. Please check your connection and try again.');
+            } else {
+                showAlert('error', 'Network Error', 'Failed to send OTP. Please check your connection and try again.');
+            }
         } finally {
             setOtpLoading(false);
             console.log('[OTP Send] Process completed - otpLoading set to false');
@@ -800,7 +816,17 @@ export function DemoRequestForm() {
 
             const data = await response.json();
             console.log('[OTP Validation] Response data:', data);
-            
+
+            // Handle cases where HTTP status is not OK but response contains error details
+            if (!response.ok && data && (data.message || data.error)) {
+                console.log('[OTP Validation] HTTP error with message:', data.message || data.error);
+                const errorMessage = data.message || data.error || data.msg || 'Invalid OTP. Please try again.';
+                showAlert('error', 'OTP Validation Failed', errorMessage);
+                setIsOtpVerified(false);
+                console.log('[OTP Validation] State updated - isOtpVerified: false');
+                return;
+            }
+
             if (data.success === true || data.response === true) {
                 console.log('[OTP Validation] Success - OTP validated successfully');
                 setIsOtpVerified(true);
@@ -810,13 +836,21 @@ export function DemoRequestForm() {
                 // No modal alert for success - using inline message instead
             } else {
                 console.log('[OTP Validation] Failed - Server response indicates invalid OTP:', data.message);
-                showAlert('error', 'OTP Validation Failed', data.message || 'Invalid OTP. Please try again.');
+                // Improved error message handling - check multiple possible message fields
+                const errorMessage = data.message || data.error || data.msg || 
+                    (data.success === false ? 'Invalid OTP. Please try again.' : 'Invalid OTP. Please try again.');
+                showAlert('error', 'OTP Validation Failed', errorMessage);
                 setIsOtpVerified(false);
                 console.log('[OTP Validation] State updated - isOtpVerified: false');
             }
         } catch (error) {
             console.error('[OTP Validation] Network error:', error);
-            showAlert('error', 'Network Error', 'Failed to validate OTP. Please check your connection and try again.');
+            // Check if the error has response data with a message
+            if (error instanceof Error && error.message.includes('Failed to fetch')) {
+                showAlert('error', 'Network Error', 'Failed to validate OTP. Please check your connection and try again.');
+            } else {
+                showAlert('error', 'Network Error', 'Failed to validate OTP. Please check your connection and try again.');
+            }
             setIsOtpVerified(false);
             console.log('[OTP Validation] Error state - isOtpVerified: false');
         } finally {
@@ -867,7 +901,7 @@ export function DemoRequestForm() {
     // Save to localStorage function (guarded)
     const saveToLocalStorage = () => {
         if (typeof window !== 'undefined') {
-            
+
             // If form is effectively empty and on first step with no plan, don't persist
             const isEmptyForm =
                 !formData.user_name &&
@@ -1042,6 +1076,7 @@ export function DemoRequestForm() {
     const validateStep2 = (): boolean => {
         const newErrors: Partial<FormData> = {};
 
+        // First validate all basic fields
         if (!formData.user_name?.trim()) newErrors.user_name = "Username is required";
         else if (formData.user_name.includes(' ')) newErrors.user_name = "Username cannot contain spaces";
 
@@ -1054,16 +1089,25 @@ export function DemoRequestForm() {
         if (!formData.mobile) newErrors.mobile = "Mobile number is required";
         else if (!/^\d{10}$/.test(formData.mobile)) newErrors.mobile = "Mobile number must be 10 digits";
 
-        // Check if OTP is verified
+        // Always set the field errors first so they show up
+        setErrors(newErrors);
+
+        // Check if there are basic field validation errors
+        if (Object.keys(newErrors).length > 0) {
+            return false;
+        }
+
+        // Now check OTP verification only if basic fields are valid
         if (!isOtpVerified) {
             if (formData.mobile && formData.mobile.length === 10) {
                 showAlert('warning', 'Mobile Verification Required', 'Please verify your mobile number with OTP to continue');
+            } else {
+                showAlert('error', 'Mobile Number Required', 'Please enter a valid mobile number and verify it with OTP');
             }
             return false;
         }
 
-        setErrors(newErrors);
-        return Object.keys(newErrors).length === 0;
+        return true;
     };
 
     const handleNext = () => {
@@ -1927,7 +1971,7 @@ export function DemoRequestForm() {
                                                     </div>
                                                     Mobile Number Verification
                                                 </label>
-                                                
+
                                                 {/* Mobile Number Input - Half Width */}
                                                 <div className="flex gap-3 items-end">
                                                     <div className="flex-1 max-w-xs">
@@ -1950,7 +1994,7 @@ export function DemoRequestForm() {
                                                             )}
                                                         </div>
                                                     </div>
-                                                    
+
                                                     {/* Verify Number Button */}
                                                     {formData.mobile.length === 10 && !isOtpSent && !isOtpVerified && (
                                                         <Button
@@ -1961,7 +2005,7 @@ export function DemoRequestForm() {
                                                             {otpLoading ? 'Sending...' : 'Verify Number'}
                                                         </Button>
                                                     )}
-                                                    
+
                                                     {/* Resend OTP Button */}
                                                     {isOtpSent && canResendOtp && !isOtpVerified && (
                                                         <Button
@@ -1972,7 +2016,7 @@ export function DemoRequestForm() {
                                                             {otpLoading ? 'Sending...' : 'Resend OTP'}
                                                         </Button>
                                                     )}
-                                                    
+
                                                     {/* Countdown Timer */}
                                                     {isOtpSent && otpCountdown > 0 && !isOtpVerified && (
                                                         <div className="px-4 py-2.5 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 rounded-xl font-medium whitespace-nowrap">
@@ -1980,7 +2024,7 @@ export function DemoRequestForm() {
                                                         </div>
                                                     )}
                                                 </div>
-                                                
+
                                                 {/* OTP Input Field */}
                                                 {isOtpSent && !isOtpVerified && (
                                                     <motion.div
@@ -2012,7 +2056,7 @@ export function DemoRequestForm() {
                                                         </p>
                                                     </motion.div>
                                                 )}
-                                                
+
                                                 {/* Inline Success Messages */}
                                                 {otpSentMessage && !isOtpVerified && (
                                                     <motion.div
@@ -2024,7 +2068,7 @@ export function DemoRequestForm() {
                                                         {otpSentMessage}
                                                     </motion.div>
                                                 )}
-                                                
+
                                                 {otpVerificationMessage && isOtpVerified && (
                                                     <motion.div
                                                         initial={{ opacity: 0, scale: 0.95 }}
@@ -2035,7 +2079,7 @@ export function DemoRequestForm() {
                                                         {otpVerificationMessage}
                                                     </motion.div>
                                                 )}
-                                                
+
                                                 {errors.mobile && (
                                                     <motion.p
                                                         className="text-red-500 text-sm flex items-center"

@@ -867,6 +867,7 @@ export function DemoRequestForm() {
     // Save to localStorage function (guarded)
     const saveToLocalStorage = () => {
         if (typeof window !== 'undefined') {
+            
             // If form is effectively empty and on first step with no plan, don't persist
             const isEmptyForm =
                 !formData.user_name &&

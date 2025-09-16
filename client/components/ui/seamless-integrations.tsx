@@ -176,6 +176,8 @@ export default function SeamlessIntegrations() {
 
                                         {/* Bidirectional flowing dots */}
                                         <motion.circle
+                                            cx={startX}
+                                            cy={startY}
                                             r={4}
                                             fill="#f97316"
                                             filter="url(#dotGlow)"
@@ -196,6 +198,8 @@ export default function SeamlessIntegrations() {
 
                                         {/* Secondary dot for enhanced flow effect */}
                                         <motion.circle
+                                            cx={endX}
+                                            cy={endY}
                                             r={2.5}
                                             fill="#f59e0b"
                                             filter="url(#dotGlow)"
@@ -262,7 +266,10 @@ export default function SeamlessIntegrations() {
                                 <img
                                     src={app.src}
                                     alt={app.name}
-                                    className={`object-contain drop-shadow dark:brightness-110 dark:contrast-110 ${app.name === 'Visio'
+                                    className={`object-contain drop-shadow ${app.name === 'Oracle' || app.name === 'Tally'
+                                            ? 'dark:invert'
+                                            : 'dark:brightness-110 dark:contrast-110'
+                                        } ${app.name === 'Visio' || app.name === 'MySQL' || app.name === 'Oracle' || app.name === 'Tally' || app.name === 'Busy'
                                             ? 'w-12 h-12 sm:w-14 sm:h-14'
                                             : 'w-7 h-7 sm:w-8 sm:h-8'
                                         }`}

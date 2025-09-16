@@ -163,6 +163,59 @@ async function handleProcessPayment(req: express.Request, res: express.Response)
   }
 };
 
+async function handleOtpRequest(req: express.Request, res: express.Response) {
+  try {
+    // Validate required fields
+    const { mobile, request_type } = req.body;
+    
+    if (!mobile) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing mobile number',
+        message: 'Mobile number is required'
+      });
+    }
+    
+    if (!request_type || !['SENT', 'VALIDATE'].includes(request_type)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid request type',
+        message: 'request_type must be either SENT or VALIDATE'
+      });
+    }
+
+    const response = await fetch('http://122.176.112.254/www-demo-msell-in/public/api/otp_send_status', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(req.body)
+    });
+
+    let data;
+    const contentType = response.headers.get('content-type');
+    
+    if (contentType && contentType.includes('application/json')) {
+      data = await response.json();
+    } else {
+      const textResponse = await response.text();
+      data = {
+        success: false,
+        error: 'Invalid response format from external API',
+        message: 'External API returned non-JSON response',
+        rawResponse: textResponse
+      };
+    }
+
+    res.status(response.status).json(data);
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: 'Failed to process OTP request via external API',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+}
 
 // Google OAuth Strategy for serverless
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
@@ -794,7 +847,8 @@ app.post('/api/times-edited', async (req, res) => {
 });
 
 app.post("/api/get-plan", handleGetPlans);
- app.post("/api/process-payment", handleProcessPayment);
+app.post("/api/process-payment", handleProcessPayment);
+app.post("/api/otp-request", handleOtpRequest);
 
 // Upload (dynamic folders + both field names)
 app.post('/api/upload-logo', (req, res, next) => {

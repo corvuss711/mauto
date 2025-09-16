@@ -10,6 +10,7 @@ interface FormData {
     password: string;
     email: string;
     mobile: string;
+    otp: string;
     company_name: string;
     company_title: string;
     website: string;
@@ -493,6 +494,7 @@ export function DemoRequestForm() {
                         password: parsed.password || "",
                         email: parsed.email || "",
                         mobile: parsed.mobile || "",
+                        otp: parsed.otp || "",
                         company_name: parsed.company_name || "",
                         company_title: parsed.company_title || "",
                         website: parsed.website || "",
@@ -507,6 +509,7 @@ export function DemoRequestForm() {
                         password: "",
                         email: "",
                         mobile: "",
+                        otp: "",
                         company_name: "",
                         company_title: "",
                         website: "",
@@ -523,6 +526,7 @@ export function DemoRequestForm() {
             password: "",
             email: "",
             mobile: "",
+            otp: "",
             company_name: "",
             company_title: "",
             website: "",
@@ -546,6 +550,16 @@ export function DemoRequestForm() {
     const [plansError, setPlansError] = useState<string | null>(null);
     const [selectedTenure, setSelectedTenure] = useState("yearly");
     const [isTenureDropdownOpen, setIsTenureDropdownOpen] = useState(false);
+
+    // OTP related states
+    const [isOtpSent, setIsOtpSent] = useState(false);
+    const [isOtpVerified, setIsOtpVerified] = useState(false);
+    const [otpLoading, setOtpLoading] = useState(false);
+    const [otpCountdown, setOtpCountdown] = useState(0);
+    const [canResendOtp, setCanResendOtp] = useState(false);
+    const [otpSentMessage, setOtpSentMessage] = useState('');
+    const [otpVerificationMessage, setOtpVerificationMessage] = useState('');
+    const otpCountdownRef = useRef<NodeJS.Timeout | null>(null);
 
     // API function to fetch plans
     const fetchPlans = async (applicationType: number) => {
@@ -680,7 +694,161 @@ export function DemoRequestForm() {
         setSubmissionResult({ success: false, message: '', showResultPage: false });
     };
 
+    // OTP functions
+    const sendOtp = async () => {
+        if (!formData.mobile || formData.mobile.length < 10) {
+            console.log('[OTP Send] Validation failed - Invalid mobile number:', formData.mobile);
+            showAlert('error', 'Invalid Mobile Number', 'Please enter a valid 10-digit mobile number');
+            return;
+        }
 
+        const cleanMobile = formData.mobile.replace(/\D/g, '');
+        const isResendOperation = isOtpSent;
+        console.log('[OTP Send] Starting OTP', isResendOperation ? 'resend' : 'generation', 'for mobile:', cleanMobile);
+
+        setOtpLoading(true);
+        try {
+            const requestPayload = {
+                mobile: cleanMobile,
+                request_type: "SENT"
+            };
+            console.log('[OTP Send] Request payload:', requestPayload);
+
+            const response = await fetch('/api/otp-request', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(requestPayload)
+            });
+
+            console.log('[OTP Send] Response status:', response.status);
+            console.log('[OTP Send] Response ok:', response.ok);
+
+            const data = await response.json();
+            console.log('[OTP Send] Response data:', data);
+            
+            if (data.success === true || data.response === true) {
+                const isResend = isOtpSent; // Check if this is a resend operation
+                console.log('[OTP Send] Success - OTP', isResend ? 'resent' : 'sent', 'successfully');
+                
+                setIsOtpSent(true);
+                setCanResendOtp(false);
+                setOtpCountdown(30);
+                setOtpSentMessage(isResend ? 'OTP resent successfully to your mobile number' : 'OTP sent successfully to your mobile number');
+                setOtpVerificationMessage(''); // Clear any previous verification message
+                
+                console.log('[OTP Send] State updated - isOtpSent: true, countdown: 30, canResendOtp: false');
+                
+                // Start countdown timer
+                if (otpCountdownRef.current) clearInterval(otpCountdownRef.current);
+                otpCountdownRef.current = setInterval(() => {
+                    setOtpCountdown(prev => {
+                        if (prev <= 1) {
+                            console.log('[OTP Send] Countdown completed - enabling resend');
+                            setCanResendOtp(true);
+                            if (otpCountdownRef.current) clearInterval(otpCountdownRef.current);
+                            return 0;
+                        }
+                        return prev - 1;
+                    });
+                }, 1000);
+                
+                // No modal alert for success - using inline message instead
+            } else {
+                console.log('[OTP Send] Failed - Server response indicates failure:', data.message);
+                showAlert('error', 'OTP Send Failed', data.message || 'Failed to send OTP. Please try again.');
+            }
+        } catch (error) {
+            console.error('[OTP Send] Network error:', error);
+            showAlert('error', 'Network Error', 'Failed to send OTP. Please check your connection and try again.');
+        } finally {
+            setOtpLoading(false);
+            console.log('[OTP Send] Process completed - otpLoading set to false');
+        }
+    };
+
+    const validateOtp = async () => {
+        if (!formData.otp || formData.otp.length < 4) {
+            console.log('[OTP Validation] Validation failed - Invalid OTP length:', formData.otp?.length || 0);
+            showAlert('error', 'Invalid OTP', 'Please enter the OTP sent to your mobile number');
+            return;
+        }
+
+        const cleanMobile = formData.mobile.replace(/\D/g, '');
+        console.log('[OTP Validation] Starting OTP validation for mobile:', cleanMobile, 'with OTP:', formData.otp);
+
+        setOtpLoading(true);
+        try {
+            const requestPayload = {
+                mobile: cleanMobile,
+                request_type: "VALIDATE",
+                otp: formData.otp
+            };
+            console.log('[OTP Validation] Request payload:', requestPayload);
+
+            const response = await fetch('/api/otp-request', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(requestPayload)
+            });
+
+            console.log('[OTP Validation] Response status:', response.status);
+            console.log('[OTP Validation] Response ok:', response.ok);
+
+            const data = await response.json();
+            console.log('[OTP Validation] Response data:', data);
+            
+            if (data.success === true || data.response === true) {
+                console.log('[OTP Validation] Success - OTP validated successfully');
+                setIsOtpVerified(true);
+                setOtpVerificationMessage('Mobile number verified successfully');
+                setOtpSentMessage(''); // Clear the sent message
+                console.log('[OTP Validation] State updated - isOtpVerified: true');
+                // No modal alert for success - using inline message instead
+            } else {
+                console.log('[OTP Validation] Failed - Server response indicates invalid OTP:', data.message);
+                showAlert('error', 'OTP Validation Failed', data.message || 'Invalid OTP. Please try again.');
+                setIsOtpVerified(false);
+                console.log('[OTP Validation] State updated - isOtpVerified: false');
+            }
+        } catch (error) {
+            console.error('[OTP Validation] Network error:', error);
+            showAlert('error', 'Network Error', 'Failed to validate OTP. Please check your connection and try again.');
+            setIsOtpVerified(false);
+            console.log('[OTP Validation] Error state - isOtpVerified: false');
+        } finally {
+            setOtpLoading(false);
+            console.log('[OTP Validation] Process completed - otpLoading set to false');
+        }
+    };
+
+    // Reset OTP states when mobile number changes
+    useEffect(() => {
+        if (formData.mobile) {
+            setIsOtpSent(false);
+            setIsOtpVerified(false);
+            setOtpSentMessage('');
+            setOtpVerificationMessage('');
+            setFormData(prev => ({ ...prev, otp: '' }));
+            if (otpCountdownRef.current) {
+                clearInterval(otpCountdownRef.current);
+                setOtpCountdown(0);
+                setCanResendOtp(false);
+            }
+        }
+    }, [formData.mobile]);
+
+    // Cleanup countdown on unmount
+    useEffect(() => {
+        return () => {
+            if (otpCountdownRef.current) {
+                clearInterval(otpCountdownRef.current);
+            }
+        };
+    }, []);
 
     // Debounced save handle
     const saveTimeoutRef = useRef<number | null>(null);
@@ -885,6 +1053,14 @@ export function DemoRequestForm() {
         if (!formData.mobile) newErrors.mobile = "Mobile number is required";
         else if (!/^\d{10}$/.test(formData.mobile)) newErrors.mobile = "Mobile number must be 10 digits";
 
+        // Check if OTP is verified
+        if (!isOtpVerified) {
+            if (formData.mobile && formData.mobile.length === 10) {
+                showAlert('warning', 'Mobile Verification Required', 'Please verify your mobile number with OTP to continue');
+            }
+            return false;
+        }
+
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     };
@@ -936,6 +1112,7 @@ export function DemoRequestForm() {
             password: "",
             email: "",
             mobile: "",
+            otp: "",
             company_name: "",
             company_title: "",
             website: "",
@@ -995,7 +1172,6 @@ export function DemoRequestForm() {
             if (!planDetail) {
                 throw new Error(`Plan detail not found for tenure: ${selectedTenure} in plan: ${planData.plan_name}`);
             }
-
             // Prepare the API request body with correct IDs from get-plan API response
             const requestBody = {
                 company_name: formData.company_name,
@@ -1009,6 +1185,7 @@ export function DemoRequestForm() {
                 contact_per_name: formData.contact_per_name,
                 landline: "", // Not collected in form
                 mobile: formData.mobile,
+                otp: formData.otp, // Include OTP for verification
                 application_type: formData.application_type,
                 pricing_id: planDetail.id, // ID from plan_details array for selected tenure
                 plan_id: planData.plan_id, // Plan ID (silver/gold/platinum from get-plan API)
@@ -1741,28 +1918,126 @@ export function DemoRequestForm() {
                                                 )}
                                             </motion.div>
 
-                                            <motion.div variants={inputVariants} transition={{ delay: 0.4 }}>
+                                            {/* Mobile Number and OTP Section */}
+                                            <motion.div variants={inputVariants} transition={{ delay: 0.4 }} className="space-y-4">
                                                 <label className="flex items-center text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
                                                     <div className="w-5 h-5 rounded-md bg-gradient-to-r from-green-400 to-emerald-400 flex items-center justify-center mr-2 shadow-sm">
                                                         <Phone className="w-3 h-3 text-white" />
                                                     </div>
-                                                    Mobile Number
+                                                    Mobile Number Verification
                                                 </label>
-                                                <div className="relative group">
-                                                    <input
-                                                        type="tel"
-                                                        value={formData.mobile}
-                                                        onChange={(e) => handleInputChange("mobile", e.target.value.replace(/\D/g, ''))}
-                                                        className={`w-full px-3 py-2.5 border-2 rounded-xl focus:ring-4 focus:ring-orange-500/20 focus:border-orange-500 bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border-gray-200 dark:border-slate-600 text-gray-900 dark:text-white transition-all duration-200 group-hover:border-orange-300 ${errors.mobile ? "border-red-400 focus:ring-red-500/20 focus:border-red-500" : ""
-                                                            }`}
-                                                        placeholder="10-digit mobile number"
-                                                        maxLength={10}
-                                                    />
-                                                    <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-orange-500/5 to-amber-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" />
+                                                
+                                                {/* Mobile Number Input - Half Width */}
+                                                <div className="flex gap-3 items-end">
+                                                    <div className="flex-1 max-w-xs">
+                                                        <div className="relative group">
+                                                            <input
+                                                                type="tel"
+                                                                value={formData.mobile}
+                                                                onChange={(e) => handleInputChange("mobile", e.target.value.replace(/\D/g, ''))}
+                                                                className={`w-full px-3 py-2.5 border-2 rounded-xl focus:ring-4 focus:ring-orange-500/20 focus:border-orange-500 bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border-gray-200 dark:border-slate-600 text-gray-900 dark:text-white transition-all duration-200 group-hover:border-orange-300 ${errors.mobile ? "border-red-400 focus:ring-red-500/20 focus:border-red-500" : ""
+                                                                    } ${isOtpVerified ? "border-green-500 bg-green-50 dark:bg-green-900/10" : ""}`}
+                                                                placeholder="10-digit mobile number"
+                                                                maxLength={10}
+                                                                disabled={isOtpVerified}
+                                                            />
+                                                            <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-orange-500/5 to-amber-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" />
+                                                            {isOtpVerified && (
+                                                                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                                                                    <CheckCircle className="w-5 h-5 text-green-500" />
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    {/* Verify Number Button */}
+                                                    {formData.mobile.length === 10 && !isOtpSent && !isOtpVerified && (
+                                                        <Button
+                                                            onClick={sendOtp}
+                                                            disabled={otpLoading}
+                                                            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                                                        >
+                                                            {otpLoading ? 'Sending...' : 'Verify Number'}
+                                                        </Button>
+                                                    )}
+                                                    
+                                                    {/* Resend OTP Button */}
+                                                    {isOtpSent && canResendOtp && !isOtpVerified && (
+                                                        <Button
+                                                            onClick={sendOtp}
+                                                            disabled={otpLoading}
+                                                            className="px-4 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                                                        >
+                                                            {otpLoading ? 'Sending...' : 'Resend OTP'}
+                                                        </Button>
+                                                    )}
+                                                    
+                                                    {/* Countdown Timer */}
+                                                    {isOtpSent && otpCountdown > 0 && !isOtpVerified && (
+                                                        <div className="px-4 py-2.5 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 rounded-xl font-medium whitespace-nowrap">
+                                                            Resend in {otpCountdown}s
+                                                        </div>
+                                                    )}
                                                 </div>
+                                                
+                                                {/* OTP Input Field */}
+                                                {isOtpSent && !isOtpVerified && (
+                                                    <motion.div
+                                                        initial={{ opacity: 0, height: 0 }}
+                                                        animate={{ opacity: 1, height: 'auto' }}
+                                                        className="space-y-3"
+                                                    >
+                                                        <div className="flex gap-3 items-center">
+                                                            <div className="flex-1 max-w-xs">
+                                                                <input
+                                                                    type="text"
+                                                                    value={formData.otp}
+                                                                    onChange={(e) => handleInputChange("otp", e.target.value.replace(/\D/g, ''))}
+                                                                    className="w-full px-3 py-2.5 border-2 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border-gray-200 dark:border-slate-600 text-gray-900 dark:text-white transition-all duration-200"
+                                                                    placeholder="Enter OTP"
+                                                                    maxLength={6}
+                                                                />
+                                                            </div>
+                                                            <Button
+                                                                onClick={validateOtp}
+                                                                disabled={otpLoading || !formData.otp || formData.otp.length < 4}
+                                                                className="px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                                                            >
+                                                                {otpLoading ? 'Validating...' : 'Validate OTP'}
+                                                            </Button>
+                                                        </div>
+                                                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                                                            Enter the 6-digit OTP sent to your mobile number
+                                                        </p>
+                                                    </motion.div>
+                                                )}
+                                                
+                                                {/* Inline Success Messages */}
+                                                {otpSentMessage && !isOtpVerified && (
+                                                    <motion.div
+                                                        initial={{ opacity: 0, y: -10 }}
+                                                        animate={{ opacity: 1, y: 0 }}
+                                                        className="flex items-center gap-2 text-blue-600 dark:text-blue-400 text-sm font-medium bg-blue-50 dark:bg-blue-900/20 px-3 py-2 rounded-lg border border-blue-200 dark:border-blue-800"
+                                                    >
+                                                        <CheckCircle className="w-4 h-4" />
+                                                        {otpSentMessage}
+                                                    </motion.div>
+                                                )}
+                                                
+                                                {otpVerificationMessage && isOtpVerified && (
+                                                    <motion.div
+                                                        initial={{ opacity: 0, scale: 0.95 }}
+                                                        animate={{ opacity: 1, scale: 1 }}
+                                                        className="flex items-center gap-2 text-green-600 dark:text-green-400 text-sm font-medium bg-green-50 dark:bg-green-900/20 px-3 py-2 rounded-lg border border-green-200 dark:border-green-800"
+                                                    >
+                                                        <CheckCircle className="w-4 h-4" />
+                                                        {otpVerificationMessage}
+                                                    </motion.div>
+                                                )}
+                                                
                                                 {errors.mobile && (
                                                     <motion.p
-                                                        className="text-red-500 text-sm mt-2 flex items-center"
+                                                        className="text-red-500 text-sm flex items-center"
                                                         initial={{ opacity: 0, x: -10 }}
                                                         animate={{ opacity: 1, x: 0 }}
                                                     >

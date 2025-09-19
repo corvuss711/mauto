@@ -22,7 +22,7 @@ function parseMysqlUrl(url?: string) {
     return { host: m[3], user: m[1], password: m[2], port: Number(m[4]), database: m[5] };
 }
 let dbConfig;
-try { dbConfig = parseMysqlUrl(process.env.MYSQL_URL); } catch { dbConfig = { host: 'localhost', user: 'root', password: '', port: 3306, database: 'mauto' }; }
+try { dbConfig = parseMysqlUrl(process.env.MYSQL_URL); } catch { dbConfig = { host: 'localhost', user: 'root', password: '', port: 3306, database: 'manacle_blogs' }; }
 // Create a basic pool for improved resilience & timeouts
 const pool = mysql.createPool({
     ...dbConfig,
@@ -34,6 +34,19 @@ const pool = mysql.createPool({
 
 // Helper to run queries via pool.promise()
 const db = pool; // keep variable name for minimal downstream changes
+
+// Create a separate connection pool specifically for blog database
+const blogDbConfig = { host: 'localhost', user: 'root', password: '', port: 3306, database: 'manacle_blogs' };
+const blogPool = mysql.createPool({
+    ...blogDbConfig,
+    waitForConnections: true,
+    connectionLimit: 5,
+    queueLimit: 0,
+    connectTimeout: 8000
+});
+
+// Helper function for blog database queries
+const blogDb = blogPool;
 
 pool.getConnection((err, conn) => {
     if (err) {
@@ -139,7 +152,7 @@ async function handleGetPlans(req: express.Request, res: express.Response) {
 
 async function handleProcessPayment(req: express.Request, res: express.Response) {
     try {
-        console.log(req.body)
+
 
         const response = await fetch('http://122.176.112.254/www-demo-msell-in/public/api/process-payment', {
             method: 'POST',
@@ -527,14 +540,7 @@ app.get('/api/me', (req, res) => {
     const user = (req as any).user;
     const cookies = req.headers.cookie;
 
-    console.log('=== /api/me DEBUG START ===');
-    console.log('[/api/me] Session ID:', sessionId);
-    console.log('[/api/me] Cookies:', cookies);
-    console.log('[/api/me] Is authenticated function exists:', typeof req.isAuthenticated);
-    console.log('[/api/me] Is authenticated result:', isAuth);
-    console.log('[/api/me] User object:', JSON.stringify(user, null, 2));
-    console.log('[/api/me] Session object:', JSON.stringify((req as any).session, null, 2));
-    console.log('=== /api/me DEBUG END ===');
+
 
     if (req.isAuthenticated && req.isAuthenticated()) {
         const u: any = (req as any).user;
@@ -850,6 +856,462 @@ app.post("/api/get-plan", handleGetPlans);
 app.post("/api/process-payment", handleProcessPayment);
 app.post("/api/otp-request", handleOtpRequest);
 
+// Blog API endpoints
+// Helper function to generate slug from title
+function generateSlug(title: string): string {
+    return title
+        .toLowerCase()
+        .replace(/[^\w\s-]/g, '') // Remove special characters
+        .replace(/\s+/g, '-') // Replace spaces with hyphens
+        .replace(/-+/g, '-') // Replace multiple hyphens with single
+        .trim();
+}
+
+// Helper function to calculate read time
+function calculateReadTime(content: string): number {
+    const wordsPerMinute = 200;
+    const words = content.replace(/<[^>]*>/g, '').split(/\s+/).length;
+    return Math.ceil(words / wordsPerMinute);
+}
+
+// GET /api/blogs - Get all published blogs
+app.get('/api/blogs', async (req, res) => {
+    try {
+        const { category, limit = 50, offset = 0, status = 'published' } = req.query;
+
+        let query = `
+            SELECT 
+                b.id, b.title, b.slug, b.excerpt, b.thumbnail_url, 
+                bc.name as category, b.author_name, b.read_time, 
+                b.published_at, b.featured, b.status,
+                DATE_FORMAT(b.published_at, '%b %d, %Y') as formatted_date
+            FROM blogs b
+            LEFT JOIN blog_categories bc ON b.category_id = bc.id
+            WHERE b.status = ?
+        `;
+
+        const params: any[] = [status];
+
+        if (category && category !== 'All') {
+            query += ' AND bc.name = ?';
+            params.push(category);
+        }
+
+        query += ' ORDER BY b.published_at DESC, b.created_at DESC LIMIT ? OFFSET ?';
+        params.push(parseInt(limit as string), parseInt(offset as string));
+
+        const [rows] = await blogDb.promise().execute(query, params);
+
+        res.json({
+            success: true,
+            data: rows,
+            total: (rows as any[]).length
+        });
+    } catch (error) {
+        console.error('Error fetching blogs:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch blogs',
+            message: error instanceof Error ? error.message : 'Unknown error'
+        });
+    }
+});
+
+// GET /api/blogs/:slug - Get single blog by slug
+app.get('/api/blogs/:slug', async (req, res) => {
+    try {
+        const { slug } = req.params;
+
+        const [rows] = await blogDb.promise().execute(
+            `SELECT 
+                id, title, slug, excerpt, content, thumbnail_url, category,
+                author_name, author_email, read_time, published_at, featured,
+                meta_title, meta_description, tags, status,
+                DATE_FORMAT(published_at, '%b %d, %Y') as formatted_date,
+                DATE_FORMAT(created_at, '%b %d, %Y at %h:%i %p') as created_date
+            FROM blogs 
+            WHERE slug = ? AND status = 'published'`,
+            [slug]
+        );
+
+        if ((rows as any[]).length === 0) {
+            return res.status(404).json({
+                success: false,
+                error: 'Blog not found'
+            });
+        }
+
+        // Optional: Track blog view (increment views counter)
+        try {
+            await blogDb.promise().execute(
+                'UPDATE blogs SET views = views + 1 WHERE id = ?',
+                [(rows as any[])[0].id]
+            );
+        } catch (viewError) {
+            console.log('Failed to track view:', viewError);
+        }
+
+        res.json({
+            success: true,
+            data: (rows as any[])[0]
+        });
+    } catch (error) {
+        console.error('Error fetching blog:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch blog',
+            message: error instanceof Error ? error.message : 'Unknown error'
+        });
+    }
+});
+
+// GET /api/blog-categories - Get all categories
+app.get('/api/blog-categories', async (req, res) => {
+    try {
+        const [rows] = await blogDb.promise().execute(
+            'SELECT name, slug, description FROM blog_categories ORDER BY name'
+        );
+
+        res.json({
+            success: true,
+            data: rows
+        });
+    } catch (error) {
+        console.error('Error fetching categories:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch categories',
+            message: error instanceof Error ? error.message : 'Unknown error'
+        });
+    }
+});
+
+// Admin routes (add authentication middleware in production)
+
+// GET /api/admin/blogs - Get all blogs (including drafts)  
+app.get('/api/admin/blogs', async (req, res) => {
+    try {
+        const { status, category, search, limit = 50, offset = 0 } = req.query;
+
+        let query = `
+            SELECT 
+                b.id, b.title, b.slug, b.excerpt, b.content, b.thumbnail_url, 
+                bc.name as category, b.author_name, b.read_time, 
+                b.status, b.featured, b.tags, b.meta_title, b.meta_description,
+                DATE_FORMAT(b.published_at, '%b %d, %Y') as formatted_date,
+                DATE_FORMAT(b.created_at, '%b %d, %Y at %h:%i %p') as created_date,
+                DATE_FORMAT(b.updated_at, '%b %d, %Y at %h:%i %p') as updated_date
+            FROM blogs b
+            LEFT JOIN blog_categories bc ON b.category_id = bc.id
+            WHERE 1=1
+        `;
+
+        const params: any[] = [];
+
+        if (status) {
+            query += ' AND b.status = ?';
+            params.push(status);
+        }
+
+        if (category && category !== 'All') {
+            query += ' AND bc.name = ?';
+            params.push(category);
+        }
+
+        if (search) {
+            query += ' AND (b.title LIKE ? OR b.excerpt LIKE ? OR b.content LIKE ?)';
+            const searchTerm = `%${search}%`;
+            params.push(searchTerm, searchTerm, searchTerm);
+        }
+
+        query += ' ORDER BY b.created_at DESC LIMIT ? OFFSET ?';
+        params.push(parseInt(limit as string), parseInt(offset as string));
+
+        const [rows] = await blogDb.promise().execute(query, params);
+
+        // Get total count
+        let countQuery = 'SELECT COUNT(*) as total FROM blogs b LEFT JOIN blog_categories bc ON b.category_id = bc.id WHERE 1=1';
+        const countParams: any[] = [];
+
+        if (status) {
+            countQuery += ' AND b.status = ?';
+            countParams.push(status);
+        }
+
+        if (category && category !== 'All') {
+            countQuery += ' AND bc.name = ?';
+            countParams.push(category);
+        }
+
+        if (search) {
+            countQuery += ' AND (b.title LIKE ? OR b.excerpt LIKE ? OR b.content LIKE ?)';
+            const searchTerm = `%${search}%`;
+            countParams.push(searchTerm, searchTerm, searchTerm);
+        }
+
+        const [countRows] = await blogDb.promise().execute(countQuery, countParams);
+
+        // Parse tags for each blog
+        const blogsWithParsedTags = (rows as any[]).map(blog => {
+            if (blog.tags) {
+                try {
+                    blog.tags = typeof blog.tags === 'string' ? JSON.parse(blog.tags) : blog.tags;
+                } catch (e) {
+                    console.warn('Failed to parse tags for blog:', blog.id, e);
+                    blog.tags = [];
+                }
+            } else {
+                blog.tags = [];
+            }
+            return blog;
+        });
+
+        res.json({
+            success: true,
+            data: blogsWithParsedTags,
+            total: (countRows as any[])[0].total,
+            pagination: {
+                limit: parseInt(limit as string),
+                offset: parseInt(offset as string),
+                hasMore: (countRows as any[])[0].total > parseInt(offset as string) + parseInt(limit as string)
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching admin blogs:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch blogs',
+            message: error instanceof Error ? error.message : 'Unknown error'
+        });
+    }
+});
+
+// POST /api/admin/blogs - Create new blog
+app.post('/api/admin/blogs', async (req, res) => {
+    try {
+        const {
+            title,
+            excerpt,
+            content,
+            thumbnail_url,
+            category,
+            tags,
+            author_name,
+            author_email,
+            status = 'draft',
+            featured = false,
+            meta_title,
+            meta_description
+        } = req.body;
+
+        // Validation
+        if (!title || !content) {
+            return res.status(400).json({
+                success: false,
+                error: 'Title and content are required'
+            });
+        }
+
+        // Generate slug
+        let slug = generateSlug(title);
+
+        // Check if slug exists and make it unique
+        const [existingSlug] = await blogDb.promise().execute(
+            'SELECT slug FROM blogs WHERE slug LIKE ? ORDER BY slug DESC LIMIT 1',
+            [`${slug}%`]
+        );
+
+        if ((existingSlug as any[]).length > 0) {
+            const lastSlug = (existingSlug as any[])[0].slug;
+            const match = lastSlug.match(/-(\d+)$/);
+            const nextNumber = match ? parseInt(match[1]) + 1 : 1;
+            slug = `${slug}-${nextNumber}`;
+        }
+
+        const readTime = calculateReadTime(content);
+        const publishedAt = status === 'published' ? new Date() : null;
+
+        const [result] = await blogDb.promise().execute(
+            `INSERT INTO blogs 
+            (title, slug, excerpt, content, thumbnail_url, category_id, tags, 
+             author_name, author_email, status, featured, read_time, 
+             meta_title, meta_description, published_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+                title, slug, excerpt, content, thumbnail_url, category,
+                JSON.stringify(tags || []), author_name, author_email,
+                status, featured, readTime, meta_title, meta_description,
+                publishedAt
+            ]
+        );
+
+        res.status(201).json({
+            success: true,
+            message: 'Blog created successfully',
+            data: {
+                id: (result as any).insertId,
+                slug,
+                read_time: readTime
+            }
+        });
+    } catch (error) {
+        console.error('Error creating blog:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to create blog',
+            message: error instanceof Error ? error.message : 'Unknown error'
+        });
+    }
+});
+
+// PUT /api/admin/blogs/:id - Update blog
+app.put('/api/admin/blogs/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const {
+            title,
+            excerpt,
+            content,
+            thumbnail_url,
+            category,
+            tags,
+            author_name,
+            author_email,
+            status,
+            featured,
+            meta_title,
+            meta_description
+        } = req.body;
+
+        // Check if blog exists
+        const [existing] = await blogDb.promise().execute(
+            'SELECT id, slug, status FROM blogs WHERE id = ?',
+            [id]
+        );
+
+        if ((existing as any[]).length === 0) {
+            return res.status(404).json({
+                success: false,
+                error: 'Blog not found'
+            });
+        }
+
+        const currentBlog = (existing as any[])[0];
+        let slug = currentBlog.slug;
+
+        // If title changed, generate new slug
+        if (title && title !== '') {
+            const newSlug = generateSlug(title);
+            if (newSlug !== currentBlog.slug) {
+                // Check if new slug exists
+                const [existingSlug] = await blogDb.promise().execute(
+                    'SELECT slug FROM blogs WHERE slug LIKE ? AND id != ? ORDER BY slug DESC LIMIT 1',
+                    [`${newSlug}%`, id]
+                );
+
+                if ((existingSlug as any[]).length > 0) {
+                    const lastSlug = (existingSlug as any[])[0].slug;
+                    const match = lastSlug.match(/-(\d+)$/);
+                    const nextNumber = match ? parseInt(match[1]) + 1 : 1;
+                    slug = `${newSlug}-${nextNumber}`;
+                } else {
+                    slug = newSlug;
+                }
+            }
+        }
+
+        const readTime = content ? calculateReadTime(content) : undefined;
+        const publishedAt = status === 'published' && currentBlog.status !== 'published'
+            ? new Date() : undefined;
+
+        // Build update query dynamically
+        const updates: string[] = [];
+        const values: any[] = [];
+
+        if (title !== undefined) { updates.push('title = ?'); values.push(title); }
+        if (slug !== currentBlog.slug) { updates.push('slug = ?'); values.push(slug); }
+        if (excerpt !== undefined) { updates.push('excerpt = ?'); values.push(excerpt); }
+        if (content !== undefined) { updates.push('content = ?'); values.push(content); }
+        if (thumbnail_url !== undefined) { updates.push('thumbnail_url = ?'); values.push(thumbnail_url); }
+        if (category !== undefined) { updates.push('category_id = ?'); values.push(category); }
+        if (tags !== undefined) { updates.push('tags = ?'); values.push(JSON.stringify(tags)); }
+        if (author_name !== undefined) { updates.push('author_name = ?'); values.push(author_name); }
+        if (author_email !== undefined) { updates.push('author_email = ?'); values.push(author_email); }
+        if (status !== undefined) { updates.push('status = ?'); values.push(status); }
+        if (featured !== undefined) { updates.push('featured = ?'); values.push(featured); }
+        if (readTime !== undefined) { updates.push('read_time = ?'); values.push(readTime); }
+        if (meta_title !== undefined) { updates.push('meta_title = ?'); values.push(meta_title); }
+        if (meta_description !== undefined) { updates.push('meta_description = ?'); values.push(meta_description); }
+        if (publishedAt !== undefined) { updates.push('published_at = ?'); values.push(publishedAt); }
+
+        if (updates.length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'No fields to update'
+            });
+        }
+
+        values.push(id);
+
+        await blogDb.promise().execute(
+            `UPDATE blogs SET ${updates.join(', ')} WHERE id = ?`,
+            values
+        );
+
+        res.json({
+            success: true,
+            message: 'Blog updated successfully',
+            data: {
+                id: parseInt(id),
+                slug,
+                read_time: readTime
+            }
+        });
+    } catch (error) {
+        console.error('Error updating blog:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to update blog',
+            message: error instanceof Error ? error.message : 'Unknown error'
+        });
+    }
+});
+
+// DELETE /api/admin/blogs/:id - Delete blog
+app.delete('/api/admin/blogs/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // Check if blog exists
+        const [existing] = await blogDb.promise().execute(
+            'SELECT id, title FROM blogs WHERE id = ?',
+            [id]
+        );
+
+        if ((existing as any[]).length === 0) {
+            return res.status(404).json({
+                success: false,
+                error: 'Blog not found'
+            });
+        }
+
+        await blogDb.promise().execute('DELETE FROM blogs WHERE id = ?', [id]);
+
+        res.json({
+            success: true,
+            message: 'Blog deleted successfully'
+        });
+    } catch (error) {
+        console.error('Error deleting blog:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to delete blog',
+            message: error instanceof Error ? error.message : 'Unknown error'
+        });
+    }
+});
+
 // Upload (dynamic folders + both field names)
 app.post('/api/upload-logo', (req, res, next) => {
     // Support ?folder=page-content-uploads or product-images
@@ -874,6 +1336,72 @@ app.post('/api/upload-logo', (req, res, next) => {
         const rel = folder ? `/uploads/${folder}/${fileObj.filename}` : `/uploads/${fileObj.filename}`;
         const url = toHttpsAbsolute(rel, req);
         res.json({ path: rel, url });
+    });
+});
+
+// Thumbnail upload for blogs
+app.post('/api/upload/thumbnail', (req, res) => {
+    const destDir = '/tmp/blogs_thumbs';
+    if (!fs.existsSync(destDir)) {
+        fs.mkdirSync(destDir, { recursive: true });
+    }
+
+    const storage = multer.diskStorage({
+        destination: (req, file, cb) => {
+            cb(null, destDir);
+        },
+        filename: (req, file, cb) => {
+            const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+            const ext = path.extname(file.originalname);
+            cb(null, 'blog-thumb-' + uniqueSuffix + ext);
+        }
+    });
+
+    const fileFilter = (req: any, file: any, cb: any) => {
+        if (file.mimetype.startsWith('image/')) {
+            cb(null, true);
+        } else {
+            cb(new Error('Only image files are allowed!'), false);
+        }
+    };
+
+    const upload = multer({
+        storage,
+        fileFilter,
+        limits: {
+            fileSize: 5 * 1024 * 1024 // 5MB limit
+        }
+    }).single('thumbnail');
+
+    upload(req as any, res as any, (err: any) => {
+        if (err) {
+            if (err.code === 'LIMIT_FILE_SIZE') {
+                return res.status(400).json({
+                    success: false,
+                    message: 'File size too large. Maximum 5MB allowed.'
+                });
+            }
+            return res.status(400).json({
+                success: false,
+                message: err.message || 'File upload failed.'
+            });
+        }
+
+        if (!(req as any).file) {
+            return res.status(400).json({
+                success: false,
+                message: 'No file uploaded.'
+            });
+        }
+
+        const file = (req as any).file;
+        const relativePath = `/blogs_thumbs/${file.filename}`;
+
+        res.json({
+            success: true,
+            url: relativePath,
+            message: 'Thumbnail uploaded successfully'
+        });
     });
 });
 

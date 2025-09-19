@@ -1,13 +1,14 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "./button";
-import { ArrowRight, ArrowLeft, Check, Eye, EyeOff, Globe, Mail, Phone, Building, User, Lock, Star, ChevronDown, Users, Briefcase, Layers, MapPin, X, CheckCircle, AlertCircle } from "lucide-react";
+import { ArrowRight, ArrowLeft, Check, Eye, EyeOff, Globe, Mail, Phone, Building, User, Lock, Star, ChevronDown, Users, Briefcase, Layers, MapPin, X, CheckCircle, AlertCircle, CreditCard } from "lucide-react";
 import { TrustedByCompanies } from "./trusted-by-companies";
 import { CompanyEllipse } from "./company-ellipse";
+import { DynamicPricing } from "../../pages/DynamicPricing";
 
 interface FormData {
-    user_name: string;
-    password: string;
+    // user_name: string;
+    // password: string;
     email: string;
     mobile: string;
     otp: string;
@@ -15,7 +16,7 @@ interface FormData {
     company_title: string;
     website: string;
     address: string;
-    no_employees: number;
+    // no_employees: number;
     contact_per_name: string;
     application_type: number;
 }
@@ -36,10 +37,14 @@ interface PlanDetail {
     plan_name: string;
     duration: string;
     base_price_per_user: string;
+    base_price_per_user_internal?: string;
+    base_price_per_user_external?: string;
     discount: string | null;
     min_users: number;
     max_users: number;
     trial_days: number;
+    base_price_per_internal_user_per_month?: number;
+    base_price_per_external_user_per_month?: number;
 }
 
 interface Plan {
@@ -165,7 +170,7 @@ const fallbackPricingData: { [key: number]: Plan } = {
             {
                 id: 2,
                 plan_name: "Silver",
-                duration: "quarterly",
+                duration: "quaterly",
                 base_price_per_user: "250.00",
                 discount: null,
                 min_users: 11,
@@ -219,7 +224,7 @@ const fallbackPricingData: { [key: number]: Plan } = {
             {
                 id: 6,
                 plan_name: "Gold",
-                duration: "quarterly",
+                duration: "quaterly",
                 base_price_per_user: "500.00",
                 discount: null,
                 min_users: 11,
@@ -273,7 +278,7 @@ const fallbackPricingData: { [key: number]: Plan } = {
             {
                 id: 10,
                 plan_name: "Platinum",
-                duration: "quarterly",
+                duration: "quaterly",
                 base_price_per_user: "500.00",
                 discount: null,
                 min_users: 11,
@@ -308,7 +313,7 @@ const fallbackPricingData: { [key: number]: Plan } = {
 const tenureOptions = [
     { value: "yearly", label: "Yearly", popular: true },
     { value: "half_yearly", label: "Half Yearly", popular: false },
-    { value: "quarterly", label: "Quarterly", popular: false },
+    { value: "quaterly", label: "Quarterly", popular: false },
     { value: "monthly", label: "Monthly", popular: false }
 ];
 
@@ -480,8 +485,11 @@ export function DemoRequestForm() {
     const [navLock, setNavLock] = useState(false);
 
     const [showPassword, setShowPassword] = useState(false);
-    const [errors, setErrors] = useState<Partial<FormData>>({});
+    const [errors, setErrors] = useState<any>({});
     const [showCompanyCodeGuide, setShowCompanyCodeGuide] = useState(false);
+    const [showCompanyNameGuide, setShowCompanyNameGuide] = useState(false);
+    const [isCompanyCodeFocused, setIsCompanyCodeFocused] = useState(false);
+    const [isCompanyNameFocused, setIsCompanyNameFocused] = useState(false);
 
     const [formData, setFormData] = useState<FormData>(() => {
         if (typeof window !== 'undefined') {
@@ -490,8 +498,8 @@ export function DemoRequestForm() {
                 try {
                     const parsed = JSON.parse(saved);
                     return {
-                        user_name: parsed.user_name || "",
-                        password: parsed.password || "",
+                        // user_name: parsed.user_name || "",
+                        // password: parsed.password || "",
                         email: parsed.email || "",
                         mobile: parsed.mobile || "",
                         otp: parsed.otp || "",
@@ -499,14 +507,14 @@ export function DemoRequestForm() {
                         company_title: parsed.company_title || "",
                         website: parsed.website || "",
                         address: parsed.address || "",
-                        no_employees: parsed.no_employees || 0,
+                        // no_employees: parsed.no_employees || 0,
                         contact_per_name: parsed.contact_per_name || "",
                         application_type: parsed.application_type || 0
                     };
                 } catch {
                     return {
-                        user_name: "",
-                        password: "",
+                        // user_name: "",
+                        // password: "",
                         email: "",
                         mobile: "",
                         otp: "",
@@ -514,7 +522,7 @@ export function DemoRequestForm() {
                         company_title: "",
                         website: "",
                         address: "",
-                        no_employees: 0,
+                        // no_employees: 0,
                         contact_per_name: "",
                         application_type: 0
                     };
@@ -522,8 +530,8 @@ export function DemoRequestForm() {
             }
         }
         return {
-            user_name: "",
-            password: "",
+            // user_name: "",
+            // password: "",
             email: "",
             mobile: "",
             otp: "",
@@ -531,7 +539,7 @@ export function DemoRequestForm() {
             company_title: "",
             website: "",
             address: "",
-            no_employees: 0,
+            // no_employees: 0,
             contact_per_name: "",
             application_type: 0
         };
@@ -551,15 +559,164 @@ export function DemoRequestForm() {
     const [selectedTenure, setSelectedTenure] = useState("yearly");
     const [isTenureDropdownOpen, setIsTenureDropdownOpen] = useState(false);
 
+    // Dynamic pricing navigation state
+    const [showDynamicPricing, setShowDynamicPricing] = useState(false);
+    const [selectedPlanForPricing, setSelectedPlanForPricing] = useState<number | null>(null);
+
+    // Track if component has been initialized to avoid clearing OTP on initial load
+    const [isInitialized, setIsInitialized] = useState(false);
+
     // OTP related states
     const [isOtpSent, setIsOtpSent] = useState(false);
-    const [isOtpVerified, setIsOtpVerified] = useState(false);
+    const [isOtpVerified, setIsOtpVerified] = useState(() => {
+        // Check localStorage for OTP verification status
+        if (typeof window !== 'undefined') {
+            return localStorage.getItem('mobile_otp_verified') === 'true';
+        }
+        return false;
+    });
     const [otpLoading, setOtpLoading] = useState(false);
     const [otpCountdown, setOtpCountdown] = useState(0);
     const [canResendOtp, setCanResendOtp] = useState(false);
     const [otpSentMessage, setOtpSentMessage] = useState('');
     const [otpVerificationMessage, setOtpVerificationMessage] = useState('');
     const otpCountdownRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Store the last verified mobile number to track changes
+    const [lastVerifiedMobile, setLastVerifiedMobile] = useState(() => {
+        if (typeof window !== 'undefined') {
+            return localStorage.getItem('verified_mobile_number') || '';
+        }
+        return '';
+    });
+
+    // Monitor mobile number changes and clear verification if mobile changes
+    useEffect(() => {
+        if (formData.mobile && lastVerifiedMobile && formData.mobile !== lastVerifiedMobile) {
+            console.log('[Mobile Change] Mobile number changed, clearing verification status');
+            setIsOtpVerified(false);
+            if (typeof window !== 'undefined') {
+                localStorage.removeItem('mobile_otp_verified');
+                localStorage.removeItem('verified_mobile_number');
+            }
+            setLastVerifiedMobile('');
+        }
+    }, [formData.mobile, lastVerifiedMobile]);
+
+    // Set initialized flag after first render to prevent clearing OTP on initial load
+    useEffect(() => {
+        setIsInitialized(true);
+    }, []);
+
+    // Browser history management for form steps
+    useEffect(() => {
+        // Initialize browser history state on component mount
+        if (typeof window !== 'undefined') {
+            const currentUrl = new URL(window.location.href);
+            const urlStep = currentUrl.searchParams.get('step');
+            const urlView = currentUrl.searchParams.get('view');
+            const urlPlan = currentUrl.searchParams.get('plan');
+            
+            // Handle URL parameters on initial load
+            if (urlStep) {
+                const stepNum = parseInt(urlStep);
+                if (stepNum >= 1 && stepNum <= 2) {
+                    if (urlView === 'pricing' && urlPlan) {
+                        // Initialize pricing view
+                        setSelectedPlanForPricing(parseInt(urlPlan));
+                        setShowDynamicPricing(true);
+                        if (stepNum !== currentStep) {
+                            setCurrentStep(stepNum);
+                        }
+                    } else if (stepNum !== currentStep) {
+                        // Initialize regular form step
+                        setCurrentStep(stepNum);
+                    }
+                }
+            } else {
+                // If URL doesn't have step parameter, add it
+                currentUrl.searchParams.set('step', currentStep.toString());
+                window.history.replaceState({ step: currentStep }, '', currentUrl.toString());
+            }
+        }
+    }, []);
+
+    // Update URL when step changes
+    useEffect(() => {
+        if (typeof window !== 'undefined' && currentStep) {
+            const currentUrl = new URL(window.location.href);
+            currentUrl.searchParams.set('step', currentStep.toString());
+            
+            // Use pushState for navigation (not replaceState) to create browser history
+            window.history.pushState({ step: currentStep }, '', currentUrl.toString());
+        }
+    }, [currentStep]);
+
+    // Listen for browser back/forward button clicks
+    useEffect(() => {
+        const handlePopState = (event: PopStateEvent) => {
+            if (event.state && typeof event.state.step === 'number') {
+                const targetStep = event.state.step;
+                
+                // Prevent navigation lock issues
+                if (navLock) return;
+                
+                // Handle pricing view navigation
+                if (event.state.view === 'pricing' && event.state.planId) {
+                    setSelectedPlanForPricing(event.state.planId);
+                    setShowDynamicPricing(true);
+                    setCurrentStep(targetStep);
+                } else {
+                    // Regular form navigation
+                    setShowDynamicPricing(false);
+                    setSelectedPlanForPricing(null);
+                    
+                    // Determine direction based on step comparison
+                    const newDirection = targetStep > currentStep ? 1 : -1;
+                    setDirection(newDirection);
+                    
+                    // Update step without creating new history entry
+                    setCurrentStep(targetStep);
+                }
+                
+                saveToLocalStorage();
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            } else {
+                // If no step in state, try to get from URL
+                const urlParams = new URLSearchParams(window.location.search);
+                const urlStep = urlParams.get('step');
+                const urlView = urlParams.get('view');
+                const urlPlan = urlParams.get('plan');
+                
+                if (urlStep) {
+                    const stepNum = parseInt(urlStep);
+                    if (stepNum >= 1 && stepNum <= 3) {
+                        if (urlView === 'pricing' && urlPlan) {
+                            setSelectedPlanForPricing(parseInt(urlPlan));
+                            setShowDynamicPricing(true);
+                            setCurrentStep(stepNum);
+                        } else {
+                            setShowDynamicPricing(false);
+                            setSelectedPlanForPricing(null);
+                            const newDirection = stepNum > currentStep ? 1 : -1;
+                            setDirection(newDirection);
+                            setCurrentStep(stepNum);
+                        }
+                        saveToLocalStorage();
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }
+                }
+            }
+        };
+
+        if (typeof window !== 'undefined') {
+            window.addEventListener('popstate', handlePopState);
+            
+            return () => {
+                window.removeEventListener('popstate', handlePopState);
+            };
+        }
+    }, [currentStep, navLock]);
 
     // API function to fetch plans
     const fetchPlans = async (applicationType: number) => {
@@ -608,7 +765,7 @@ export function DemoRequestForm() {
         }
     };
 
-    // Function to transform API data to pricing card format
+    // Function to transform API data to pricing card format - Updated to show yearly pricing
     const getCurrentPricingData = () => {
         if (Object.keys(plans).length === 0) {
             return null;
@@ -617,18 +774,19 @@ export function DemoRequestForm() {
         const planKeys = Object.keys(plans);
         const planArray = planKeys.map(key => plans[key]);
 
-        // Filter plans by selected tenure and transform to PricingTier format
+        // Always show yearly pricing using base_price_per_external_user_per_month from yearly plan
         const tiers: PricingTier[] = planArray.map((plan, index) => {
-            // Find the plan detail for the selected tenure
-            const planDetail = plan.plan_details.find(detail => detail.duration === selectedTenure);
+            // Find the yearly plan detail to get the yearly monthly price
+            const yearlyDetail = plan.plan_details.find(detail => detail.duration === "yearly");
 
-            if (!planDetail) {
-                // Fallback to first available plan detail if selected tenure not found
+            if (!yearlyDetail) {
+                // Fallback to first available plan detail if yearly not found
                 const fallbackDetail = plan.plan_details[0];
+                const monthlyPrice = fallbackDetail.base_price_per_external_user_per_month || parseFloat(fallbackDetail.base_price_per_user_external || fallbackDetail.base_price_per_user || "0");
                 return {
                     name: plan.plan_name,
-                    price: `₹${parseFloat(fallbackDetail.base_price_per_user).toFixed(0)}`,
-                    period: `/${fallbackDetail.duration.replace('_', ' ')}`,
+                    price: `₹${monthlyPrice.toFixed(2)}`,
+                    period: "/month",
                     features: plan.features_list,
                     popular: index === 1, // Make the second plan popular (Gold)
                     minUsers: fallbackDetail.min_users,
@@ -637,20 +795,23 @@ export function DemoRequestForm() {
                 };
             }
 
+            // Use base_price_per_external_user_per_month from yearly plan for display
+            const monthlyPrice = yearlyDetail.base_price_per_external_user_per_month || parseFloat(yearlyDetail.base_price_per_user_external || yearlyDetail.base_price_per_user || "0");
+
             return {
                 name: plan.plan_name,
-                price: `₹${parseFloat(planDetail.base_price_per_user).toFixed(0)}`,
-                period: `/${planDetail.duration.replace('_', ' ')}`,
+                price: `₹${monthlyPrice.toFixed(2)}`,
+                period: "/month",
                 features: plan.features_list,
                 popular: index === 1, // Make the second plan popular (Gold)
-                minUsers: planDetail.min_users,
-                maxUsers: planDetail.max_users,
-                trialDays: planDetail.trial_days
+                minUsers: yearlyDetail.min_users,
+                maxUsers: yearlyDetail.max_users,
+                trialDays: yearlyDetail.trial_days
             };
         });
 
         return {
-            title: `${applicationTypes.find(type => type.value === formData.application_type)?.label || 'Solutions'} - ${tenureOptions.find(t => t.value === selectedTenure)?.label} Plans`,
+            title: `${applicationTypes.find(type => type.value === formData.application_type)?.label || 'Solutions'} - Plans`,
             tiers
         };
     };
@@ -689,6 +850,9 @@ export function DemoRequestForm() {
         showResultPage: false
     });
 
+
+
+
     // Function to close result page
     const closeResultPage = () => {
         setSubmissionResult({ success: false, message: '', showResultPage: false });
@@ -697,14 +861,14 @@ export function DemoRequestForm() {
     // OTP functions
     const sendOtp = async () => {
         if (!formData.mobile || formData.mobile.length < 10) {
-            console.log('[OTP Send] Validation failed - Invalid mobile number:', formData.mobile);
+
             showAlert('error', 'Invalid Mobile Number', 'Please enter a valid 10-digit mobile number');
             return;
         }
 
         const cleanMobile = formData.mobile.replace(/\D/g, '');
         const isResendOperation = isOtpSent;
-        console.log('[OTP Send] Starting OTP', isResendOperation ? 'resend' : 'generation', 'for mobile:', cleanMobile);
+
 
         setOtpLoading(true);
         try {
@@ -712,7 +876,7 @@ export function DemoRequestForm() {
                 mobile: cleanMobile,
                 request_type: "SENT"
             };
-            console.log('[OTP Send] Request payload:', requestPayload);
+
 
             const response = await fetch('/api/otp-request', {
                 method: 'POST',
@@ -722,11 +886,12 @@ export function DemoRequestForm() {
                 body: JSON.stringify(requestPayload)
             });
 
-            console.log('[OTP Send] Response status:', response.status);
-            console.log('[OTP Send] Response ok:', response.ok);
+            console.log('[OTP Send] Raw response status:', response.status);
+            console.log('[OTP Send] Raw response headers:', Object.fromEntries(response.headers.entries()));
 
             const data = await response.json();
-            console.log('[OTP Send] Response data:', data);
+            console.log('[OTP Send] Complete response data:', JSON.stringify(data, null, 2));
+
 
             // Handle cases where HTTP status is not OK but response contains error details
             if (!response.ok && data && (data.message || data.error)) {
@@ -766,7 +931,7 @@ export function DemoRequestForm() {
             } else {
                 console.log('[OTP Send] Failed - Server response indicates failure:', data.message);
                 // Improved error message handling - check multiple possible message fields
-                const errorMessage = data.message || data.error || data.msg || 
+                const errorMessage = data.message || data.error || data.msg ||
                     (data.success === false ? 'Failed to send OTP. Please try again.' : 'Failed to send OTP. Please try again.');
                 showAlert('error', 'OTP Send Failed', errorMessage);
             }
@@ -811,11 +976,12 @@ export function DemoRequestForm() {
                 body: JSON.stringify(requestPayload)
             });
 
-            console.log('[OTP Validation] Response status:', response.status);
-            console.log('[OTP Validation] Response ok:', response.ok);
+            console.log('[OTP Validation] Raw response status:', response.status);
+            console.log('[OTP Validation] Raw response ok:', response.ok);
+            console.log('[OTP Validation] Raw response headers:', Object.fromEntries(response.headers.entries()));
 
             const data = await response.json();
-            console.log('[OTP Validation] Response data:', data);
+            console.log('[OTP Validation] Complete response data:', JSON.stringify(data, null, 2));
 
             // Handle cases where HTTP status is not OK but response contains error details
             if (!response.ok && data && (data.message || data.error)) {
@@ -830,6 +996,17 @@ export function DemoRequestForm() {
             if (data.success === true || data.response === true) {
                 console.log('[OTP Validation] Success - OTP validated successfully');
                 setIsOtpVerified(true);
+
+                // Store verification status and mobile number in localStorage
+                if (typeof window !== 'undefined') {
+                    localStorage.setItem('mobile_otp_verified', 'true');
+                    localStorage.setItem('verified_mobile_number', formData.mobile);
+                    console.log('[OTP Validation] Verification status stored in localStorage');
+                }
+
+                // Update the last verified mobile state
+                setLastVerifiedMobile(formData.mobile);
+
                 setOtpVerificationMessage('Mobile number verified successfully');
                 setOtpSentMessage(''); // Clear the sent message
                 console.log('[OTP Validation] State updated - isOtpVerified: true');
@@ -837,7 +1014,7 @@ export function DemoRequestForm() {
             } else {
                 console.log('[OTP Validation] Failed - Server response indicates invalid OTP:', data.message);
                 // Improved error message handling - check multiple possible message fields
-                const errorMessage = data.message || data.error || data.msg || 
+                const errorMessage = data.message || data.error || data.msg ||
                     (data.success === false ? 'Invalid OTP. Please try again.' : 'Invalid OTP. Please try again.');
                 showAlert('error', 'OTP Validation Failed', errorMessage);
                 setIsOtpVerified(false);
@@ -859,21 +1036,24 @@ export function DemoRequestForm() {
         }
     };
 
-    // Reset OTP states when mobile number changes
+    // Reset OTP states when mobile number changes (but not on initial load)
     useEffect(() => {
-        if (formData.mobile) {
-            setIsOtpSent(false);
-            setIsOtpVerified(false);
-            setOtpSentMessage('');
-            setOtpVerificationMessage('');
-            setFormData(prev => ({ ...prev, otp: '' }));
-            if (otpCountdownRef.current) {
-                clearInterval(otpCountdownRef.current);
-                setOtpCountdown(0);
-                setCanResendOtp(false);
+        if (isInitialized && formData.mobile) {
+            // Only reset if the mobile number is different from the verified one
+            if (lastVerifiedMobile && formData.mobile !== lastVerifiedMobile) {
+                setIsOtpSent(false);
+                setIsOtpVerified(false);
+                setOtpSentMessage('');
+                setOtpVerificationMessage('');
+                setFormData(prev => ({ ...prev, otp: '' }));
+                if (otpCountdownRef.current) {
+                    clearInterval(otpCountdownRef.current);
+                    setOtpCountdown(0);
+                    setCanResendOtp(false);
+                }
             }
         }
-    }, [formData.mobile]);
+    }, [formData.mobile, isInitialized, lastVerifiedMobile]);
 
     // Cleanup countdown on unmount
     useEffect(() => {
@@ -904,15 +1084,15 @@ export function DemoRequestForm() {
 
             // If form is effectively empty and on first step with no plan, don't persist
             const isEmptyForm =
-                !formData.user_name &&
-                !formData.password &&
+                // !formData.user_name &&
+                // !formData.password &&
                 !formData.email &&
                 !formData.mobile &&
                 !formData.company_name &&
                 !formData.company_title &&
                 !formData.website &&
                 !formData.address &&
-                formData.no_employees === 0 &&
+                // formData.no_employees === 0 &&
                 !formData.contact_per_name &&
                 formData.application_type === 0 &&
                 !selectedPlan &&
@@ -1054,10 +1234,14 @@ export function DemoRequestForm() {
     };
 
     const validateStep1 = (): boolean => {
-        const newErrors: Partial<FormData> = {};
+        const newErrors: any = {};
 
+        // Company Code validation with enhanced restrictions
         if (!formData.company_name?.trim()) newErrors.company_name = "Company Code is required";
         else if (formData.company_name.includes(' ')) newErrors.company_name = "Company Code cannot contain spaces";
+        else if (/[@#$%^&*()+=\[\]{}|\\:";'<>?,./]/.test(formData.company_name)) {
+            newErrors.company_name = "Company Code cannot contain special characters like @, #, $, etc.";
+        }
 
         if (!formData.company_title?.trim()) newErrors.company_title = "Company Name is required";
 
@@ -1066,28 +1250,14 @@ export function DemoRequestForm() {
             newErrors.website = "Website must start with http://, https://, or www.";
         }
 
-        if (!formData.address?.trim()) newErrors.address = "Address is required";
-        if (!formData.contact_per_name?.trim()) newErrors.contact_per_name = "Contact person name is required";
-
-        setErrors(newErrors);
-        return Object.keys(newErrors).length === 0;
-    };
-
-    const validateStep2 = (): boolean => {
-        const newErrors: Partial<FormData> = {};
-
-        // First validate all basic fields
-        if (!formData.user_name?.trim()) newErrors.user_name = "Username is required";
-        else if (formData.user_name.includes(' ')) newErrors.user_name = "Username cannot contain spaces";
-
-        if (!formData.password) newErrors.password = "Password is required";
-        else if (formData.password.length < 6) newErrors.password = "Password must be at least 6 characters";
-
         if (!formData.email) newErrors.email = "Email is required";
         else if (!/\S+@\S+\.\S+/.test(formData.email)) newErrors.email = "Invalid email format";
 
         if (!formData.mobile) newErrors.mobile = "Mobile number is required";
         else if (!/^\d{10}$/.test(formData.mobile)) newErrors.mobile = "Mobile number must be 10 digits";
+
+        if (!formData.contact_per_name?.trim()) newErrors.contact_per_name = "Contact person name is required";
+        if (!formData.address?.trim()) newErrors.address = "Address is required";
 
         // Always set the field errors first so they show up
         setErrors(newErrors);
@@ -1110,6 +1280,11 @@ export function DemoRequestForm() {
         return true;
     };
 
+    // const validateStep2 = (): boolean => {
+    //     // This function is no longer needed as step 2 has been merged with step 1
+    //     return true;
+    // };
+
     const handleNext = () => {
         if (navLock) return;
         if (currentStep === 1 && validateStep1()) {
@@ -1119,13 +1294,27 @@ export function DemoRequestForm() {
             saveToLocalStorage();
             window.scrollTo({ top: 0, behavior: 'smooth' });
             setTimeout(() => setNavLock(false), 350);
-        } else if (currentStep === 2 && validateStep2()) {
+            
+            // Update URL
+            if (typeof window !== 'undefined') {
+                const currentUrl = new URL(window.location.href);
+                currentUrl.searchParams.set('step', '2');
+                window.history.pushState({ step: 2 }, '', currentUrl.toString());
+            }
+        } else if (currentStep === 2) {
             setDirection(1);
             setNavLock(true);
             setCurrentStep(3);
             saveToLocalStorage();
             window.scrollTo({ top: 0, behavior: 'smooth' });
             setTimeout(() => setNavLock(false), 350);
+            
+            // Update URL
+            if (typeof window !== 'undefined') {
+                const currentUrl = new URL(window.location.href);
+                currentUrl.searchParams.set('step', '3');
+                window.history.pushState({ step: 3 }, '', currentUrl.toString());
+            }
         }
     };
 
@@ -1134,10 +1323,18 @@ export function DemoRequestForm() {
         if (currentStep > 1) {
             setDirection(-1);
             setNavLock(true);
-            setCurrentStep(currentStep - 1);
+            const newStep = currentStep - 1;
+            setCurrentStep(newStep);
             saveToLocalStorage();
             window.scrollTo({ top: 0, behavior: 'smooth' });
             setTimeout(() => setNavLock(false), 350);
+            
+            // Update URL
+            if (typeof window !== 'undefined') {
+                const currentUrl = new URL(window.location.href);
+                currentUrl.searchParams.set('step', newStep.toString());
+                window.history.pushState({ step: newStep }, '', currentUrl.toString());
+            }
         }
     };
 
@@ -1152,9 +1349,14 @@ export function DemoRequestForm() {
         localStorage.removeItem('demoFormPlan');
         localStorage.removeItem('demoFormHasSelected');
 
+        // Clear OTP verification status on form clear
+        localStorage.removeItem('mobile_otp_verified');
+        localStorage.removeItem('verified_mobile_number');
+        console.log('[Form Clear] OTP verification status cleared from localStorage');
+
         setFormData({
-            user_name: "",
-            password: "",
+            // user_name: "",
+            // password: "",
             email: "",
             mobile: "",
             otp: "",
@@ -1162,13 +1364,25 @@ export function DemoRequestForm() {
             company_title: "",
             website: "",
             address: "",
-            no_employees: 0,
+            // no_employees: 0,
             contact_per_name: "",
             application_type: 0
         });
         handlePlanSelection(null);
         setCurrentStep(1);
         setErrors({});
+
+        // Reset OTP verification states
+        setIsOtpSent(false);
+        setIsOtpVerified(false);
+        setOtpLoading(false);
+        setOtpCountdown(0);
+        setCanResendOtp(false);
+        setOtpSentMessage('');
+        setOtpVerificationMessage('');
+        setLastVerifiedMobile('');
+        console.log('[Form Clear] OTP states reset');
+
         // Ensure nothing persists immediately after
         if (saveTimeoutRef.current) {
             window.clearTimeout(saveTimeoutRef.current);
@@ -1178,10 +1392,7 @@ export function DemoRequestForm() {
     };
 
     const handleSubmit = async () => {
-        if (!selectedPlan) {
-            showAlert('warning', 'Plan Selection Required', 'Please select a pricing plan to continue with your demo request.');
-            return;
-        }
+        
 
         setIsSubmitting(true);
 
@@ -1221,8 +1432,8 @@ export function DemoRequestForm() {
             const requestBody = {
                 company_name: formData.company_name,
                 company_title: formData.company_title,
-                user_name: formData.user_name,
-                password: formData.password,
+                // user_name: formData.user_name,
+                // password: formData.password,
                 website: formData.website,
                 email: formData.email,
                 state_code: null, // Default state code as per your example
@@ -1234,7 +1445,7 @@ export function DemoRequestForm() {
                 application_type: formData.application_type,
                 pricing_id: planDetail.id, // ID from plan_details array for selected tenure
                 plan_id: planData.plan_id, // Plan ID (silver/gold/platinum from get-plan API)
-                num_users: selectedPlanData.minUsers // Using minimum users from selected plan
+                num_users: selectedPlanData.minUsers // Using minimum users from selected plan (direct selection without DynamicPricing)
             };
 
             // Debug logging for frontend
@@ -1322,6 +1533,204 @@ export function DemoRequestForm() {
         }
     };
 
+    // Navigation functions for dynamic pricing flow
+    const handleGoToPricing = (planName: string) => {
+        // Find the plan ID from the plan name
+        const planEntry = Object.entries(plans).find(([key, plan]) =>
+            plan.plan_name.toLowerCase() === planName.toLowerCase()
+        );
+
+        if (planEntry) {
+            const [, plan] = planEntry;
+            setSelectedPlanForPricing(plan.plan_id);
+            setShowDynamicPricing(true);
+            
+            // Update URL to show pricing view
+            if (typeof window !== 'undefined') {
+                const currentUrl = new URL(window.location.href);
+                currentUrl.searchParams.set('step', '2');
+                currentUrl.searchParams.set('view', 'pricing');
+                currentUrl.searchParams.set('plan', plan.plan_id.toString());
+                window.history.pushState({ step: 2, view: 'pricing', planId: plan.plan_id }, '', currentUrl.toString());
+            }
+        } else {
+            console.error('Plan not found:', planName, 'Available plans:', Object.values(plans).map(p => p.plan_name));
+        }
+    };
+
+    const handleBackToForm = () => {
+        setShowDynamicPricing(false);
+        setSelectedPlanForPricing(null);
+        
+        // Update URL to go back to step 2 form view
+        if (typeof window !== 'undefined') {
+            const currentUrl = new URL(window.location.href);
+            currentUrl.searchParams.set('step', '2');
+            currentUrl.searchParams.delete('view');
+            currentUrl.searchParams.delete('plan');
+            window.history.pushState({ step: 2 }, '', currentUrl.toString());
+        }
+    };
+
+    const handleCompleteDemoFromPricing = async (planId: number, pricingId: number, numberOfUsers: number) => {
+        // Update form data with selected plan and pricing details
+        const updatedFormData = {
+            ...formData,
+            plan_id: planId,
+            pricing_id: pricingId
+        };
+
+        // Submit to process-payment API
+        setIsSubmitting(true);
+
+        console.log('[Dynamic Pricing] Starting API call with data:', {
+            planId,
+            pricingId,
+            numberOfUsers,
+            formData: {
+                company_name: formData.company_name,
+                email: formData.email,
+                mobile: formData.mobile,
+                application_type: formData.application_type
+            }
+        });
+
+        try {
+            const response = await fetch('/api/process-payment', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    company_name: formData.company_name,
+                    company_title: formData.company_title,
+                    website: formData.website,
+                    email: formData.email,
+                    state_code: null,
+                    address: formData.address,
+                    contact_per_name: formData.contact_per_name,
+                    landline: "",
+                    mobile: formData.mobile,
+                    otp: formData.otp,
+                    application_type: formData.application_type,
+                    pricing_id: pricingId,
+                    plan_id: planId,
+                    num_users: numberOfUsers // Use the final number of users from DynamicPricing
+                })
+            });
+
+            let responseData;
+            const contentType = response.headers.get('content-type');
+
+            try {
+                if (contentType && contentType.includes('application/json')) {
+                    responseData = await response.json();
+                } else {
+                    // Handle non-JSON responses (HTML error pages, etc.)
+                    const textResponse = await response.text();
+                    console.error('[Dynamic Pricing] Non-JSON response:', textResponse);
+                    throw new Error('Server returned invalid response format. Please try again later.');
+                }
+            } catch (parseError) {
+                console.error('[Dynamic Pricing] JSON parse error:', parseError);
+                throw new Error('Invalid response format from server. Please try again.');
+            }
+
+            console.log('[Dynamic Pricing] API Response:', responseData);
+
+            // Check for success conditions - either response.response === true OR success keywords in message
+            const isSuccessResponse = responseData.response === true ||
+                responseData.success === true ||
+                (responseData.message && (
+                    responseData.message.toLowerCase().includes('payment successful') ||
+                    responseData.message.toLowerCase().includes('created') ||
+                    responseData.message.toLowerCase().includes('success')
+                ));
+
+            if (response.ok && isSuccessResponse) {
+                // Success - use actual API message if available
+                const apiMessage = responseData.message &&
+                    (responseData.message.toLowerCase().includes('payment successful') ||
+                        responseData.message.toLowerCase().includes('created') ||
+                        responseData.message.toLowerCase().includes('success'))
+                    ? responseData.message
+                    : 'Demo request submitted successfully!';
+
+                const successMessage = apiMessage + '\n\nOur team will connect with you shortly and your credentials will be shared via email within 24 hours.';
+
+                setSubmissionResult({
+                    success: true,
+                    message: successMessage,
+                    showResultPage: true
+                });
+                clearForm();
+                setShowDynamicPricing(false);
+            } else {
+                // Failure - extract detailed error message from API response
+                let errorMessage = 'Failed to submit demo request. Please try again.';
+
+                if (responseData) {
+                    // Try multiple possible error message fields
+                    errorMessage = responseData.message ||
+                        responseData.error ||
+                        responseData.msg ||
+                        responseData.details ||
+                        (responseData.errors && Array.isArray(responseData.errors) ? responseData.errors.join(', ') : '') ||
+                        (responseData.data && responseData.data.message) ||
+                        errorMessage;
+
+                    // Don't include status details in user-facing message
+                }
+
+                console.error('[Dynamic Pricing] API Error:', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    responseData: responseData
+                });
+
+                console.log('[Dynamic Pricing] Setting error submission result:', {
+                    success: false,
+                    message: errorMessage,
+                    showResultPage: true
+                });
+
+                setSubmissionResult({
+                    success: false,
+                    message: errorMessage,
+                    showResultPage: true
+                });
+            }
+        } catch (error) {
+            console.error('[Dynamic Pricing] Network/Parse error:', error);
+
+            // Provide more specific error messages based on error type
+            let errorMessage = 'Network error occurred. Please check your connection and try again.';
+
+            if (error instanceof TypeError && error.message.includes('fetch')) {
+                errorMessage = 'Unable to connect to server. Please check your internet connection and try again.';
+            } else if (error instanceof SyntaxError) {
+                errorMessage = 'Server response format error. Please try again later.';
+            } else if (error.message) {
+                // Use the specific error message if available
+                errorMessage = error.message;
+            }
+
+            console.log('[Dynamic Pricing] Setting network error submission result:', {
+                success: false,
+                message: errorMessage,
+                showResultPage: true
+            });
+
+            setSubmissionResult({
+                success: false,
+                message: errorMessage,
+                showResultPage: true
+            });
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
     const stepVariants = {
         enter: { opacity: 0, scale: 0.98 },
         center: {
@@ -1358,7 +1767,7 @@ export function DemoRequestForm() {
         <>
             {/* Result Page */}
             {submissionResult.showResultPage && (
-                <div className="fixed inset-0 bg-gradient-to-br from-orange-50 via-yellow-50/80 to-blue-50 dark:from-slate-900 dark:via-slate-800 dark:to-indigo-900/50 z-50 flex items-center justify-center p-4">
+                <div className="fixed inset-0 bg-gradient-to-br from-orange-50 via-yellow-50/80 to-blue-50 dark:from-slate-900 dark:via-slate-800 dark:to-indigo-900/50 z-[9999] flex items-center justify-center p-4">
                     <motion.div
                         initial={{ scale: 0.8, opacity: 0 }}
                         animate={{ scale: 1, opacity: 1 }}
@@ -1520,18 +1929,18 @@ export function DemoRequestForm() {
                                     transition={{ duration: 0.5, delay: 0.2 }}
                                 >
                                     {currentStep === 1 && "Provide your business details for a customized experience"}
-                                    {currentStep === 2 && "Create your account credentials to get started"}
-                                    {currentStep === 3 && "Select the solution that fits your needs best"}
+                                    {currentStep === 2 && "Select the solution that fits your needs best"}
+                                    {currentStep === 3 && "Choose your plan and customize pricing options"}
                                 </motion.p>
                             </div>
                         </div>
                     </motion.div>
 
                     {/* Main Content */}
-                    <div className={`${currentStep === 3 ? 'max-w-7xl mx-auto mb-8 lg:mb-12 xl:mb-8' : 'max-w-7xl mx-auto grid grid-cols-1 xl:grid-cols-2 gap-6 lg:gap-8 items-stretch mb-12 lg:mb-16 xl:mb-20'}`}>
+                    <div className={`${currentStep === 2 || currentStep === 3 ? 'max-w-7xl mx-auto mb-8 lg:mb-12 xl:mb-8' : 'max-w-7xl mx-auto grid grid-cols-1 xl:grid-cols-2 gap-6 lg:gap-8 items-stretch mb-12 lg:mb-16 xl:mb-20'}`}>
                         {/* Enhanced Form Section */}
                         <motion.div
-                            className={`bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl rounded-3xl p-3 md:p-4 xl:p-3 shadow-2xl border border-white/20 dark:border-slate-700/30 relative overflow-visible ${currentStep === 3 ? 'w-full col-span-2' : 'flex flex-col'}`}
+                            className={`bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl rounded-3xl p-3 md:p-4 xl:p-3 shadow-2xl border border-white/20 dark:border-slate-700/30 relative overflow-visible ${currentStep === 2 || currentStep === 3 ? 'w-full col-span-2' : 'flex flex-col'}`}
                             initial={{ opacity: 0, x: -50 }}
                             animate={{ opacity: 1, x: 0 }}
                             transition={{ duration: 0.6 }}
@@ -1572,7 +1981,7 @@ export function DemoRequestForm() {
                                                 animate={{ opacity: 1, y: 0 }}
                                                 transition={{ delay: 0.2 }}
                                             >
-                                                Company Information
+                                                Business Information
                                             </motion.h2>
                                             <motion.p
                                                 className="text-gray-600 dark:text-gray-300 text-sm lg:text-base xl:text-sm leading-relaxed"
@@ -1580,68 +1989,204 @@ export function DemoRequestForm() {
                                                 animate={{ opacity: 1 }}
                                                 transition={{ delay: 0.3 }}
                                             >
-                                                Help us understand your business to personalize your experience
+                                                Tell us about your business and contact details
                                             </motion.p>
                                         </div>
-                                        <div className="space-y-2 lg:space-y-3 xl:space-y-2 flex-1 min-h-0 px-1">
+                                        <div className="space-y-4 flex-1 min-h-0 px-1">
 
-
-                                            <motion.div variants={inputVariants} transition={{ delay: 0.2 }}>
-                                                <label className="flex items-center text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2 lg:mb-3 xl:mb-2">
-                                                    <div className="w-5 h-5 rounded-md bg-gradient-to-r from-blue-400 to-indigo-400 flex items-center justify-center mr-2 shadow-sm">
-                                                        <Building className="w-3 h-3 text-white" />
-                                                    </div>
-                                                    Company Name
-                                                </label>
-                                                <div className="relative group">
-                                                    <input
-                                                        type="text"
-                                                        value={formData.company_title}
-                                                        onChange={(e) => handleInputChange("company_title", e.target.value)}
-                                                        className={`w-full px-3 py-2.5 border-2 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border-gray-200 dark:border-slate-600 text-gray-900 dark:text-white transition-all duration-200 group-hover:border-blue-300 ${errors.company_title ? "border-red-400 focus:ring-red-500/20 focus:border-red-500" : ""
-                                                            }`}
-                                                        placeholder="Full company name (e.g., ABC Corp Pvt Ltd)"
-                                                    />
-                                                    <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-500/5 to-indigo-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" />
-                                                </div>
-                                                {errors.company_title && (
-                                                    <motion.p
-                                                        className="text-red-500 text-sm mt-2 flex items-center"
-                                                        initial={{ opacity: 0, x: -10 }}
-                                                        animate={{ opacity: 1, x: 0 }}
-                                                    >
-                                                        <div className="w-1 h-1 bg-red-500 rounded-full mr-2" />
-                                                        {errors.company_title}
-                                                    </motion.p>
-                                                )}
-                                            </motion.div>
-
-                                            <motion.div variants={inputVariants} transition={{ delay: 0.1 }}>
-                                                <label className="flex items-center text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2 lg:mb-3 xl:mb-2">
-                                                    <div className="w-5 h-5 rounded-md bg-gradient-to-r from-blue-400 to-indigo-400 flex items-center justify-center mr-2 shadow-sm">
-                                                        <Building className="w-3 h-3 text-white" />
-                                                    </div>
-                                                    Company Code
-                                                    {/* Question Mark Icon with Tooltip - Hidden on mobile */}
-                                                    <div className="relative ml-2 hidden md:block">
-                                                        <div
-                                                            className="w-4 h-4 rounded-full bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-500 flex items-center justify-center cursor-help transition-colors duration-200"
-                                                            onMouseEnter={() => setShowCompanyCodeGuide(true)}
-                                                            onMouseLeave={() => setShowCompanyCodeGuide(false)}
-                                                            onClick={() => setShowCompanyCodeGuide(!showCompanyCodeGuide)}
-                                                        >
-                                                            <span className="text-white text-xs font-bold">?</span>
+                                            {/* Company Name and Company Code - Side by Side */}
+                                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                                <motion.div variants={inputVariants} transition={{ delay: 0.1 }}>
+                                                    <label className="flex items-center text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
+                                                        <div className="w-5 h-5 rounded-md bg-gradient-to-r from-blue-400 to-indigo-400 flex items-center justify-center mr-2 shadow-sm">
+                                                            <Building className="w-3 h-3 text-white" />
                                                         </div>
+                                                        Company Name
+                                                        {/* Question Mark Icon with Tooltip - Hidden on small screens */}
+                                                        <div className="relative ml-2 hidden md:block">
+                                                            <div
+                                                                className="w-4 h-4 rounded-full bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-500 flex items-center justify-center cursor-help transition-colors duration-200"
+                                                                onMouseEnter={() => setShowCompanyNameGuide(true)}
+                                                                onMouseLeave={() => setShowCompanyNameGuide(false)}
+                                                                onClick={() => setShowCompanyNameGuide(!showCompanyNameGuide)}
+                                                            >
+                                                                <span className="text-white text-xs font-bold">?</span>
+                                                            </div>
 
-                                                        {/* Company Code Guide Tooltip for Medium and larger screens */}
+                                                            {/* Company Name Guide Tooltip */}
+                                                            <AnimatePresence>
+                                                                {showCompanyNameGuide && (
+                                                                    <motion.div
+                                                                        initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                                                                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                                                                        exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                                                                        transition={{ duration: 0.2 }}
+                                                                        className="absolute top-full mt-2 w-64 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700/50 rounded-lg p-3 shadow-lg backdrop-blur-sm z-50 md:left-0 lg:left-1/2 lg:transform lg:-translate-x-1/2"
+                                                                    >
+                                                                        <div className="flex items-start space-x-2">
+                                                                            <div className="w-4 h-4 rounded-full bg-blue-500 flex items-center justify-center mt-0.5 flex-shrink-0">
+                                                                                <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
+                                                                            </div>
+                                                                            <div className="text-sm text-blue-700 dark:text-blue-300">
+                                                                                <p className="font-medium mb-1">Enter full company name</p>
+                                                                                <p className="text-blue-600 dark:text-blue-400">Like ABC Pvt Ltd, XYZ Corporation, etc.</p>
+                                                                            </div>
+                                                                        </div>
+                                                                        {/* Arrow pointing up */}
+                                                                        <div className="absolute -top-1 w-2 h-2 bg-blue-50 dark:bg-blue-900/20 border-l border-t border-blue-200 dark:border-blue-700/50 rotate-45 md:left-4 lg:left-1/2 lg:transform lg:-translate-x-1/2"></div>
+                                                                    </motion.div>
+                                                                )}
+                                                            </AnimatePresence>
+                                                        </div>
+                                                    </label>
+                                                    <div className="relative group">
+                                                        <input
+                                                            type="text"
+                                                            value={formData.company_title}
+                                                            onFocus={() => setIsCompanyNameFocused(true)}
+                                                            onBlur={() => setIsCompanyNameFocused(false)}
+                                                            onChange={(e) => handleInputChange("company_title", e.target.value)}
+                                                            className={`w-full px-3 py-2.5 border-2 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border-gray-200 dark:border-slate-600 text-gray-900 dark:text-white transition-all duration-200 group-hover:border-blue-300 ${errors.company_title ? "border-red-400 focus:ring-red-500/20 focus:border-red-500" : ""
+                                                                }`}
+                                                            placeholder="Full company name (e.g., ABC Corp Pvt Ltd)"
+                                                        />
+
+                                                        {/* Small screen description - shows on focus */}
                                                         <AnimatePresence>
-                                                            {showCompanyCodeGuide && (
+                                                            {isCompanyNameFocused && (
                                                                 <motion.div
-                                                                    initial={{ opacity: 0, y: -10, scale: 0.95 }}
-                                                                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                                                                    exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                                                                    transition={{ duration: 0.2 }}
-                                                                    className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 w-64 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700/50 rounded-lg p-3 shadow-lg backdrop-blur-sm z-50"
+                                                                    initial={{ opacity: 0, height: 0, y: -5 }}
+                                                                    animate={{
+                                                                        opacity: 1,
+                                                                        height: "auto",
+                                                                        y: 0,
+                                                                        transition: {
+                                                                            duration: 0.4,
+                                                                            ease: [0.25, 0.8, 0.25, 1],
+                                                                            opacity: { duration: 0.3, delay: 0.1 }
+                                                                        }
+                                                                    }}
+                                                                    exit={{
+                                                                        opacity: 0,
+                                                                        height: 0,
+                                                                        y: -5,
+                                                                        transition: {
+                                                                            duration: 0.3,
+                                                                            ease: [0.4, 0, 0.6, 1]
+                                                                        }
+                                                                    }}
+                                                                    className="md:hidden mt-2 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700/50 rounded-lg"
+                                                                >
+                                                                    <div className="flex items-start space-x-2">
+                                                                        <div className="w-4 h-4 rounded-full bg-blue-500 flex items-center justify-center mt-0.5 flex-shrink-0">
+                                                                            <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
+                                                                        </div>
+                                                                        <div className="text-sm text-blue-700 dark:text-blue-300">
+                                                                            <p className="font-medium mb-1">Enter full company name</p>
+                                                                            <p className="text-blue-600 dark:text-blue-400">Like ABC Pvt Ltd, XYZ Corporation, etc.</p>
+                                                                        </div>
+                                                                    </div>
+                                                                </motion.div>
+                                                            )}
+                                                        </AnimatePresence>
+                                                        <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-500/5 to-indigo-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" />
+                                                    </div>
+                                                    {errors.company_title && (
+                                                        <motion.p
+                                                            className="text-red-500 text-sm mt-2 flex items-center"
+                                                            initial={{ opacity: 0, x: -10 }}
+                                                            animate={{ opacity: 1, x: 0 }}
+                                                        >
+                                                            <div className="w-1 h-1 bg-red-500 rounded-full mr-2" />
+                                                            {errors.company_title}
+                                                        </motion.p>
+                                                    )}
+                                                </motion.div>
+
+                                                <motion.div variants={inputVariants} transition={{ delay: 0.2 }}>
+                                                    <label className="flex items-center text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
+                                                        <div className="w-5 h-5 rounded-md bg-gradient-to-r from-blue-400 to-indigo-400 flex items-center justify-center mr-2 shadow-sm">
+                                                            <Building className="w-3 h-3 text-white" />
+                                                        </div>
+                                                        Company Code
+                                                        {/* Question Mark Icon with Tooltip - Hidden on small screens */}
+                                                        <div className="relative ml-2 hidden md:block">
+                                                            <div
+                                                                className="w-4 h-4 rounded-full bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-500 flex items-center justify-center cursor-help transition-colors duration-200"
+                                                                onMouseEnter={() => setShowCompanyCodeGuide(true)}
+                                                                onMouseLeave={() => setShowCompanyCodeGuide(false)}
+                                                                onClick={() => setShowCompanyCodeGuide(!showCompanyCodeGuide)}
+                                                            >
+                                                                <span className="text-white text-xs font-bold">?</span>
+                                                            </div>
+
+                                                            {/* Company Code Guide Tooltip - Responsive positioning */}
+                                                            <AnimatePresence>
+                                                                {showCompanyCodeGuide && (
+                                                                    <motion.div
+                                                                        initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                                                                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                                                                        exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                                                                        transition={{ duration: 0.2 }}
+                                                                        className="absolute top-full mt-2 w-64 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700/50 rounded-lg p-3 shadow-lg backdrop-blur-sm z-50 md:-right-16 lg:right-0"
+                                                                    >
+                                                                        <div className="flex items-start space-x-2">
+                                                                            <div className="w-4 h-4 rounded-full bg-blue-500 flex items-center justify-center mt-0.5 flex-shrink-0">
+                                                                                <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
+                                                                            </div>
+                                                                            <div className="text-sm text-blue-700 dark:text-blue-300">
+                                                                                <p className="font-medium mb-1">This becomes your login ID</p>
+                                                                                <p className="text-blue-600 dark:text-blue-400">Use lowercase letters only, no spaces or special characters like @, #, $, etc.</p>
+                                                                            </div>
+                                                                        </div>
+                                                                        {/* Arrow pointing up */}
+                                                                        <div className="absolute -top-1 w-2 h-2 bg-blue-50 dark:bg-blue-900/20 border-l border-t border-blue-200 dark:border-blue-700/50 rotate-45 md:right-20 lg:right-4"></div>
+                                                                    </motion.div>
+                                                                )}
+                                                            </AnimatePresence>
+                                                        </div>
+                                                    </label>
+                                                    <div className="relative group">
+                                                        <input
+                                                            type="text"
+                                                            value={formData.company_name}
+                                                            onFocus={() => setIsCompanyCodeFocused(true)}
+                                                            onBlur={() => setIsCompanyCodeFocused(false)}
+                                                            onChange={(e) => {
+                                                                // Enhanced restriction: only allow alphanumeric characters
+                                                                const cleanValue = e.target.value.toLowerCase().replace(/[^a-z0-9]/g, '');
+                                                                handleInputChange("company_name", cleanValue);
+                                                            }}
+                                                            className={`w-full px-3 py-2.5 border-2 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border-gray-200 dark:border-slate-600 text-gray-900 dark:text-white transition-all duration-200 group-hover:border-blue-300 ${errors.company_name ? "border-red-400 focus:ring-red-500/20 focus:border-red-500" : ""
+                                                                }`}
+                                                            placeholder="e.g. abc, company, demo123"
+                                                        />
+
+                                                        {/* Small screen description - shows on focus/typing */}
+                                                        <AnimatePresence>
+                                                            {isCompanyCodeFocused && (
+                                                                <motion.div
+                                                                    initial={{ opacity: 0, height: 0, y: -5 }}
+                                                                    animate={{
+                                                                        opacity: 1,
+                                                                        height: "auto",
+                                                                        y: 0,
+                                                                        transition: {
+                                                                            duration: 0.4,
+                                                                            ease: [0.25, 0.8, 0.25, 1],
+                                                                            opacity: { duration: 0.3, delay: 0.1 }
+                                                                        }
+                                                                    }}
+                                                                    exit={{
+                                                                        opacity: 0,
+                                                                        height: 0,
+                                                                        y: -5,
+                                                                        transition: {
+                                                                            duration: 0.3,
+                                                                            ease: [0.4, 0, 0.6, 1]
+                                                                        }
+                                                                    }}
+                                                                    className="md:hidden mt-2 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700/50 rounded-lg"
                                                                 >
                                                                     <div className="flex items-start space-x-2">
                                                                         <div className="w-4 h-4 rounded-full bg-blue-500 flex items-center justify-center mt-0.5 flex-shrink-0">
@@ -1649,112 +2194,289 @@ export function DemoRequestForm() {
                                                                         </div>
                                                                         <div className="text-sm text-blue-700 dark:text-blue-300">
                                                                             <p className="font-medium mb-1">This becomes your login ID</p>
-                                                                            <p className="text-blue-600 dark:text-blue-400">Use lowercase letters only, no spaces. This will be used to access your demo solutions.</p>
+                                                                            <p className="text-blue-600 dark:text-blue-400">Use lowercase letters only, no spaces or special characters like @, #, $, etc.</p>
                                                                         </div>
                                                                     </div>
-                                                                    {/* Arrow pointing up */}
-                                                                    <div className="absolute -top-1 left-1/2 transform -translate-x-1/2 w-2 h-2 bg-blue-50 dark:bg-blue-900/20 border-l border-t border-blue-200 dark:border-blue-700/50 rotate-45"></div>
                                                                 </motion.div>
                                                             )}
                                                         </AnimatePresence>
+                                                        <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-500/5 to-indigo-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" />
                                                     </div>
-                                                </label>
-                                                <div className="relative group">
-                                                    <input
-                                                        type="text"
-                                                        value={formData.company_name}
-                                                        onChange={(e) => {
-                                                            handleInputChange("company_name", e.target.value.toLowerCase().replace(/\s/g, ''));
-                                                            // Show guide on mobile when typing starts
-                                                            if (window.innerWidth < 768 && e.target.value.length > 0) {
-                                                                setShowCompanyCodeGuide(true);
-                                                            }
-                                                        }}
-                                                        onFocus={() => {
-                                                            // Show guide on mobile when focused and has content
-                                                            if (window.innerWidth < 768 && formData.company_name.length > 0) {
-                                                                setShowCompanyCodeGuide(true);
-                                                            }
-                                                        }}
-                                                        onBlur={() => {
-                                                            // Hide guide on mobile when blurred
-                                                            if (window.innerWidth < 768) {
-                                                                setShowCompanyCodeGuide(false);
-                                                            }
-                                                        }}
-                                                        className={`w-full px-3 py-2.5 border-2 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border-gray-200 dark:border-slate-600 text-gray-900 dark:text-white transition-all duration-200 group-hover:border-blue-300 ${errors.company_name ? "border-red-400 focus:ring-red-500/20 focus:border-red-500" : ""
-                                                            }`}
-                                                        placeholder="e.g. abc, company"
-                                                    />
-                                                    <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-500/5 to-indigo-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" />
-                                                </div>
-
-                                                {/* Mobile Guide Tooltip - Shows below input when typing and takes space in layout */}
-                                                <AnimatePresence>
-                                                    {showCompanyCodeGuide && window.innerWidth < 768 && (
-                                                        <motion.div
-                                                            initial={{ opacity: 0, height: 0, marginTop: 0 }}
-                                                            animate={{ opacity: 1, height: 'auto', marginTop: 8 }}
-                                                            exit={{ opacity: 0, height: 0, marginTop: 0 }}
-                                                            transition={{ duration: 0.3, ease: "easeInOut" }}
-                                                            className="w-full bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700/50 rounded-lg p-3 shadow-lg backdrop-blur-sm md:hidden overflow-hidden"
+                                                    {errors.company_name && (
+                                                        <motion.p
+                                                            className="text-red-500 text-sm mt-2 flex items-center"
+                                                            initial={{ opacity: 0, x: -10 }}
+                                                            animate={{ opacity: 1, x: 0 }}
                                                         >
-                                                            <div className="flex items-start space-x-2">
-                                                                <div className="w-4 h-4 rounded-full bg-blue-500 flex items-center justify-center mt-0.5 flex-shrink-0">
-                                                                    <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
-                                                                </div>
-                                                                <div className="text-sm text-blue-700 dark:text-blue-300">
-                                                                    <p className="font-medium mb-1">This becomes your login ID</p>
-                                                                    <p className="text-blue-600 dark:text-blue-400">Use lowercase letters only, no spaces. This will be used to access your demo solutions.</p>
+                                                            <div className="w-1 h-1 bg-red-500 rounded-full mr-2" />
+                                                            {errors.company_name}
+                                                        </motion.p>
+                                                    )}
+                                                </motion.div>
+                                            </div>
+
+                                            {/* Website and Email - Side by Side */}
+                                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                                <motion.div variants={inputVariants} transition={{ delay: 0.3 }}>
+                                                    <label className="flex items-center text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
+                                                        <div className="w-5 h-5 rounded-md bg-gradient-to-r from-blue-400 to-indigo-400 flex items-center justify-center mr-2 shadow-sm">
+                                                            <Globe className="w-3 h-3 text-white" />
+                                                        </div>
+                                                        Website
+                                                    </label>
+                                                    <div className="relative group">
+                                                        <input
+                                                            type="url"
+                                                            value={formData.website}
+                                                            onChange={(e) => handleInputChange("website", e.target.value)}
+                                                            className={`w-full px-3 py-2.5 border-2 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border-gray-200 dark:border-slate-600 text-gray-900 dark:text-white transition-all duration-200 group-hover:border-blue-300 ${errors.website ? "border-red-400 focus:ring-red-500/20 focus:border-red-500" : ""
+                                                                }`}
+                                                            placeholder="https://www.example.com"
+                                                        />
+                                                        <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-500/5 to-indigo-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" />
+                                                    </div>
+                                                    {errors.website && (
+                                                        <motion.p
+                                                            className="text-red-500 text-sm mt-2 flex items-center"
+                                                            initial={{ opacity: 0, x: -10 }}
+                                                            animate={{ opacity: 1, x: 0 }}
+                                                        >
+                                                            <div className="w-1 h-1 bg-red-500 rounded-full mr-2" />
+                                                            {errors.website}
+                                                        </motion.p>
+                                                    )}
+                                                </motion.div>
+
+                                                <motion.div variants={inputVariants} transition={{ delay: 0.4 }}>
+                                                    <label className="flex items-center text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
+                                                        <div className="w-5 h-5 rounded-md bg-gradient-to-r from-blue-400 to-cyan-400 flex items-center justify-center mr-2 shadow-sm">
+                                                            <Mail className="w-3 h-3 text-white" />
+                                                        </div>
+                                                        Email Address
+                                                    </label>
+                                                    <div className="relative group">
+                                                        <input
+                                                            type="email"
+                                                            value={formData.email}
+                                                            onChange={(e) => handleInputChange("email", e.target.value)}
+                                                            className={`w-full px-3 py-2.5 border-2 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border-gray-200 dark:border-slate-600 text-gray-900 dark:text-white transition-all duration-200 group-hover:border-blue-300 ${errors.email ? "border-red-400 focus:ring-red-500/20 focus:border-red-500" : ""
+                                                                }`}
+                                                            placeholder="Enter your email address"
+                                                        />
+                                                        <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-500/5 to-indigo-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" />
+                                                    </div>
+                                                    {errors.email && (
+                                                        <motion.p
+                                                            className="text-red-500 text-sm mt-2 flex items-center"
+                                                            initial={{ opacity: 0, x: -10 }}
+                                                            animate={{ opacity: 1, x: 0 }}
+                                                        >
+                                                            <div className="w-1 h-1 bg-red-500 rounded-full mr-2" />
+                                                            {errors.email}
+                                                        </motion.p>
+                                                    )}
+                                                </motion.div>
+                                            </div>
+
+                                            {/* Contact Person Name and Mobile Number - Side by Side */}
+                                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+                                                <motion.div variants={inputVariants} transition={{ delay: 0.5 }}>
+                                                    <label className="flex items-center text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
+                                                        <div className="w-5 h-5 rounded-md bg-gradient-to-r from-blue-400 to-indigo-400 flex items-center justify-center mr-2 shadow-sm">
+                                                            <User className="w-3 h-3 text-white" />
+                                                        </div>
+                                                        Contact Person
+                                                    </label>
+                                                    <div className="relative group">
+                                                        <input
+                                                            type="text"
+                                                            value={formData.contact_per_name}
+                                                            onChange={(e) => handleInputChange("contact_per_name", e.target.value)}
+                                                            className={`w-full px-3 py-2.5 border-2 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border-gray-200 dark:border-slate-600 text-gray-900 dark:text-white transition-all duration-200 group-hover:border-blue-300 ${errors.contact_per_name ? "border-red-400 focus:ring-red-500/20 focus:border-red-500" : ""
+                                                                }`}
+                                                            placeholder="Full name of contact person"
+                                                        />
+                                                        <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-500/5 to-indigo-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" />
+                                                    </div>
+                                                    {errors.contact_per_name && (
+                                                        <motion.p
+                                                            className="text-red-500 text-sm mt-2 flex items-center"
+                                                            initial={{ opacity: 0, x: -10 }}
+                                                            animate={{ opacity: 1, x: 0 }}
+                                                        >
+                                                            <div className="w-1 h-1 bg-red-500 rounded-full mr-2" />
+                                                            {errors.contact_per_name}
+                                                        </motion.p>
+                                                    )}
+                                                </motion.div>
+
+                                                {/* Mobile Number Verification Section */}
+                                                <motion.div variants={inputVariants} transition={{ delay: 0.6 }}>
+                                                    <label className="flex items-center text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
+                                                        <div className="w-5 h-5 rounded-md bg-gradient-to-r from-green-400 to-emerald-400 flex items-center justify-center mr-2 shadow-sm">
+                                                            <Phone className="w-3 h-3 text-white" />
+                                                        </div>
+                                                        Mobile Number
+                                                    </label>
+
+                                                    {/* Mobile Number Input */}
+                                                    <div className="space-y-2">
+                                                        <div className="flex gap-3 items-end lg:flex-col lg:items-stretch lg:gap-2">
+                                                            <div className="flex-1 lg:w-full">
+                                                                <div className="relative group">
+                                                                    <input
+                                                                        type="tel"
+                                                                        value={formData.mobile}
+                                                                        onChange={(e) => handleInputChange("mobile", e.target.value.replace(/\D/g, ''))}
+                                                                        className={`w-full px-3 py-2.5 border-2 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border-gray-200 dark:border-slate-600 text-gray-900 dark:text-white transition-all duration-200 group-hover:border-blue-300 ${errors.mobile ? "border-red-400 focus:ring-red-500/20 focus:border-red-500" : ""
+                                                                            } ${isOtpVerified ? "border-green-500 bg-green-50 dark:bg-green-900/10" : ""}`}
+                                                                        placeholder="10-digit mobile number"
+                                                                        maxLength={10}
+                                                                        disabled={isOtpVerified}
+                                                                    />
+                                                                    <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-500/5 to-indigo-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" />
+                                                                    {isOtpVerified && (
+                                                                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                                                                            <CheckCircle className="w-5 h-5 text-green-500" />
+                                                                        </div>
+                                                                    )}
                                                                 </div>
                                                             </div>
-                                                        </motion.div>
-                                                    )}
-                                                </AnimatePresence>
-                                                {errors.company_name && (
-                                                    <motion.p
-                                                        className="text-red-500 text-sm mt-2 flex items-center"
-                                                        initial={{ opacity: 0, x: -10 }}
-                                                        animate={{ opacity: 1, x: 0 }}
-                                                    >
-                                                        <div className="w-1 h-1 bg-red-500 rounded-full mr-2" />
-                                                        {errors.company_name}
-                                                    </motion.p>
-                                                )}
-                                            </motion.div>
 
-                                            <motion.div variants={inputVariants} transition={{ delay: 0.3 }}>
-                                                <label className="flex items-center text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2 lg:mb-3 xl:mb-2">
-                                                    <div className="w-5 h-5 rounded-md bg-gradient-to-r from-blue-400 to-indigo-400 flex items-center justify-center mr-2 shadow-sm">
-                                                        <Globe className="w-3 h-3 text-white" />
+                                                            {/* Verify Number Button - Responsive positioning */}
+                                                            <div className="lg:hidden">
+                                                                {/* Small/Medium screens: Button next to input */}
+                                                                {formData.mobile.length === 10 && !isOtpSent && !isOtpVerified && (
+                                                                    <Button
+                                                                        onClick={sendOtp}
+                                                                        disabled={otpLoading}
+                                                                        className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                                                                    >
+                                                                        {otpLoading ? 'Sending...' : 'Verify Number'}
+                                                                    </Button>
+                                                                )}
+
+                                                                {/* Resend OTP Button */}
+                                                                {isOtpSent && canResendOtp && !isOtpVerified && (
+                                                                    <Button
+                                                                        onClick={sendOtp}
+                                                                        disabled={otpLoading}
+                                                                        className="px-4 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                                                                    >
+                                                                        {otpLoading ? 'Sending...' : 'Resend OTP'}
+                                                                    </Button>
+                                                                )}
+
+                                                                {/* Countdown Timer */}
+                                                                {isOtpSent && otpCountdown > 0 && !isOtpVerified && (
+                                                                    <div className="px-4 py-2.5 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 rounded-xl font-medium whitespace-nowrap">
+                                                                        Resend in {otpCountdown}s
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Large screens: Button below input */}
+                                                        <div className="hidden lg:block">
+                                                            {formData.mobile.length === 10 && !isOtpSent && !isOtpVerified && (
+                                                                <Button
+                                                                    onClick={sendOtp}
+                                                                    disabled={otpLoading}
+                                                                    className="w-full px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                                >
+                                                                    {otpLoading ? 'Sending...' : 'Verify Number'}
+                                                                </Button>
+                                                            )}
+
+                                                            {/* Resend OTP Button */}
+                                                            {isOtpSent && canResendOtp && !isOtpVerified && (
+                                                                <Button
+                                                                    onClick={sendOtp}
+                                                                    disabled={otpLoading}
+                                                                    className="w-full px-4 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                                >
+                                                                    {otpLoading ? 'Sending...' : 'Resend OTP'}
+                                                                </Button>
+                                                            )}
+
+                                                            {/* Countdown Timer */}
+                                                            {isOtpSent && otpCountdown > 0 && !isOtpVerified && (
+                                                                <div className="w-full px-4 py-2.5 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 rounded-xl font-medium text-center">
+                                                                    Resend in {otpCountdown}s
+                                                                </div>
+                                                            )}
+                                                        </div>
+
+                                                        {/* OTP Input Field */}
+                                                        {isOtpSent && !isOtpVerified && (
+                                                            <motion.div
+                                                                initial={{ opacity: 0, height: 0 }}
+                                                                animate={{ opacity: 1, height: 'auto' }}
+                                                                className="space-y-3"
+                                                            >
+                                                                <div className="flex gap-3 items-center">
+                                                                    <div className="flex-1">
+                                                                        <input
+                                                                            type="text"
+                                                                            value={formData.otp}
+                                                                            onChange={(e) => handleInputChange("otp", e.target.value.replace(/\D/g, ''))}
+                                                                            className="w-full px-3 py-2.5 border-2 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border-gray-200 dark:border-slate-600 text-gray-900 dark:text-white transition-all duration-200"
+                                                                            placeholder="Enter OTP"
+                                                                            maxLength={6}
+                                                                        />
+                                                                    </div>
+                                                                    <Button
+                                                                        onClick={validateOtp}
+                                                                        disabled={otpLoading || formData.otp.length < 4}
+                                                                        className="px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                                                                    >
+                                                                        {otpLoading ? 'Verifying...' : 'Verify OTP'}
+                                                                    </Button>
+                                                                </div>
+                                                            </motion.div>
+                                                        )}
+
+                                                        {/* Mobile Error */}
+                                                        {errors.mobile && (
+                                                            <motion.p
+                                                                className="text-red-500 text-sm flex items-center"
+                                                                initial={{ opacity: 0, x: -10 }}
+                                                                animate={{ opacity: 1, x: 0 }}
+                                                            >
+                                                                <div className="w-1 h-1 bg-red-500 rounded-full mr-2" />
+                                                                {errors.mobile}
+                                                            </motion.p>
+                                                        )}
+
+                                                        {/* OTP Messages */}
+                                                        {otpSentMessage && (
+                                                            <motion.div
+                                                                initial={{ opacity: 0, x: -10 }}
+                                                                animate={{ opacity: 1, x: 0 }}
+                                                                className="flex items-center space-x-2 text-sm text-blue-600 dark:text-blue-400"
+                                                            >
+                                                                <CheckCircle className="w-4 h-4" />
+                                                                <span>{otpSentMessage}</span>
+                                                            </motion.div>
+                                                        )}
+
+                                                        {otpVerificationMessage && (
+                                                            <motion.div
+                                                                initial={{ opacity: 0, x: -10 }}
+                                                                animate={{ opacity: 1, x: 0 }}
+                                                                className="flex items-center space-x-2 text-sm text-green-600 dark:text-green-400"
+                                                            >
+                                                                <CheckCircle className="w-4 h-4" />
+                                                                <span>{otpVerificationMessage}</span>
+                                                            </motion.div>
+                                                        )}
                                                     </div>
-                                                    Website
-                                                </label>
-                                                <div className="relative group">
-                                                    <input
-                                                        type="url"
-                                                        value={formData.website}
-                                                        onChange={(e) => handleInputChange("website", e.target.value)}
-                                                        className={`w-full px-3 py-2.5 border-2 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border-gray-200 dark:border-slate-600 text-gray-900 dark:text-white transition-all duration-200 group-hover:border-blue-300 ${errors.website ? "border-red-400 focus:ring-red-500/20 focus:border-red-500" : ""
-                                                            }`}
-                                                        placeholder="https://www.example.com"
-                                                    />
-                                                    <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-500/5 to-indigo-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" />
-                                                </div>
-                                                {errors.website && (
-                                                    <motion.p
-                                                        className="text-red-500 text-sm mt-2 flex items-center"
-                                                        initial={{ opacity: 0, x: -10 }}
-                                                        animate={{ opacity: 1, x: 0 }}
-                                                    >
-                                                        <div className="w-1 h-1 bg-red-500 rounded-full mr-2" />
-                                                        {errors.website}
-                                                    </motion.p>
-                                                )}
-                                            </motion.div>
+                                                </motion.div>
+                                            </div>
 
-                                            <motion.div variants={inputVariants} transition={{ delay: 0.4 }}>
-                                                <label className="flex items-center text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2 lg:mb-3 xl:mb-2">
+                                            {/* Address - Full Width */}
+                                            <motion.div variants={inputVariants} transition={{ delay: 0.7 }}>
+                                                <label className="flex items-center text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
                                                     <div className="w-5 h-5 rounded-md bg-gradient-to-r from-blue-400 to-indigo-400 flex items-center justify-center mr-2 shadow-sm">
                                                         <MapPin className="w-3 h-3 text-white" />
                                                     </div>
@@ -1783,62 +2505,34 @@ export function DemoRequestForm() {
                                                 )}
                                             </motion.div>
 
-                                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 lg:gap-4 xl:gap-3">
-                                                <motion.div variants={inputVariants} transition={{ delay: 0.5 }}>
-                                                    <label className="flex items-center text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2 lg:mb-3 xl:mb-2">
-                                                        <div className="w-5 h-5 rounded-md bg-gradient-to-r from-blue-400 to-indigo-400 flex items-center justify-center mr-2 shadow-sm">
-                                                            <Users className="w-3 h-3 text-white" />
-                                                        </div>
-                                                        Number of Employees
-                                                    </label>
-                                                    <div className="relative group">
-                                                        <input
-                                                            type="number"
-                                                            value={formData.no_employees || ''}
-                                                            onChange={(e) => handleInputChange("no_employees", parseInt(e.target.value) || 0)}
-                                                            className="w-full px-3 py-2.5 border-2 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border-gray-200 dark:border-slate-600 text-gray-900 dark:text-white transition-all duration-200 group-hover:border-blue-300"
-                                                            placeholder="Total number of employees"
-                                                            min="1"
-                                                        />
-                                                        <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-500/5 to-indigo-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" />
+                                            {/* Commented out Number of Employees field */}
+                                            {/*
+                                            <motion.div variants={inputVariants} transition={{ delay: 0.5 }}>
+                                                <label className="flex items-center text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
+                                                    <div className="w-5 h-5 rounded-md bg-gradient-to-r from-blue-400 to-indigo-400 flex items-center justify-center mr-2 shadow-sm">
+                                                        <Users className="w-3 h-3 text-white" />
                                                     </div>
-                                                </motion.div>
-
-                                                <motion.div variants={inputVariants} transition={{ delay: 0.6 }}>
-                                                    <label className="flex items-center text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2 lg:mb-3 xl:mb-2">
-                                                        <div className="w-5 h-5 rounded-md bg-gradient-to-r from-blue-400 to-indigo-400 flex items-center justify-center mr-2 shadow-sm">
-                                                            <User className="w-3 h-3 text-white" />
-                                                        </div>
-                                                        Contact Person
-                                                    </label>
-                                                    <div className="relative group">
-                                                        <input
-                                                            type="text"
-                                                            value={formData.contact_per_name}
-                                                            onChange={(e) => handleInputChange("contact_per_name", e.target.value)}
-                                                            className={`w-full px-3 py-2.5 border-2 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border-gray-200 dark:border-slate-600 text-gray-900 dark:text-white transition-all duration-200 group-hover:border-blue-300 ${errors.contact_per_name ? "border-red-400 focus:ring-red-500/20 focus:border-red-500" : ""
-                                                                }`}
-                                                            placeholder="Full name of contact person"
-                                                        />
-                                                        <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-500/5 to-indigo-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" />
-                                                    </div>
-                                                    {errors.contact_per_name && (
-                                                        <motion.p
-                                                            className="text-red-500 text-sm mt-2 flex items-center"
-                                                            initial={{ opacity: 0, x: -10 }}
-                                                            animate={{ opacity: 1, x: 0 }}
-                                                        >
-                                                            <div className="w-1 h-1 bg-red-500 rounded-full mr-2" />
-                                                            {errors.contact_per_name}
-                                                        </motion.p>
-                                                    )}
-                                                </motion.div>
-                                            </div>
+                                                    Number of Employees
+                                                </label>
+                                                <div className="relative group">
+                                                    <input
+                                                        type="number"
+                                                        value={formData.no_employees || ''}
+                                                        onChange={(e) => handleInputChange("no_employees", parseInt(e.target.value) || 0)}
+                                                        className="w-full px-3 py-2.5 border-2 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border-gray-200 dark:border-slate-600 text-gray-900 dark:text-white transition-all duration-200 group-hover:border-blue-300"
+                                                        placeholder="Total number of employees"
+                                                        min="1"
+                                                    />
+                                                    <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-500/5 to-indigo-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" />
+                                                </div>
+                                            </motion.div>
+                                            */}
                                         </div>
                                     </motion.div>
                                 )}
 
-                                {/* Step 2: Create Credentials */}
+                                {/* Old Step 2: Create Credentials - COMMENTED OUT DUE TO MERGE */}
+                                {/*
                                 {currentStep === 2 && (
                                     <motion.div
                                         key="step2"
@@ -1878,225 +2572,14 @@ export function DemoRequestForm() {
                                             </motion.p>
                                         </div>
                                         <div className="space-y-2 lg:space-y-3 xl:space-y-2 flex-1 min-h-0 px-1">
-                                            <motion.div variants={inputVariants} transition={{ delay: 0.1 }}>
-                                                <label className="flex items-center text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2 lg:mb-3 xl:mb-2">
-                                                    <div className="w-5 h-5 rounded-md bg-gradient-to-r from-orange-400 to-amber-400 flex items-center justify-center mr-2 shadow-sm">
-                                                        <User className="w-3 h-3 text-white" />
-                                                    </div>
-                                                    Username
-                                                </label>
-                                                <div className="relative group">
-                                                    <input
-                                                        type="text"
-                                                        value={formData.user_name}
-                                                        onChange={(e) => handleInputChange("user_name", e.target.value)}
-                                                        className={`w-full px-3 py-2.5 border-2 rounded-xl focus:ring-4 focus:ring-orange-500/20 focus:border-orange-500 bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border-gray-200 dark:border-slate-600 text-gray-900 dark:text-white transition-all duration-200 group-hover:border-orange-300 ${errors.user_name ? "border-red-400 focus:ring-red-500/20 focus:border-red-500" : ""
-                                                            }`}
-                                                        placeholder="Enter username (no spaces)"
-                                                    />
-                                                    <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-orange-500/5 to-amber-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" />
-                                                </div>
-                                                {errors.user_name && (
-                                                    <p className="text-red-500 text-sm mt-1">{errors.user_name}</p>
-                                                )}
-                                            </motion.div>
-
-                                            <motion.div variants={inputVariants} transition={{ delay: 0.2 }}>
-                                                <label className="flex items-center text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
-                                                    <div className="w-5 h-5 rounded-md bg-gradient-to-r from-red-400 to-pink-400 flex items-center justify-center mr-2 shadow-sm">
-                                                        <Lock className="w-3 h-3 text-white" />
-                                                    </div>
-                                                    Password
-                                                </label>
-                                                <div className="relative group">
-                                                    <input
-                                                        type={showPassword ? "text" : "password"}
-                                                        value={formData.password}
-                                                        onChange={(e) => handleInputChange("password", e.target.value)}
-                                                        className={`w-full px-3 py-2.5 pr-12 border-2 rounded-xl focus:ring-4 focus:ring-orange-500/20 focus:border-orange-500 bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border-gray-200 dark:border-slate-600 text-gray-900 dark:text-white transition-all duration-200 group-hover:border-orange-300 ${errors.password ? "border-red-400 focus:ring-red-500/20 focus:border-red-500" : ""
-                                                            }`}
-                                                        placeholder="Enter secure password"
-                                                    />
-                                                    <motion.button
-                                                        type="button"
-                                                        onClick={() => setShowPassword(!showPassword)}
-                                                        className="absolute right-3 top-2.5 p-1 rounded-lg text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-slate-700 transition-all duration-200"
-                                                        whileHover={{ scale: 1.1 }}
-                                                        whileTap={{ scale: 0.95 }}
-                                                    >
-                                                        {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                                                    </motion.button>
-                                                    <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-orange-500/5 to-amber-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" />
-                                                </div>
-                                                {errors.password && (
-                                                    <p className="text-red-500 text-sm mt-1">{errors.password}</p>
-                                                )}
-                                            </motion.div>
-
-                                            <motion.div variants={inputVariants} transition={{ delay: 0.3 }}>
-                                                <label className="flex items-center text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
-                                                    <div className="w-5 h-5 rounded-md bg-gradient-to-r from-blue-400 to-cyan-400 flex items-center justify-center mr-2 shadow-sm">
-                                                        <Mail className="w-3 h-3 text-white" />
-                                                    </div>
-                                                    Email Address
-                                                </label>
-                                                <div className="relative group">
-                                                    <input
-                                                        type="email"
-                                                        value={formData.email}
-                                                        onChange={(e) => handleInputChange("email", e.target.value)}
-                                                        className={`w-full px-3 py-2.5 border-2 rounded-xl focus:ring-4 focus:ring-orange-500/20 focus:border-orange-500 bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border-gray-200 dark:border-slate-600 text-gray-900 dark:text-white transition-all duration-200 group-hover:border-orange-300 ${errors.email ? "border-red-400 focus:ring-red-500/20 focus:border-red-500" : ""
-                                                            }`}
-                                                        placeholder="Enter your email address"
-                                                    />
-                                                    <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-orange-500/5 to-amber-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" />
-                                                </div>
-                                                {errors.email && (
-                                                    <motion.p
-                                                        className="text-red-500 text-sm mt-2 flex items-center"
-                                                        initial={{ opacity: 0, x: -10 }}
-                                                        animate={{ opacity: 1, x: 0 }}
-                                                    >
-                                                        <div className="w-1 h-1 bg-red-500 rounded-full mr-2" />
-                                                        {errors.email}
-                                                    </motion.p>
-                                                )}
-                                            </motion.div>
-
-                                            {/* Mobile Number and OTP Section */}
-                                            <motion.div variants={inputVariants} transition={{ delay: 0.4 }} className="space-y-4">
-                                                <label className="flex items-center text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
-                                                    <div className="w-5 h-5 rounded-md bg-gradient-to-r from-green-400 to-emerald-400 flex items-center justify-center mr-2 shadow-sm">
-                                                        <Phone className="w-3 h-3 text-white" />
-                                                    </div>
-                                                    Mobile Number Verification
-                                                </label>
-
-                                                {/* Mobile Number Input - Half Width */}
-                                                <div className="flex gap-3 items-end">
-                                                    <div className="flex-1 max-w-xs">
-                                                        <div className="relative group">
-                                                            <input
-                                                                type="tel"
-                                                                value={formData.mobile}
-                                                                onChange={(e) => handleInputChange("mobile", e.target.value.replace(/\D/g, ''))}
-                                                                className={`w-full px-3 py-2.5 border-2 rounded-xl focus:ring-4 focus:ring-orange-500/20 focus:border-orange-500 bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border-gray-200 dark:border-slate-600 text-gray-900 dark:text-white transition-all duration-200 group-hover:border-orange-300 ${errors.mobile ? "border-red-400 focus:ring-red-500/20 focus:border-red-500" : ""
-                                                                    } ${isOtpVerified ? "border-green-500 bg-green-50 dark:bg-green-900/10" : ""}`}
-                                                                placeholder="10-digit mobile number"
-                                                                maxLength={10}
-                                                                disabled={isOtpVerified}
-                                                            />
-                                                            <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-orange-500/5 to-amber-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" />
-                                                            {isOtpVerified && (
-                                                                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                                                                    <CheckCircle className="w-5 h-5 text-green-500" />
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Verify Number Button */}
-                                                    {formData.mobile.length === 10 && !isOtpSent && !isOtpVerified && (
-                                                        <Button
-                                                            onClick={sendOtp}
-                                                            disabled={otpLoading}
-                                                            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                                                        >
-                                                            {otpLoading ? 'Sending...' : 'Verify Number'}
-                                                        </Button>
-                                                    )}
-
-                                                    {/* Resend OTP Button */}
-                                                    {isOtpSent && canResendOtp && !isOtpVerified && (
-                                                        <Button
-                                                            onClick={sendOtp}
-                                                            disabled={otpLoading}
-                                                            className="px-4 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                                                        >
-                                                            {otpLoading ? 'Sending...' : 'Resend OTP'}
-                                                        </Button>
-                                                    )}
-
-                                                    {/* Countdown Timer */}
-                                                    {isOtpSent && otpCountdown > 0 && !isOtpVerified && (
-                                                        <div className="px-4 py-2.5 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 rounded-xl font-medium whitespace-nowrap">
-                                                            Resend in {otpCountdown}s
-                                                        </div>
-                                                    )}
-                                                </div>
-
-                                                {/* OTP Input Field */}
-                                                {isOtpSent && !isOtpVerified && (
-                                                    <motion.div
-                                                        initial={{ opacity: 0, height: 0 }}
-                                                        animate={{ opacity: 1, height: 'auto' }}
-                                                        className="space-y-3"
-                                                    >
-                                                        <div className="flex gap-3 items-center">
-                                                            <div className="flex-1 max-w-xs">
-                                                                <input
-                                                                    type="text"
-                                                                    value={formData.otp}
-                                                                    onChange={(e) => handleInputChange("otp", e.target.value.replace(/\D/g, ''))}
-                                                                    className="w-full px-3 py-2.5 border-2 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border-gray-200 dark:border-slate-600 text-gray-900 dark:text-white transition-all duration-200"
-                                                                    placeholder="Enter OTP"
-                                                                    maxLength={6}
-                                                                />
-                                                            </div>
-                                                            <Button
-                                                                onClick={validateOtp}
-                                                                disabled={otpLoading || !formData.otp || formData.otp.length < 4}
-                                                                className="px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                                                            >
-                                                                {otpLoading ? 'Validating...' : 'Validate OTP'}
-                                                            </Button>
-                                                        </div>
-                                                        <p className="text-sm text-gray-600 dark:text-gray-400">
-                                                            Enter the 6-digit OTP sent to your mobile number
-                                                        </p>
-                                                    </motion.div>
-                                                )}
-
-                                                {/* Inline Success Messages */}
-                                                {otpSentMessage && !isOtpVerified && (
-                                                    <motion.div
-                                                        initial={{ opacity: 0, y: -10 }}
-                                                        animate={{ opacity: 1, y: 0 }}
-                                                        className="flex items-center gap-2 text-blue-600 dark:text-blue-400 text-sm font-medium bg-blue-50 dark:bg-blue-900/20 px-3 py-2 rounded-lg border border-blue-200 dark:border-blue-800"
-                                                    >
-                                                        <CheckCircle className="w-4 h-4" />
-                                                        {otpSentMessage}
-                                                    </motion.div>
-                                                )}
-
-                                                {otpVerificationMessage && isOtpVerified && (
-                                                    <motion.div
-                                                        initial={{ opacity: 0, scale: 0.95 }}
-                                                        animate={{ opacity: 1, scale: 1 }}
-                                                        className="flex items-center gap-2 text-green-600 dark:text-green-400 text-sm font-medium bg-green-50 dark:bg-green-900/20 px-3 py-2 rounded-lg border border-green-200 dark:border-green-800"
-                                                    >
-                                                        <CheckCircle className="w-4 h-4" />
-                                                        {otpVerificationMessage}
-                                                    </motion.div>
-                                                )}
-
-                                                {errors.mobile && (
-                                                    <motion.p
-                                                        className="text-red-500 text-sm flex items-center"
-                                                        initial={{ opacity: 0, x: -10 }}
-                                                        animate={{ opacity: 1, x: 0 }}
-                                                    >
-                                                        <div className="w-1 h-1 bg-red-500 rounded-full mr-2" />
-                                                        {errors.mobile}
-                                                    </motion.p>
-                                                )}
-                                            </motion.div>
+                                            ... all the old step 2 content ...
                                         </div>
                                     </motion.div>
                                 )}
+                                */}
 
-                                {/* Step 3: Application Type & Pricing */}
-                                {currentStep === 3 && (
+                                {/* Step 2: Application Type & Pricing (previously Step 3) */}
+                                {currentStep === 2 && (
                                     <motion.div
                                         key="step3"
                                         variants={stepVariants}
@@ -2144,8 +2627,11 @@ export function DemoRequestForm() {
                                             <h2 className="text-lg lg:text-xl xl:text-lg font-bold text-gray-800 dark:text-white mb-1 lg:mb-2 xl:mb-1 tracking-tight">
                                                 Choose Your Solution
                                             </h2>
-                                            <p className="text-gray-600 dark:text-gray-300 text-xs lg:text-sm xl:text-xs">
+                                            <p className="text-gray-600 dark:text-gray-300 text-xs lg:text-sm xl:text-xs mb-1">
                                                 Pick the solution that matches your business requirements
+                                            </p>
+                                            <p className="text-blue-600 dark:text-blue-400 text-xs lg:text-sm xl:text-xs font-medium opacity-90">
+                                                You can always change your mind during the demo!
                                             </p>
                                         </div>
 
@@ -2202,83 +2688,34 @@ export function DemoRequestForm() {
                                             </AnimatePresence>
                                         </motion.div>
 
-                                        {/* Tenure Selection Dropdown */}
+                                        {/* Previous Step Button - Top Left (Large Portraits and Larger) */}
+                                        <motion.div
+                                            className="absolute top-4 left-4 z-10 hidden lg:block"
+                                            initial={{ opacity: 0, x: -20 }}
+                                            animate={{ opacity: 1, x: 0 }}
+                                            transition={{ delay: 0.2, duration: 0.3 }}
+                                        >
+                                            <motion.button
+                                                whileHover={{ scale: 1.05 }}
+                                                whileTap={{ scale: 0.95 }}
+                                                onClick={handleBack}
+                                                className="flex items-center gap-2 px-3 py-2 bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm border border-gray-200 dark:border-slate-600 hover:border-orange-300 dark:hover:border-orange-400 text-gray-700 dark:text-gray-200 hover:text-gray-900 dark:hover:text-white font-medium rounded-lg transition-all duration-300 shadow-md hover:shadow-lg group"
+                                            >
+                                                <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" />
+                                                <span className="text-sm">Previous</span>
+                                            </motion.button>
+                                        </motion.div>
+
+                                        {/* Tenure Selection Dropdown - Commented out for new pricing flow */}
+                                        {/*
                                         <AnimatePresence>
                                             {formData.application_type > 0 && (
-                                                <motion.div
-                                                    initial={{ opacity: 0, y: 20 }}
-                                                    animate={{ opacity: 1, y: 0 }}
-                                                    exit={{ opacity: 0, y: -20 }}
-                                                    transition={{
-                                                        duration: 0.3,
-                                                        delay: 0.05,
-                                                        ease: "easeOut"
-                                                    }}
-                                                    className="mb-6 flex flex-col items-center"
-                                                >
-                                                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2 text-center">
-                                                        Choose Billing Tenure
-                                                    </label>
-                                                    <div className="relative w-72">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setIsTenureDropdownOpen(!isTenureDropdownOpen)}
-                                                            className="w-full px-4 py-3 text-base border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 bg-white dark:bg-slate-700 border-gray-300 dark:border-slate-600 text-gray-900 dark:text-white flex items-center justify-between hover:border-orange-400 transition-all duration-200"
-                                                        >
-                                                            <span className="flex items-center gap-2">
-                                                                {tenureOptions.find(t => t.value === selectedTenure)?.label}
-                                                                {tenureOptions.find(t => t.value === selectedTenure)?.popular && (
-                                                                    <span className="text-xs bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 px-2 py-0.5 rounded-full font-medium">
-                                                                        Recommended
-                                                                    </span>
-                                                                )}
-                                                            </span>
-                                                            <ChevronDown className={`w-5 h-5 text-gray-600 dark:text-gray-300 transition-transform duration-200 flex-shrink-0 ml-2 ${isTenureDropdownOpen ? 'rotate-180' : ''}`} />
-                                                        </button>
-
-                                                        <AnimatePresence>
-                                                            {isTenureDropdownOpen && (
-                                                                <motion.div
-                                                                    initial={{ opacity: 0, y: -10, scale: 0.95 }}
-                                                                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                                                                    exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                                                                    transition={{ duration: 0.2 }}
-                                                                    className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg shadow-xl z-[9999] overflow-hidden"
-                                                                >
-                                                                    {tenureOptions.map((tenure) => (
-                                                                        <motion.button
-                                                                            key={tenure.value}
-                                                                            type="button"
-                                                                            onClick={() => {
-                                                                                setSelectedTenure(tenure.value);
-                                                                                setIsTenureDropdownOpen(false);
-                                                                            }}
-                                                                            className="w-full px-4 py-3 text-left text-gray-900 dark:text-white hover:bg-orange-50 dark:hover:bg-slate-600 transition-all duration-150 ease-out border-b border-gray-100 dark:border-slate-600 last:border-b-0 flex items-center justify-between"
-                                                                            whileHover={{
-                                                                                backgroundColor: 'rgba(249, 115, 22, 0.08)',
-                                                                                scale: 1.01,
-                                                                                transition: { duration: 0.15, ease: "easeOut" }
-                                                                            }}
-                                                                            whileTap={{
-                                                                                scale: 0.98,
-                                                                                transition: { duration: 0.1 }
-                                                                            }}
-                                                                        >
-                                                                            <span>{tenure.label}</span>
-                                                                            {tenure.popular && (
-                                                                                <span className="text-xs bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 px-2 py-0.5 rounded-full font-medium">
-                                                                                    Recommended
-                                                                                </span>
-                                                                            )}
-                                                                        </motion.button>
-                                                                    ))}
-                                                                </motion.div>
-                                                            )}
-                                                        </AnimatePresence>
-                                                    </div>
+                                                <motion.div>
+                                                    // Tenure dropdown content would be here
                                                 </motion.div>
                                             )}
                                         </AnimatePresence>
+                                        */}
 
                                         {/* Dynamic Pricing Cards */}
                                         <AnimatePresence>
@@ -2324,17 +2761,20 @@ export function DemoRequestForm() {
                                                                     </span>
                                                                 )}
                                                             </motion.h3>
-                                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-4 lg:gap-6 xl:gap-5 lg:items-end mt-6 lg:mt-8 xl:mt-6 transform-gpu">
+                                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-4 lg:gap-6 xl:gap-5 items-stretch mt-6 lg:mt-8 xl:mt-6 transform-gpu">
                                                                 {getCurrentPricingData()?.tiers.map((tier, index) => (
                                                                     <motion.div
                                                                         key={tier.name}
-                                                                        className={`group relative p-4 lg:p-5 xl:p-4 mx-1 ${tier.popular ? 'pt-6 lg:pt-8 xl:pt-6 pb-5 lg:pb-6 xl:pb-5 lg:min-h-[380px] xl:min-h-[340px] min-h-[320px]' : 'pt-5 lg:pt-6 xl:pt-5 pb-5 lg:pb-6 xl:pb-5 min-h-[320px] lg:min-h-[350px] xl:min-h-[310px]'} flex flex-col rounded-2xl border-2 shadow-xl transition-all duration-300 ease-out cursor-pointer overflow-visible transform-gpu will-change-transform backdrop-blur-sm ${selectedPlan === tier.name
-                                                                            ? tier.popular
-                                                                                ? "border-orange-300 dark:border-orange-400 bg-gradient-to-br from-orange-50/90 via-amber-50/70 to-amber-50/90 dark:from-orange-900/25 dark:via-amber-900/20 dark:to-orange-900/25 shadow-xl shadow-orange-500/20 dark:shadow-orange-900/30 z-10 ring-2 ring-orange-300/50"
-                                                                                : "border-orange-300 dark:border-orange-400 bg-gradient-to-br from-white via-gray-50/30 to-white dark:from-slate-800 dark:via-slate-700/50 dark:to-slate-800 shadow-xl shadow-orange-500/20 dark:shadow-orange-900/30 z-10 ring-2 ring-orange-300/50"
-                                                                            : tier.popular
-                                                                                ? "border-gradient-to-r from-orange-50/90 bg-gradient-to-br via-amber-50/70 to-amber-50/90 dark:from-orange-900/25 dark:via-amber-900/20 dark:to-orange-900/25 shadow-orange-200/50 dark:shadow-orange-900/30"
-                                                                                : "border-gray-200 bg-gradient-to-br from-white via-gray-50/30 to-white dark:from-slate-800 dark:via-slate-700/50 dark:to-slate-800 dark:border-slate-600 shadow-gray-200/50 dark:shadow-slate-900/50"
+                                                                        className={`group relative flex flex-col rounded-2xl border-2 shadow-xl transition-all duration-300 ease-out cursor-pointer overflow-visible transform-gpu will-change-transform backdrop-blur-sm ${tier.popular
+                                                                            ? 'p-4 lg:p-5 xl:p-4 pt-6 lg:pt-8 xl:pt-6 pb-5 lg:pb-6 xl:pb-5 min-h-[420px] sm:min-h-[440px] md:min-h-[480px] lg:min-h-[520px] xl:min-h-[500px] 2xl:min-h-[480px]'
+                                                                            : 'p-4 lg:p-5 xl:p-4 pt-5 lg:pt-6 xl:pt-5 pb-5 lg:pb-6 xl:pb-5 min-h-[400px] sm:min-h-[420px] md:min-h-[460px] lg:min-h-[500px] xl:min-h-[480px] 2xl:min-h-[460px]'
+                                                                            } ${selectedPlan === tier.name
+                                                                                ? tier.popular
+                                                                                    ? "border-orange-300 dark:border-orange-400 bg-gradient-to-br from-orange-50/90 via-amber-50/70 to-amber-50/90 dark:from-orange-900/25 dark:via-amber-900/20 dark:to-orange-900/25 shadow-xl shadow-orange-500/20 dark:shadow-orange-900/30 z-10 ring-2 ring-orange-300/50"
+                                                                                    : "border-orange-300 dark:border-orange-400 bg-gradient-to-br from-white via-gray-50/30 to-white dark:from-slate-800 dark:via-slate-700/50 dark:to-slate-800 shadow-xl shadow-orange-500/20 dark:shadow-orange-900/30 z-10 ring-2 ring-orange-300/50"
+                                                                                : tier.popular
+                                                                                    ? "border-gradient-to-r from-orange-50/90 bg-gradient-to-br via-amber-50/70 to-amber-50/90 dark:from-orange-900/25 dark:via-amber-900/20 dark:to-orange-900/25 shadow-orange-200/50 dark:shadow-orange-900/30"
+                                                                                    : "border-gray-200 bg-gradient-to-br from-white via-gray-50/30 to-white dark:from-slate-800 dark:via-slate-700/50 dark:to-slate-800 dark:border-slate-600 shadow-gray-200/50 dark:shadow-slate-900/50"
                                                                             } hover:border-orange-300 dark:hover:border-orange-400 hover:shadow-xl hover:shadow-orange-500/20 dark:hover:shadow-orange-900/30`}
                                                                         initial={{
                                                                             opacity: 0,
@@ -2361,7 +2801,23 @@ export function DemoRequestForm() {
                                                                             scale: 0.98,
                                                                             transition: { duration: 0.1 }
                                                                         }}
-                                                                        onClick={() => handlePlanSelection(selectedPlan === tier.name ? null : tier.name)}
+                                                                        onClick={() => {
+                                                                            // Find the plan entry for this tier
+                                                                            const planEntry = Object.entries(plans).find(([key, plan]) =>
+                                                                                plan.plan_name.toLowerCase() === tier.name.toLowerCase()
+                                                                            );
+                                                                            if (planEntry) {
+                                                                                const [, plan] = planEntry;
+                                                                                setSelectedPlanForPricing(plan.plan_id);
+                                                                                // Navigate to step 3 (pricing customization)
+                                                                                setDirection(1);
+                                                                                setNavLock(true);
+                                                                                setCurrentStep(3);
+                                                                                saveToLocalStorage();
+                                                                                window.scrollTo({ top: 0, behavior: 'smooth' });
+                                                                                setTimeout(() => setNavLock(false), 350);
+                                                                            }
+                                                                        }}
                                                                     >
                                                                         {/* Enhanced gradient overlay with shimmer effect */}
                                                                         <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-orange-500/5 via-amber-500/10 to-yellow-500/5 dark:from-orange-400/10 dark:via-amber-400/15 dark:to-yellow-400/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
@@ -2461,7 +2917,7 @@ export function DemoRequestForm() {
                                                                                 </div>
                                                                             </div>
                                                                         </div>
-                                                                        <ul className={`space-y-3 text-left ${!tier.popular ? 'flex-1' : ''} relative z-10`}>
+                                                                        <ul className="space-y-3 text-left flex-1 relative z-10 overflow-y-auto custom-scrollbar">
                                                                             {tier.features.map((feature, featureIndex) => (
                                                                                 <motion.li
                                                                                     key={featureIndex}
@@ -2480,7 +2936,7 @@ export function DemoRequestForm() {
 
                                                                         {/* Plan Details Section */}
                                                                         <motion.div
-                                                                            className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-600 text-center relative z-10"
+                                                                            className="mt-auto pt-4 border-t border-gray-200 dark:border-gray-600 text-center relative z-10"
                                                                             initial={{ opacity: 0, y: 10 }}
                                                                             animate={{ opacity: 1, y: 0 }}
                                                                             transition={{ delay: 0.6 }}
@@ -2499,6 +2955,35 @@ export function DemoRequestForm() {
                                                                                     <span className="ml-1">days free trial</span>
                                                                                 </div>
                                                                             </div>
+
+                                                                            {/* Select plan button */}
+                                                                            <motion.button
+                                                                                className={`mt-4 w-full font-semibold py-3 px-6 rounded-lg transition-all duration-300 transform hover:scale-105 hover:shadow-lg ${
+                                                                                    selectedPlanForPricing === plans[tier.name.toLowerCase().replace(/\s+/g, '_')]?.plan_id
+                                                                                        ? 'bg-gradient-to-r from-green-500 to-green-600 text-white'
+                                                                                        : 'bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white'
+                                                                                }`}
+                                                                                whileHover={{ scale: 1.02 }}
+                                                                                whileTap={{ scale: 0.98 }}
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    const planEntry = Object.entries(plans).find(([key, plan]) =>
+                                                                                        plan.plan_name.toLowerCase() === tier.name.toLowerCase()
+                                                                                    );
+                                                                                    if (planEntry) {
+                                                                                        setSelectedPlanForPricing(planEntry[1].plan_id);
+                                                                                        // Navigate to step 3 (pricing customization)
+                                                                                        setDirection(1);
+                                                                                        setNavLock(true);
+                                                                                        setCurrentStep(3);
+                                                                                        saveToLocalStorage();
+                                                                                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                                                                                        setTimeout(() => setNavLock(false), 350);
+                                                                                    }
+                                                                                }}
+                                                                            >
+                                                                                Go with this plan
+                                                                            </motion.button>
                                                                         </motion.div>
                                                                     </motion.div>
                                                                 )) || []}
@@ -2507,44 +2992,74 @@ export function DemoRequestForm() {
                                                     ) : null}
 
                                                     {/* Enhanced Selection prompt */}
-                                                    {formData.application_type > 0 && getCurrentPricingData() && (
-                                                        <motion.div
-                                                            className="mt-8 text-center"
-                                                            initial={{ opacity: 0, y: 20 }}
-                                                            animate={{ opacity: 1, y: 0 }}
-                                                            transition={{ delay: 0.8 }}
-                                                        >
-                                                            <div className="relative bg-gradient-to-r from-blue-50 via-indigo-50/80 to-purple-50 dark:from-blue-900/25 dark:via-indigo-900/20 dark:to-purple-900/25 rounded-xl p-5 border border-blue-200/60 dark:border-blue-700/60 shadow-lg backdrop-blur-sm overflow-hidden">
-                                                                {/* Subtle animated background */}
-                                                                <div className="absolute inset-0 bg-gradient-to-r from-blue-400/5 via-indigo-400/10 to-purple-400/5 animate-pulse" />
-
-                                                                <div className="relative z-10">
-                                                                    <p className="text-blue-800 dark:text-blue-200 font-semibold text-lg mb-2">
-                                                                        Click on a plan to select it (optional)
-                                                                    </p>
-                                                                    <p className="text-blue-700 dark:text-blue-300 text-sm opacity-90">
-                                                                        You can always change your mind during the demo!
-                                                                    </p>
-
-                                                                    {selectedPlan && (
-                                                                        <motion.div
-                                                                            className="mt-4 p-3 bg-gradient-to-r from-green-100 to-emerald-100 dark:from-green-900/30 dark:to-emerald-900/30 rounded-lg border border-green-200 dark:border-green-700"
-                                                                            initial={{ opacity: 0, y: 10 }}
-                                                                            animate={{ opacity: 1, y: 0 }}
-                                                                            transition={{ delay: 0.2 }}
-                                                                        >
-                                                                            <p className="text-green-800 dark:text-green-200 font-semibold text-base flex items-center justify-center gap-2">
-                                                                                ✅ Selected: <span className="text-green-700 dark:text-green-300">{selectedPlan} Plan</span>
-                                                                            </p>
-                                                                        </motion.div>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        </motion.div>
-                                                    )}
                                                 </motion.div>
                                             )}
                                         </AnimatePresence>
+                                    </motion.div>
+                                )}
+
+                                {/* Step 3: Dynamic Pricing */}
+                                {currentStep === 3 && (
+                                    <motion.div
+                                        key="step3-pricing"
+                                        variants={stepVariants}
+                                        initial="enter"
+                                        animate="center"
+                                        exit="exit"
+                                        className="w-full"
+                                    >
+                                        <div className="text-center mb-6">
+                                            <motion.div
+                                                className="relative w-12 h-12 lg:w-14 lg:h-14 xl:w-12 xl:h-12 bg-gradient-to-br from-purple-500 via-purple-400 to-indigo-500 rounded-xl flex items-center justify-center mx-auto mb-3 lg:mb-4 xl:mb-3 shadow-xl"
+                                                whileHover={{ scale: 1.05, rotateY: 10 }}
+                                                initial={{ rotateX: -15 }}
+                                                animate={{ rotateX: 0 }}
+                                                transition={{ duration: 0.5 }}
+                                            >
+                                                <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-black/10 rounded-xl" />
+                                                <div className="absolute inset-0.5 bg-gradient-to-br from-white/30 to-transparent rounded-xl" />
+                                                <CreditCard className="w-5 h-5 lg:w-6 lg:h-6 xl:w-5 xl:h-5 text-white relative z-10 drop-shadow-lg" />
+                                                <div className="absolute -inset-1 bg-gradient-to-r from-purple-400 to-indigo-400 rounded-xl opacity-30 blur-md animate-pulse" />
+                                            </motion.div>
+                                            
+                                            <motion.h3
+                                                className="text-xl lg:text-2xl xl:text-xl font-bold text-gray-800 dark:text-white mb-2"
+                                                initial={{ opacity: 0, y: 10 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                transition={{ delay: 0.2 }}
+                                            >
+                                                Customize Your Pricing
+                                            </motion.h3>
+                                            
+                                            <motion.p
+                                                className="text-gray-600 dark:text-gray-300 text-sm lg:text-base xl:text-sm"
+                                                initial={{ opacity: 0, y: 10 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                transition={{ delay: 0.3 }}
+                                            >
+                                                Finalize your selection and get a personalized demo
+                                            </motion.p>
+                                        </div>
+
+                                        {/* DynamicPricing Component */}
+                                        <motion.div
+                                            initial={{ opacity: 0, y: 20 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            transition={{ delay: 0.4 }}
+                                            className="w-full"
+                                        >
+                                            <DynamicPricing
+                                                selectedPlanId={selectedPlanForPricing}
+                                                allPlans={plans}
+                                                onGoBack={() => {
+                                                    setCurrentStep(2);
+                                                    setDirection(-1);
+                                                }}
+                                                onCompleteDemo={handleCompleteDemoFromPricing}
+                                                formData={formData}
+                                                isSubmitting={isSubmitting}
+                                            />
+                                        </motion.div>
                                     </motion.div>
                                 )}
                             </AnimatePresence>
@@ -2564,8 +3079,8 @@ export function DemoRequestForm() {
                                     <Button
                                         variant="outline"
                                         onClick={handleBack}
-                                        disabled={currentStep === 1}
-                                        className="relative flex items-center justify-center gap-2 lg:gap-3 xl:gap-2 px-6 lg:px-8 xl:px-6 py-3 lg:py-4 xl:py-3 w-full sm:w-auto bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm border-2 border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700 hover:border-orange-300 dark:hover:border-orange-400 text-gray-700 dark:text-gray-200 hover:text-gray-700 dark:hover:text-gray-200 font-semibold rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed group"
+                                        disabled={currentStep === 1 || currentStep === 3}
+                                        className="relative flex items-center justify-center gap-2 lg:gap-3 xl:gap-2 px-6 lg:px-8 xl:px-6 py-3 lg:py-4 xl:py-3 w-full sm:w-auto bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm border-2 border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700 hover:border-orange-300 dark:hover:border-orange-400 text-gray-700 dark:text-gray-200 hover:text-gray-700 dark:hover:text-gray-200 font-semibold rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed group lg:hidden"
                                     >
                                         <div className="absolute inset-0 bg-gradient-to-r from-orange-500/5 to-amber-500/5 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                                         <ArrowLeft className="w-5 h-5 transition-transform group-hover:-translate-x-0.5" />
@@ -2573,7 +3088,7 @@ export function DemoRequestForm() {
                                     </Button>
                                 </motion.div>
 
-                                {currentStep < 3 ? (
+                                {currentStep < 3 && currentStep !== 2 ? (
                                     <motion.div
                                         whileHover={{ scale: 1.02 }}
                                         whileTap={{ scale: 0.98 }}
@@ -2581,14 +3096,23 @@ export function DemoRequestForm() {
                                     >
                                         <Button
                                             onClick={handleNext}
-                                            className="relative flex items-center justify-center gap-2 lg:gap-3 xl:gap-2 px-6 lg:px-8 xl:px-6 py-3 lg:py-4 xl:py-3 w-full sm:w-auto bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 hover:from-orange-600 hover:via-amber-600 hover:to-orange-700 text-white font-bold shadow-xl hover:shadow-2xl transition-all duration-300 rounded-xl group overflow-hidden"
+                                            disabled={currentStep === 2 && !selectedPlanForPricing}
+                                            className={`relative flex items-center justify-center gap-2 lg:gap-3 xl:gap-2 px-6 lg:px-8 xl:px-6 py-3 lg:py-4 xl:py-3 w-full sm:w-auto font-bold shadow-xl hover:shadow-2xl transition-all duration-300 rounded-xl group overflow-hidden ${
+                                                currentStep === 2 && !selectedPlanForPricing
+                                                    ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                                                    : 'bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 hover:from-orange-600 hover:via-amber-600 hover:to-orange-700 text-white'
+                                            }`}
                                         >
-                                            <div className="absolute inset-0 bg-gradient-to-r from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                                            <div className={`absolute inset-0 bg-gradient-to-r from-white/20 to-transparent transition-opacity duration-300 ${
+                                                currentStep === 2 && !selectedPlanForPricing ? 'opacity-0' : 'opacity-0 group-hover:opacity-100'
+                                            }`} />
                                             <span className="relative z-10">Continue</span>
                                             <ArrowRight className="w-5 h-5 relative z-10 transition-transform group-hover:translate-x-0.5" />
                                         </Button>
                                     </motion.div>
                                 ) : (
+                                    // Complete Demo Request button - commented out for new pricing flow
+                                    /*
                                     <motion.div
                                         whileHover={{ scale: 1.02 }}
                                         whileTap={{ scale: 0.98 }}
@@ -2611,12 +3135,19 @@ export function DemoRequestForm() {
                                             )}
                                         </Button>
                                     </motion.div>
+                                    */
+                                    // <div className="text-center">
+                                    //     <p className="text-gray-600 dark:text-gray-400 text-sm">
+                                    //         {selectedPlanForPricing ? 'Plan selected! Continue to customize your pricing.' : 'Select a plan above to continue to the next step.'}
+                                    //     </p>
+                                    // </div>
+                                    <></>
                                 )}
                             </motion.div>
                         </motion.div>
 
-                        {/* Enhanced Right Section - Steps 1 and 2 */}
-                        {(currentStep === 1 || currentStep === 2) && (
+                        {/* Enhanced Right Section - Only Step 1 */}
+                        {currentStep === 1 && (
                             <motion.div
                                 className="h-full"
                                 initial={{ opacity: 0, x: 50 }}
@@ -2775,9 +3306,7 @@ export function DemoRequestForm() {
                     </div>
 
                 </div>
-            </div>
-
-            {/* Trusted By Companies Section - Outside main container */}
+            </div>            {/* Trusted By Companies Section - Outside main container */}
             <div className="bg-transparent">
                 <CompanyEllipse />
             </div>
@@ -2858,7 +3387,7 @@ export function DemoRequestForm() {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+                        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4"
                         onClick={() => setAlertConfig(prev => ({ ...prev, show: false }))}
                     >
                         <motion.div

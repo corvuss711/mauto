@@ -9,7 +9,7 @@ export default function AuthResult() {
     const [isProcessing, setIsProcessing] = useState(true);
 
     useEffect(() => {
-        console.log('[AuthResult] Starting OAuth result processing...');
+
 
         const processOAuthResult = async () => {
             try {
@@ -22,10 +22,10 @@ export default function AuthResult() {
                 const urlEmail = params.get('email');
                 const isNew = params.get('new') === '1';
 
-                console.log('[AuthResult] URL params:', { urlUserId, urlEmail, isNew });
+
 
                 // First try to get user data from the session
-                console.log('[AuthResult] Fetching user data from /api/me...');
+
                 const response = await fetch('/api/me', {
                     credentials: 'include',
                     headers: {

@@ -138,7 +138,6 @@ export default function AutoSite() {
   ];
 
   const apiBase = window.location.origin;
-  console.log(apiBase)
 
   // Helper to check if a string is a valid URL
   function isValidUrl(url: string) {
@@ -184,7 +183,7 @@ export default function AutoSite() {
   React.useEffect(() => {
     // Listen for user logout/login events
     const handleUserLogout = () => {
-      console.log('[AutoSite] User logout event received');
+
       // On logout, we clear all localStorage (user will be gone)
       localStorage.removeItem('autoSiteFormData');
       localStorage.removeItem('autoSiteCurrentStep');
@@ -196,11 +195,11 @@ export default function AutoSite() {
       setCurrentStep(0);
       setCompanyId(0);
 
-      console.log('[AutoSite] Cleared form data due to logout');
+
     };
 
     const handleUserLogin = () => {
-      console.log('[AutoSite] User login event received');
+
       // On login, we DON'T clear anything immediately
       // The user change detection effect above will handle it properly
       // This prevents clearing data when the same user logs back in

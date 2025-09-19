@@ -364,6 +364,80 @@ export const uploadLogo = [
   }
 ];
 
+// Thumbnail upload endpoint for blogs
+export const uploadThumbnail = [
+  (req: Request, res: Response, next) => {
+
+
+    // Create blog_thumbs directory if it doesn't exist
+    const destDir = path.join(process.cwd(), 'public', 'blogs_thumbs');
+
+
+    if (!fs.existsSync(destDir)) {
+
+      fs.mkdirSync(destDir, { recursive: true });
+    }
+
+    const storage = multer.diskStorage({
+      destination: function (req, file, cb) {
+        cb(null, destDir);
+      },
+      filename: function (req, file, cb) {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        const ext = path.extname(file.originalname);
+        cb(null, 'blog-thumb-' + uniqueSuffix + ext);
+      }
+    });
+
+    const upload = multer({
+      storage,
+      fileFilter,
+      limits: {
+        fileSize: 5 * 1024 * 1024 // 5MB limit
+      }
+    }).single('thumbnail');
+
+    upload(req, res, function (err) {
+
+
+      if (err) {
+        console.error('Upload error:', err);
+        if (err.code === 'LIMIT_FILE_SIZE') {
+          return res.status(400).json({
+            success: false,
+            message: 'File size too large. Maximum 5MB allowed.'
+          });
+        }
+        return res.status(400).json({
+          success: false,
+          message: err.message || 'File upload failed.'
+        });
+      }
+
+      if (!(req as any).file) {
+
+        return res.status(400).json({
+          success: false,
+          message: 'No file uploaded.'
+        });
+      }
+
+      const file = (req as any).file;
+      const relativePath = `/blogs_thumbs/${file.filename}`;
+
+      // Create absolute URL based on request
+      const protocol = req.secure ? 'https' : 'http';
+      const host = req.get('host') || 'localhost:3000';
+      const absoluteUrl = `${protocol}://${host}${relativePath}`;
+
+      res.json({
+        success: true,
+        url: absoluteUrl,
+        message: 'Thumbnail uploaded successfully'
+      });
+    });
+  }
+];
 
 export const handleDomainCheck = async (req: Request, res: Response) => {
   try {

@@ -1547,7 +1547,7 @@ export function Hero() {
             <Button
               size="lg"
               className="bg-gradient-to-r from-orange-500 via-yellow-400 to-orange-500 hover:from-orange-600 hover:via-yellow-500 hover:to-orange-600 text-white px-8 py-4 text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300"
-              onClick={() => navigate('/contact-us')}
+              onClick={() => navigate('/demo-request')}
             >
               <Play className="w-5 h-5 mr-2" />
               Request a Demo

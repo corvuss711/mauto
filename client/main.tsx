@@ -27,6 +27,8 @@ const AccessDenied = lazy(() => import('./pages/AccessDenied'));
 const Signup = lazy(() => import('./pages/Signup'));
 const AuthResult = lazy(() => import('./pages/AuthResult'));
 const Blogs = lazy(() => import('./pages/Blogs'));
+const BlogPost = lazy(() => import('./pages/BlogPost'));
+const BlogAdmin = lazy(() => import('./pages/BlogAdmin'));
 const CRMSoftwareFundamentals = lazy(() => import('./pages/blogs/CRMSoftwareFundamentals'));
 const DispatchFundamentals = lazy(() => import('./pages/blogs/DispatchFundamentals'));
 const Podcasts = lazy(() => import('./pages/Podcasts'));
@@ -140,8 +142,16 @@ const App = () => (
             <Route path="/digital-marketing-services" element={<Digital_Marketing />} />
             <Route path="/whatsapp-ordering-system" element={<Whatsapp_Ordering />} />
             <Route path="/blogs" element={<Blogs />} />
+            {/* TODO: Re-enable ProtectedRoute for production */}
+            <Route path="/admin/blogs" element={<BlogAdmin />} />
+            {/* <Route path="/admin/blogs" element={
+              <ProtectedRoute>
+                <BlogAdmin />
+              </ProtectedRoute>
+            } /> */}
             <Route path="/blogs/crm-software-fundamentals" element={<CRMSoftwareFundamentals />} />
             <Route path="/blogs/dispatch-automation-fundamentals" element={<DispatchFundamentals />} />
+            <Route path="/blogs/:slug" element={<BlogPost />} />
             <Route path="/podcasts" element={<Podcasts />} />
             <Route path="/seminars-webinars" element={<SeminarsWebinars />} />
             <Route path="/faqs" element={<FAQs />} />

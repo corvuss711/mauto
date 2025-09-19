@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { Header } from '@/components/ui/header';
 import Footer from '@/components/ui/footer';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -6,47 +6,82 @@ import { Link } from 'react-router-dom';
 import { ThemeProvider } from '../components/ui/theme-provider';
 
 interface BlogMeta {
+    id: number;
     slug: string;
     title: string;
     excerpt: string;
-    thumbnail: string;
+    thumbnail_url: string;
     category: string;
-    readTime: string;
-    date: string;
+    read_time: number;
+    formatted_date: string;
+    author_name: string;
+    featured: boolean;
 }
 
-const blogItems: BlogMeta[] = [
+// Static fallback data
+const staticBlogItems: BlogMeta[] = [
     {
+        id: 1,
         slug: 'dispatch-automation-fundamentals',
         title: 'From Chaos to Control : Why Dispatch Automation Wins',
         excerpt: 'Discover how dispatch automation can transform your operations, improve efficiency, and enhance customer satisfaction.',
-        thumbnail: '/blogs_thumbs/dispatch.jpeg',
+        thumbnail_url: '/blogs_thumbs/dispatch.jpeg',
         category: 'Dispatch Management',
-        readTime: '6 min read',
-        date: 'Aug 21, 2025'
-    },
-    // {
-    //     slug: 'crm-software-fundamentals',
-    //     title: 'CRM Software Fundamentals: Building Stronger Customer Relationships',
-    //     excerpt: 'Understand what a CRM is, why growing businesses need it, and the core modules that drive sales velocity and retention.',
-    //     thumbnail: 'https://img.freepik.com/free-vector/refer-friend-concept-with-illustrations_52683-24293.jpg?t=st=1755721220~exp=1755724820~hmac=44f3743507535f7b7d35671507fa1c59d1db13a31f3545a261457d38666de5b9&w=740',
-    //     category: 'CRM',
-    //     readTime: '6 min read',
-    //     date: 'Aug 21, 2025'
-    // },
+        read_time: 6,
+        formatted_date: 'Aug 21, 2025',
+        author_name: 'Admin',
+        featured: true
+    }
 ];
 
 export default function Blogs() {
     const [activeCategory, setActiveCategory] = useState('All');
-    const categories = useMemo(() => {
-        const set = new Set(blogItems.map(b => b.category));
-        return ['All', ...Array.from(set)];
+    const [blogItems, setBlogItems] = useState<BlogMeta[]>(staticBlogItems);
+    const [categories, setCategories] = useState<string[]>(['All']);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    // Fetch blogs from API
+    useEffect(() => {
+        const fetchBlogs = async () => {
+            try {
+                setLoading(true);
+                const response = await fetch('/api/blogs');
+                const data = await response.json();
+
+                if (data.success && data.data.length > 0) {
+                    // Always show static blog first, then dynamic blogs
+                    const combinedBlogs = [...staticBlogItems, ...data.data];
+                    setBlogItems(combinedBlogs);
+
+                    // Extract unique categories from both static and dynamic blogs
+                    const uniqueCategories = new Set(combinedBlogs.map((b: BlogMeta) => b.category));
+                    setCategories(['All', ...Array.from(uniqueCategories)] as string[]);
+                } else {
+                    // Use only static data if no dynamic blogs found
+                    setBlogItems(staticBlogItems);
+                    const staticCategories = new Set(staticBlogItems.map(b => b.category));
+                    setCategories(['All', ...Array.from(staticCategories)]);
+                }
+            } catch (err) {
+                console.error('Error fetching blogs:', err);
+                setError('Failed to load blogs from API');
+                // Always show static blog even if API fails
+                setBlogItems(staticBlogItems);
+                const staticCategories = new Set(staticBlogItems.map(b => b.category));
+                setCategories(['All', ...Array.from(staticCategories)]);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchBlogs();
     }, []);
 
     const filteredBlogs = useMemo(() => {
         if (activeCategory === 'All') return blogItems;
         return blogItems.filter(b => b.category === activeCategory);
-    }, [activeCategory]);
+    }, [activeCategory, blogItems]);
 
     const MotionLink = motion(Link);
 
@@ -100,7 +135,7 @@ export default function Blogs() {
                 {/* Blogs Grid */}
                 <main className="flex-1 pb-24">
                     <div className="max-w-6xl mx-auto px-6 lg:px-10">
-                        {/* Category Pills (static for now) */}
+                        {/* Category Pills */}
                         <div className="flex flex-wrap justify-center gap-3 mt-8 mb-10 pt-2">
                             {categories.map(c => {
                                 const active = c === activeCategory;
@@ -122,47 +157,65 @@ export default function Blogs() {
                                 );
                             })}
                         </div>
-                        <motion.div
-                            className="grid gap-10 sm:grid-cols-2 lg:grid-cols-3"
-                            variants={containerVariants}
-                            custom={filteredBlogs.length}
-                            initial="hidden"
-                            whileInView="show"
-                            viewport={{ once: true, amount: 0.15 }}
-                            layout
-                        >
-                            <AnimatePresence mode="popLayout">
-                                {filteredBlogs.map((b) => (
-                                    <MotionLink
-                                        key={b.slug}
-                                        to={`/blogs/${b.slug}`}
-                                        variants={cardVariants}
-                                        layout
-                                        whileHover={{ y: -4, transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] } }}
-                                        whileTap={{ scale: 0.98 }}
-                                        exit="exit"
-                                        className="group flex flex-col rounded-2xl overflow-hidden bg-card/80 backdrop-blur border border-glass-border hover:shadow-xl hover:border-primary/40 transition-[border-color,box-shadow,transform] duration-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                                        aria-label={`Read article: ${b.title}`}
-                                    >
-                                        <div className="relative aspect-[20/10] overflow-hidden">
-                                            <img src={b.thumbnail} alt={b.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
-                                            {/* <span className="absolute top-3 left-3 px-3 py-1 rounded-full text-xs font-bold bg-black/60 backdrop-blur text-white">{b.category}</span> */}
-                                        </div>
-                                        <div className="flex flex-col flex-1 p-6">
-                                            <h2 className="text-xl font-bold mb-3 group-hover:text-primary transition-colors leading-snug">{b.title}</h2>
-                                            <p className="text-sm text-foreground/70 flex-1 mb-4 leading-relaxed">{b.excerpt}</p>
-                                            <div className="flex items-center justify-between text-xs text-foreground/60 font-medium">
-                                                <span>{b.date}</span>
-                                                <span>{b.readTime}</span>
+
+                        {/* Loading State */}
+                        {loading && (
+                            <div className="flex justify-center items-center py-20">
+                                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+                            </div>
+                        )}
+
+                        {/* Error State */}
+                        {error && !loading && (
+                            <div className="text-center py-20">
+                                <p className="text-red-500 mb-4">{error}</p>
+                                <p className="text-foreground/60">Showing fallback content</p>
+                            </div>
+                        )}
+                        {/* Blogs Grid */}
+                        {!loading && (
+                            <motion.div
+                                className="grid gap-10 sm:grid-cols-2 lg:grid-cols-3"
+                                variants={containerVariants}
+                                custom={filteredBlogs.length}
+                                initial="hidden"
+                                whileInView="show"
+                                viewport={{ once: true, amount: 0.15 }}
+                                layout
+                            >
+                                <AnimatePresence mode="popLayout">
+                                    {filteredBlogs.map((b) => (
+                                        <MotionLink
+                                            key={b.slug}
+                                            to={`/blogs/${b.slug}`}
+                                            variants={cardVariants}
+                                            layout
+                                            whileHover={{ y: -4, transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] } }}
+                                            whileTap={{ scale: 0.98 }}
+                                            exit="exit"
+                                            className="group flex flex-col rounded-2xl overflow-hidden bg-card/80 backdrop-blur border border-glass-border hover:shadow-xl hover:border-primary/40 transition-[border-color,box-shadow,transform] duration-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                                            aria-label={`Read article: ${b.title}`}
+                                        >
+                                            <div className="relative aspect-[20/10] overflow-hidden">
+                                                <img src={b.thumbnail_url} alt={b.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
+                                                {/* <span className="absolute top-3 left-3 px-3 py-1 rounded-full text-xs font-bold bg-black/60 backdrop-blur text-white">{b.category}</span> */}
                                             </div>
-                                            <span className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-primary group-hover:gap-3 transition-all">
-                                                Read Article <span aria-hidden>→</span>
-                                            </span>
-                                        </div>
-                                    </MotionLink>
-                                ))}
-                            </AnimatePresence>
-                        </motion.div>
+                                            <div className="flex flex-col flex-1 p-6">
+                                                <h2 className="text-xl font-bold mb-3 group-hover:text-primary transition-colors leading-snug">{b.title}</h2>
+                                                <p className="text-sm text-foreground/70 flex-1 mb-4 leading-relaxed">{b.excerpt}</p>
+                                                <div className="flex items-center justify-between text-xs text-foreground/60 font-medium">
+                                                    <span>{b.formatted_date}</span>
+                                                    <span>{b.read_time} min read</span>
+                                                </div>
+                                                <span className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-primary group-hover:gap-3 transition-all">
+                                                    Read Article <span aria-hidden>→</span>
+                                                </span>
+                                            </div>
+                                        </MotionLink>
+                                    ))}
+                                </AnimatePresence>
+                            </motion.div>
+                        )}
                     </div>
                 </main>
                 <Footer />

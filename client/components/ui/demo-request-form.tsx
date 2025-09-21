@@ -3147,7 +3147,7 @@ export function DemoRequestForm() {
                                                 <>
                                                     {/* Large screens - aligned with Previous button */}
                                                     <motion.div
-                                                        className="absolute top-8 right-12 z-10 hidden lg:block"
+                                                        className={`absolute top-8 right-12 z-10 hidden lg:block ${isCustomPlanView ? 'lg:hidden' : ''}`}
                                                         initial={{ opacity: 0, x: 20, scale: 0.9 }}
                                                         animate={{ opacity: 1, x: 0, scale: 1 }}
                                                         transition={{ delay: 0.3, duration: 0.4, type: "spring", stiffness: 300 }}
@@ -3158,8 +3158,14 @@ export function DemoRequestForm() {
                                                             onClick={() => {
                                                                 setIsCustomPlanView(true);
 
-                                                                // Update URL to show custom plan view
+                                                                // Scroll to top on mobile portraits
                                                                 if (typeof window !== 'undefined') {
+                                                                    const isMobilePortrait = window.innerWidth <= 768 && window.innerHeight > window.innerWidth;
+                                                                    if (isMobilePortrait) {
+                                                                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                                                                    }
+
+                                                                    // Update URL to show custom plan view
                                                                     const currentUrl = new URL(window.location.href);
                                                                     currentUrl.searchParams.set('step', '2');
                                                                     currentUrl.searchParams.set('view', 'custom');
@@ -3186,7 +3192,7 @@ export function DemoRequestForm() {
 
                                                     {/* Medium screens - closer to edge */}
                                                     <motion.div
-                                                        className="absolute top-0 right-0 z-10 hidden md:block lg:hidden"
+                                                        className={`absolute top-0 right-0 z-10 hidden md:block lg:hidden ${isCustomPlanView ? 'md:hidden' : ''}`}
                                                         initial={{ opacity: 0, x: 20, scale: 0.9 }}
                                                         animate={{ opacity: 1, x: 0, scale: 1 }}
                                                         transition={{ delay: 0.3, duration: 0.4, type: "spring", stiffness: 300 }}
@@ -3197,8 +3203,14 @@ export function DemoRequestForm() {
                                                             onClick={() => {
                                                                 setIsCustomPlanView(true);
 
-                                                                // Update URL to show custom plan view
+                                                                // Scroll to top on mobile portraits
                                                                 if (typeof window !== 'undefined') {
+                                                                    const isMobilePortrait = window.innerWidth <= 768 && window.innerHeight > window.innerWidth;
+                                                                    if (isMobilePortrait) {
+                                                                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                                                                    }
+
+                                                                    // Update URL to show custom plan view
                                                                     const currentUrl = new URL(window.location.href);
                                                                     currentUrl.searchParams.set('step', '2');
                                                                     currentUrl.searchParams.set('view', 'custom');
@@ -4028,8 +4040,14 @@ export function DemoRequestForm() {
                                                                     onClick={() => {
                                                                         setIsCustomPlanView(true);
 
-                                                                        // Update URL to show custom plan view
+                                                                        // Scroll to top on mobile portraits
                                                                         if (typeof window !== 'undefined') {
+                                                                            const isMobilePortrait = window.innerWidth <= 768 && window.innerHeight > window.innerWidth;
+                                                                            if (isMobilePortrait) {
+                                                                                window.scrollTo({ top: 0, behavior: 'smooth' });
+                                                                            }
+
+                                                                            // Update URL to show custom plan view
                                                                             const currentUrl = new URL(window.location.href);
                                                                             currentUrl.searchParams.set('step', '2');
                                                                             currentUrl.searchParams.set('view', 'custom');

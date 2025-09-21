@@ -1584,6 +1584,8 @@ export function DemoRequestForm() {
         }
 
         // Now check OTP verification only if basic fields are valid
+        // TODO: Temporarily commented out OTP verification requirement - will uncomment later
+        /*
         if (!isOtpVerified) {
             if (formData.mobile && formData.mobile.length === 10) {
                 showAlert('warning', 'Mobile Verification Required', 'Please verify your mobile number with OTP to continue');
@@ -1592,6 +1594,7 @@ export function DemoRequestForm() {
             }
             return false;
         }
+        */
 
         return true;
     };

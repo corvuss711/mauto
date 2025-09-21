@@ -522,7 +522,7 @@ export function DemoRequestForm() {
         }
         return '';
     });
-    
+
     const [selectedServices, setSelectedServices] = useState<Array<{ id: number, name?: string, category?: string, generic_name: string, external_price_per_user: string | number, application_type?: string }>>(() => {
         if (typeof window !== 'undefined') {
             const saved = localStorage.getItem('demoFormCustomPlan');
@@ -537,7 +537,7 @@ export function DemoRequestForm() {
         }
         return [];
     });
-    
+
     const [customPlanPricing, setCustomPlanPricing] = useState({
         monthly: 500,
         quarterly: 475,
@@ -638,7 +638,7 @@ export function DemoRequestForm() {
         }
         return null;
     });
-    
+
     const [isFromCustomPlan, setIsFromCustomPlan] = useState(() => {
         if (typeof window !== 'undefined') {
             const saved = localStorage.getItem('demoFormCustomPlan');
@@ -653,7 +653,7 @@ export function DemoRequestForm() {
         }
         return false;
     });
-    
+
     const [customPlanData, setCustomPlanData] = useState<any>(() => {
         if (typeof window !== 'undefined') {
             const saved = localStorage.getItem('demoFormCustomPlan');
@@ -671,7 +671,7 @@ export function DemoRequestForm() {
 
     // Track if component has been initialized to avoid clearing OTP on initial load
     const [isInitialized, setIsInitialized] = useState(false);
-    
+
     // Track if we're currently resetting due to localStorage being cleared
     const [isResettingFromClearedStorage, setIsResettingFromClearedStorage] = useState(false);
 
@@ -723,12 +723,12 @@ export function DemoRequestForm() {
             const hasFormData = localStorage.getItem('demoFormData');
             const hasCustomPlanData = localStorage.getItem('demoFormCustomPlan');
             const hasFormStep = localStorage.getItem('demoFormStep');
-            
+
             // If localStorage was manually cleared or doesn't exist, reset all states
             if (!hasFormData && !hasCustomPlanData && !hasFormStep && (currentStep > 1 || isCustomPlanView || selectedServices.length > 0 || customPlanData)) {
                 console.log('[LocalStorage Check] Detected cleared localStorage, resetting all states');
                 setIsResettingFromClearedStorage(true);
-                
+
                 setCurrentStep(1);
                 setIsCustomPlanView(false);
                 setSelectedServices([]);
@@ -737,7 +737,7 @@ export function DemoRequestForm() {
                 setIsFromCustomPlan(false);
                 setSelectedPlanForPricing(null);
                 setShowDynamicPricing(false);
-                
+
                 // Reset the flag after a brief delay to allow state updates to complete
                 setTimeout(() => {
                     setIsResettingFromClearedStorage(false);
@@ -792,7 +792,7 @@ export function DemoRequestForm() {
         if (isResettingFromClearedStorage) {
             return;
         }
-        
+
         if (typeof window !== 'undefined' && currentStep) {
             const currentUrl = new URL(window.location.href);
             currentUrl.searchParams.set('step', currentStep.toString());
@@ -828,15 +828,15 @@ export function DemoRequestForm() {
                     // When going back from custom plan pricing, go to the previous step that was stored
                     const previousStep = event.state.previousStep;
                     const previousView = event.state.previousView;
-                    
+
                     setShowDynamicPricing(false);
                     setSelectedPlanForPricing(null);
-                    
+
                     if (previousView === 'custom') {
                         // Return to custom plan view
                         setIsCustomPlanView(true);
                         setCurrentStep(previousStep);
-                        
+
                         // Update URL to show custom plan view
                         if (typeof window !== 'undefined') {
                             const currentUrl = new URL(window.location.href);
@@ -849,7 +849,7 @@ export function DemoRequestForm() {
                     } else {
                         // Return to regular step view
                         setIsCustomPlanView(false);
-                        
+
                         // Set direction and navigate to the previous step
                         const newDirection = previousStep > currentStep ? 1 : -1;
                         setDirection(newDirection);
@@ -1033,19 +1033,19 @@ export function DemoRequestForm() {
         if (isResettingFromClearedStorage) {
             return;
         }
-        
+
         // Only auto-save if localStorage has valid data or if we have actual form data
         // This prevents re-saving when localStorage has been manually cleared
         if (typeof window !== 'undefined') {
             const hasFormData = localStorage.getItem('demoFormData');
             const hasFormStep = localStorage.getItem('demoFormStep');
-            
+
             // Don't auto-save if localStorage was manually cleared and we're in a reset state
             if (!hasFormData && !hasFormStep && currentStep === 1 && !isCustomPlanView && selectedServices.length === 0) {
                 return;
             }
         }
-        
+
         saveToLocalStorage();
     }, [isCustomPlanView, selectedServices, customPlanDescription, customPlanData, isFromCustomPlan, selectedPlanForPricing, currentStep, isResettingFromClearedStorage]);
 
@@ -1366,10 +1366,10 @@ export function DemoRequestForm() {
     const saveToLocalStorage = () => {
         if (typeof window !== 'undefined') {
             // Check if localStorage was manually cleared by checking for the absence of any demo form keys
-            const hasAnyDemoFormData = localStorage.getItem('demoFormData') || 
-                                     localStorage.getItem('demoFormStep') || 
-                                     localStorage.getItem('demoFormPlan') || 
-                                     localStorage.getItem('demoFormCustomPlan');
+            const hasAnyDemoFormData = localStorage.getItem('demoFormData') ||
+                localStorage.getItem('demoFormStep') ||
+                localStorage.getItem('demoFormPlan') ||
+                localStorage.getItem('demoFormCustomPlan');
 
             // If form is effectively empty and on first step with no plan, don't persist
             const isEmptyForm =
@@ -1403,10 +1403,10 @@ export function DemoRequestForm() {
                 localStorage.removeItem('demoFormCustomPlan');
                 return;
             }
-            
+
             localStorage.setItem('demoFormData', JSON.stringify(formData));
             localStorage.setItem('demoFormStep', currentStep.toString());
-            
+
             if (selectedPlan) {
                 localStorage.setItem('demoFormPlan', selectedPlan);
             } else {
@@ -1632,13 +1632,13 @@ export function DemoRequestForm() {
                 setSelectedPlanForPricing(999); // Custom plan ID
                 setIsFromCustomPlan(true);
                 saveToLocalStorage();
-                
+
                 // Scroll to pricing section after a delay to ensure component is rendered
                 setTimeout(() => {
                     const pricingSection = document.querySelector('[data-pricing-section="true"]');
                     if (pricingSection) {
-                        pricingSection.scrollIntoView({ 
-                            behavior: 'smooth', 
+                        pricingSection.scrollIntoView({
+                            behavior: 'smooth',
                             block: 'start'
                         });
                     } else {
@@ -1654,9 +1654,9 @@ export function DemoRequestForm() {
                     currentUrl.searchParams.set('plan', '999');
                     currentUrl.searchParams.set('fromCustom', 'true');
                     currentUrl.searchParams.delete('view');
-                    window.history.pushState({ 
-                        step: 3, 
-                        planId: 999, 
+                    window.history.pushState({
+                        step: 3,
+                        planId: 999,
                         isCustomPlan: true,
                         fromCustomPlan: true,
                         previousStep: 2,
@@ -1669,16 +1669,16 @@ export function DemoRequestForm() {
                 setNavLock(true);
                 setCurrentStep(3);
                 saveToLocalStorage();
-                
+
                 // For regular flow, scroll to top initially, but if DynamicPricing appears, scroll to it
                 window.scrollTo({ top: 0, behavior: 'smooth' });
-                
+
                 // Check for pricing section after navigation animation
                 setTimeout(() => {
                     const pricingSection = document.querySelector('[data-pricing-section="true"]');
                     if (pricingSection) {
-                        pricingSection.scrollIntoView({ 
-                            behavior: 'smooth', 
+                        pricingSection.scrollIntoView({
+                            behavior: 'smooth',
                             block: 'start'
                         });
                     }
@@ -1721,10 +1721,10 @@ export function DemoRequestForm() {
             window.clearTimeout(saveTimeoutRef.current);
             saveTimeoutRef.current = null;
         }
-        
+
         // Set reset flag to prevent auto-save during clear
         setIsResettingFromClearedStorage(true);
-        
+
         localStorage.removeItem('demoFormData');
         localStorage.removeItem('demoFormStep');
         localStorage.removeItem('demoFormPlan');
@@ -1780,7 +1780,7 @@ export function DemoRequestForm() {
             saveTimeoutRef.current = null;
         }
         setHasSelectedBefore(false);
-        
+
         // Clear reset flag after state updates complete
         setTimeout(() => {
             setIsResettingFromClearedStorage(false);
@@ -2171,9 +2171,9 @@ export function DemoRequestForm() {
                     currentUrl.searchParams.set('plan', '999'); // Custom plan ID
                     currentUrl.searchParams.set('fromCustom', 'true'); // Track that this came from custom plan
                     currentUrl.searchParams.delete('view');
-                    window.history.pushState({ 
-                        step: 3, 
-                        planId: 999, 
+                    window.history.pushState({
+                        step: 3,
+                        planId: 999,
                         isCustomPlan: true,
                         fromCustomPlan: true,
                         previousStep: 2, // When going back, should go to step 2
@@ -3265,7 +3265,7 @@ export function DemoRequestForm() {
                                                             Back to Plans
                                                         </motion.button>
 
-                                                       
+
                                                     </div>
 
                                                     {/* Custom Plan Header */}
@@ -3486,9 +3486,9 @@ export function DemoRequestForm() {
                                                                                                     className="peer sr-only"
                                                                                                 />
                                                                                                 <div className="w-5 h-5 bg-white dark:bg-slate-600 border-2 border-gray-300 dark:border-slate-500 rounded-md transition-all duration-200 peer-checked:bg-gradient-to-r peer-checked:from-purple-500 peer-checked:to-indigo-600 peer-checked:border-purple-500 flex items-center justify-center shadow-sm">
-                                                                                                    <svg 
+                                                                                                    <svg
                                                                                                         className={`w-3 h-3 text-white transition-opacity duration-200 ${selectedServices.find(s => s.id === service.id) ? 'opacity-100' : 'opacity-0'}`}
-                                                                                                        fill="currentColor" 
+                                                                                                        fill="currentColor"
                                                                                                         viewBox="0 0 20 20"
                                                                                                     >
                                                                                                         <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
@@ -3505,7 +3505,7 @@ export function DemoRequestForm() {
                                                                                             </div>
                                                                                         </motion.label>
                                                                                     ))}
-                                                                                    
+
                                                                                     {/* Show message when all services are selected */}
                                                                                     {availableServices.length > 0 && selectedServices.length === availableServices.length && (
                                                                                         <motion.div
@@ -3698,13 +3698,13 @@ export function DemoRequestForm() {
                                                                                     setNavLock(true);
                                                                                     setCurrentStep(3);
                                                                                     saveToLocalStorage();
-                                                                                    
+
                                                                                     // Scroll to pricing section after navigation
                                                                                     setTimeout(() => {
                                                                                         const pricingSection = document.querySelector('[data-pricing-section="true"]');
                                                                                         if (pricingSection) {
-                                                                                            pricingSection.scrollIntoView({ 
-                                                                                                behavior: 'smooth', 
+                                                                                            pricingSection.scrollIntoView({
+                                                                                                behavior: 'smooth',
                                                                                                 block: 'start'
                                                                                             });
                                                                                         } else {
@@ -3862,13 +3862,13 @@ export function DemoRequestForm() {
                                                                                             setNavLock(true);
                                                                                             setCurrentStep(3);
                                                                                             saveToLocalStorage();
-                                                                                            
+
                                                                                             // Scroll to pricing section after navigation
                                                                                             setTimeout(() => {
                                                                                                 const pricingSection = document.querySelector('[data-pricing-section="true"]');
                                                                                                 if (pricingSection) {
-                                                                                                    pricingSection.scrollIntoView({ 
-                                                                                                        behavior: 'smooth', 
+                                                                                                    pricingSection.scrollIntoView({
+                                                                                                        behavior: 'smooth',
                                                                                                         block: 'start'
                                                                                                     });
                                                                                                 } else {

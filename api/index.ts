@@ -852,34 +852,135 @@ app.post('/api/times-edited', async (req, res) => {
     } catch (e) { res.status(500).json({ error: 'Failed to check times_edited' }); }
 });
 
-async function handleGetServices(req: express.Request, res: express.Response) {
-    try {
-        // For now, return static services data - in future, this could be from external API
-        const servicesData = {
-            response: true,
-            data: [
-                { id: 1, name: 'CRM', category: 'sales', generic_name: 'Customer Relationship Management', external_price_per_user: 50 },
-                { id: 2, name: 'Inventory', category: 'management', generic_name: 'Inventory Management', external_price_per_user: 30 },
-                { id: 3, name: 'Reporting', category: 'analytics', generic_name: 'Advanced Reporting', external_price_per_user: 25 },
-                { id: 4, name: 'Mobile App', category: 'mobile', generic_name: 'Mobile Application', external_price_per_user: 40 },
-                { id: 5, name: 'Analytics', category: 'analytics', generic_name: 'Business Analytics Dashboard', external_price_per_user: 35 },
-                { id: 6, name: 'API Access', category: 'integration', generic_name: 'REST API Integration', external_price_per_user: 20 }
-            ]
-        };
 
-        res.json(servicesData);
+
+async function handleGetServicesList(req: express.Request, res: express.Response) {
+    try {
+        const response = await fetch('http://122.176.112.254/www-demo-msell-in/public/api/get-services-list', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(req.body)
+        });
+
+        const data = await response.json();
+
+        res.status(response.status).json(data);
     } catch (error) {
-        console.error('❌ Error fetching services:', error);
         res.status(500).json({
             response: false,
-            error: 'Failed to fetch services',
+            error: 'Failed to fetch services from external API',
+            message: error instanceof Error ? error.message : 'Unknown error'
+        });
+    }
+}
+
+async function handleCalculateCustomPlan(req: express.Request, res: express.Response) {
+    try {
+        const { selectedServices, applicationTypeId } = req.body;
+
+        if (!selectedServices || !Array.isArray(selectedServices) || selectedServices.length === 0) {
+            return res.status(400).json({
+                response: false,
+                error: 'Selected services are required',
+                message: 'Please provide an array of selected services'
+            });
+        }
+
+        // Calculate total monthly price from selected services
+        // Note: services API returns daily prices, so we multiply by 30 to get monthly price
+        const totalDailyPrice = selectedServices.reduce((total: number, service: any) => {
+            const dailyPrice = parseFloat(service.external_price_per_user || service.price || "0");
+            return total + dailyPrice;
+        }, 0);
+
+        // Convert daily price to monthly price (daily * 30)
+        const totalMonthlyPrice = totalDailyPrice * 30;
+
+        // For yearly calculation: monthly * 12 * discount / 12 = monthly * discount
+        const yearlyMonthlyPrice = totalMonthlyPrice * 0.8; // 20% discount
+        const sixMonthlyPrice = totalMonthlyPrice * 0.9;    // 10% discount  
+        const quarterlyPrice = totalMonthlyPrice * 0.95;    // 5% discount
+
+        // Create plan details with different tenure discounts
+        const planDetails = [
+            {
+                id: 1,
+                plan_name: "Custom Plan",
+                duration: "monthly",
+                base_price_per_user: totalMonthlyPrice.toFixed(2),
+                base_price_per_user_external: totalMonthlyPrice.toFixed(2),
+                discount: "0",
+                min_users: 1,
+                max_users: Number.MAX_SAFE_INTEGER, // Truly unlimited for custom plans
+                trial_days: 7,
+                base_price_per_external_user_per_month: totalMonthlyPrice
+            },
+            {
+                id: 2,
+                plan_name: "Custom Plan",
+                duration: "quaterly",
+                base_price_per_user: quarterlyPrice.toFixed(2), // 5% discount
+                base_price_per_user_external: quarterlyPrice.toFixed(2),
+                discount: "5",
+                min_users: 1,
+                max_users: Number.MAX_SAFE_INTEGER, // Truly unlimited for custom plans
+                trial_days: 7,
+                base_price_per_external_user_per_month: quarterlyPrice
+            },
+            {
+                id: 3,
+                plan_name: "Custom Plan",
+                duration: "half_yearly",
+                base_price_per_user: sixMonthlyPrice.toFixed(2), // 10% discount
+                base_price_per_user_external: sixMonthlyPrice.toFixed(2),
+                discount: "10",
+                min_users: 1,
+                max_users: Number.MAX_SAFE_INTEGER, // Truly unlimited for custom plans
+                trial_days: 7,
+                base_price_per_external_user_per_month: sixMonthlyPrice
+            },
+            {
+                id: 4,
+                plan_name: "Custom Plan",
+                duration: "yearly",
+                base_price_per_user: yearlyMonthlyPrice.toFixed(2), // 20% discount
+                base_price_per_user_external: yearlyMonthlyPrice.toFixed(2),
+                discount: "20",
+                min_users: 1,
+                max_users: Number.MAX_SAFE_INTEGER, // Truly unlimited for custom plans
+                trial_days: 7,
+                base_price_per_external_user_per_month: yearlyMonthlyPrice
+            }
+        ];
+
+        // Create the custom plan structure
+        const customPlan = {
+            plan_name: "Custom Plan",
+            plan_id: 999, // Use a unique ID for custom plans
+            features_list: selectedServices.map((service: any) => service.generic_name || service.name),
+            plan_details: planDetails
+        };
+
+        res.status(200).json({
+            response: true,
+            data: customPlan,
+            message: 'Custom plan calculated successfully'
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            response: false,
+            error: 'Failed to calculate custom plan pricing',
             message: error instanceof Error ? error.message : 'Unknown error'
         });
     }
 };
 
 app.post("/api/get-plan", handleGetPlans);
-app.get("/api/get-services", handleGetServices);
+app.get("/api/get-services-list", handleGetServicesList);
+app.post("/api/calculate-custom-plan", handleCalculateCustomPlan);
 app.post("/api/process-payment", handleProcessPayment);
 app.post("/api/otp-request", handleOtpRequest);
 

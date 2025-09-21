@@ -480,13 +480,13 @@ export function DemoRequestForm() {
                 const hasFormData = localStorage.getItem('demoFormData');
                 const hasCustomPlanData = localStorage.getItem('demoFormCustomPlan');
                 const hasPlanData = localStorage.getItem('demoFormPlan');
-                
+
                 // If we have a step > 1 but no supporting data, reset to step 1
                 if (step > 1 && !hasFormData && !hasCustomPlanData && !hasPlanData) {
                     localStorage.removeItem('demoFormStep');
                     return 1;
                 }
-                
+
                 return step >= 1 && step <= 3 ? step : 1;
             }
         }
@@ -742,15 +742,15 @@ export function DemoRequestForm() {
                 // If localStorage was manually cleared or doesn't exist, reset all states
                 if (!hasFormData && !hasCustomPlanData && !hasFormStep && !hasPlanData) {
                     // Check if component state suggests we should have localStorage data
-                    const shouldHaveData = currentStep > 1 || 
-                                         isCustomPlanView || 
-                                         selectedServices.length > 0 || 
-                                         customPlanData || 
-                                         selectedPlan ||
-                                         formData.email ||
-                                         formData.mobile ||
-                                         formData.company_name ||
-                                         formData.application_type > 0;
+                    const shouldHaveData = currentStep > 1 ||
+                        isCustomPlanView ||
+                        selectedServices.length > 0 ||
+                        customPlanData ||
+                        selectedPlan ||
+                        formData.email ||
+                        formData.mobile ||
+                        formData.company_name ||
+                        formData.application_type > 0;
 
                     if (shouldHaveData) {
                         console.log('[LocalStorage Check] Detected cleared localStorage, resetting all states');
@@ -766,7 +766,7 @@ export function DemoRequestForm() {
                         setSelectedPlanForPricing(null);
                         setShowDynamicPricing(false);
                         handlePlanSelection(null);
-                        
+
                         // Reset form data
                         setFormData({
                             email: "",
@@ -810,7 +810,7 @@ export function DemoRequestForm() {
         };
 
         window.addEventListener('focus', handleFocus);
-        
+
         // Periodic check every 2 seconds
         const interval = setInterval(checkLocalStorageConsistency, 2000);
 
@@ -1049,41 +1049,56 @@ export function DemoRequestForm() {
         setServicesLoading(true);
         setServicesError(null);
 
+        console.log('[Fetch Services] Starting for application type:', applicationType);
+
         try {
+            const requestBody = {
+                application_type: applicationType
+            };
+
+            console.log('[Fetch Services] Request body:', requestBody);
+
             const response = await fetch('/api/get-services-list', {
-                method: 'GET',
+                method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                }
+                },
+                body: JSON.stringify(requestBody)
             });
+
+            console.log('[Fetch Services] Response status:', response.status);
 
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
 
             const data = await response.json();
+            console.log('[Fetch Services] Response data:', data);
 
             if (data.response && data.data && Array.isArray(data.data) && data.data.length > 0) {
+                console.log('[Fetch Services] Services found:', data.data.length);
                 setAvailableServices(data.data);
                 setServicesError(null);
                 setShowCustomPlan(true);
                 setCustomPlanMessage("");
             } else {
+                console.log('[Fetch Services] No services available from API');
                 // No services available from API
                 setAvailableServices([]);
                 setShowCustomPlan(false);
                 setCustomPlanMessage("No services available");
-                setServicesError("No services found in the system");
+                setServicesError("No services found for this application type");
             }
         } catch (error) {
             // No fallback data - just show error state
-            console.error('Failed to fetch services:', error);
+            console.error('[Fetch Services] Error:', error);
             setAvailableServices([]);
             setShowCustomPlan(false);
             setCustomPlanMessage("Services unavailable");
             setServicesError("Failed to load services. Please try again later.");
         } finally {
             setServicesLoading(false);
+            console.log('[Fetch Services] Completed');
         }
     };
 
@@ -1207,7 +1222,7 @@ export function DemoRequestForm() {
     // Function to close result page
     const closeResultPage = () => {
         setSubmissionResult({ success: false, message: '', showResultPage: false });
-        
+
         // If this was a successful submission, ensure we're on step 1
         if (submissionResult.success) {
             setCurrentStep(1);
@@ -1832,7 +1847,7 @@ export function DemoRequestForm() {
 
         // Reset plan selection
         handlePlanSelection(null);
-        
+
         // Reset step to 1
         setCurrentStep(1);
         setErrors({});
@@ -1863,7 +1878,7 @@ export function DemoRequestForm() {
         setAvailableServices([]);
         setServicesError(null);
         setSelectedTenure("yearly");
-        
+
         // Reset URL to step 1 and remove all query parameters
         if (typeof window !== 'undefined') {
             const currentUrl = new URL(window.location.href);
@@ -2007,7 +2022,7 @@ export function DemoRequestForm() {
 
                 // Clear form after successful submission
                 clearForm();
-                
+
                 // Immediately update the URL to show step 1
                 if (typeof window !== 'undefined') {
                     const currentUrl = new URL(window.location.href);

@@ -979,7 +979,7 @@ async function handleCalculateCustomPlan(req: express.Request, res: express.Resp
 };
 
 app.post("/api/get-plan", handleGetPlans);
-app.get("/api/get-services-list", handleGetServicesList);
+app.post("/api/get-services-list", handleGetServicesList);
 app.post("/api/calculate-custom-plan", handleCalculateCustomPlan);
 app.post("/api/process-payment", handleProcessPayment);
 app.post("/api/otp-request", handleOtpRequest);

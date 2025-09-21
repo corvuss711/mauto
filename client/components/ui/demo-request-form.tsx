@@ -474,8 +474,21 @@ export function DemoRequestForm() {
     const [currentStep, setCurrentStep] = useState(() => {
         if (typeof window !== 'undefined') {
             const saved = localStorage.getItem('demoFormStep');
-            const step = saved ? parseInt(saved) : 1;
-            return step >= 1 && step <= 3 ? step : 1;
+            // Always check if we have corresponding form data when we have a saved step
+            if (saved) {
+                const step = parseInt(saved);
+                const hasFormData = localStorage.getItem('demoFormData');
+                const hasCustomPlanData = localStorage.getItem('demoFormCustomPlan');
+                const hasPlanData = localStorage.getItem('demoFormPlan');
+                
+                // If we have a step > 1 but no supporting data, reset to step 1
+                if (step > 1 && !hasFormData && !hasCustomPlanData && !hasPlanData) {
+                    localStorage.removeItem('demoFormStep');
+                    return 1;
+                }
+                
+                return step >= 1 && step <= 3 ? step : 1;
+            }
         }
         return 1;
     });
@@ -719,32 +732,93 @@ export function DemoRequestForm() {
 
     // Check localStorage consistency and reset custom plan states if localStorage is cleared
     useEffect(() => {
-        if (typeof window !== 'undefined') {
-            const hasFormData = localStorage.getItem('demoFormData');
-            const hasCustomPlanData = localStorage.getItem('demoFormCustomPlan');
-            const hasFormStep = localStorage.getItem('demoFormStep');
+        const checkLocalStorageConsistency = () => {
+            if (typeof window !== 'undefined') {
+                const hasFormData = localStorage.getItem('demoFormData');
+                const hasCustomPlanData = localStorage.getItem('demoFormCustomPlan');
+                const hasFormStep = localStorage.getItem('demoFormStep');
+                const hasPlanData = localStorage.getItem('demoFormPlan');
 
-            // If localStorage was manually cleared or doesn't exist, reset all states
-            if (!hasFormData && !hasCustomPlanData && !hasFormStep && (currentStep > 1 || isCustomPlanView || selectedServices.length > 0 || customPlanData)) {
-                console.log('[LocalStorage Check] Detected cleared localStorage, resetting all states');
-                setIsResettingFromClearedStorage(true);
+                // If localStorage was manually cleared or doesn't exist, reset all states
+                if (!hasFormData && !hasCustomPlanData && !hasFormStep && !hasPlanData) {
+                    // Check if component state suggests we should have localStorage data
+                    const shouldHaveData = currentStep > 1 || 
+                                         isCustomPlanView || 
+                                         selectedServices.length > 0 || 
+                                         customPlanData || 
+                                         selectedPlan ||
+                                         formData.email ||
+                                         formData.mobile ||
+                                         formData.company_name ||
+                                         formData.application_type > 0;
 
-                setCurrentStep(1);
-                setIsCustomPlanView(false);
-                setSelectedServices([]);
-                setCustomPlanDescription('');
-                setCustomPlanData(null);
-                setIsFromCustomPlan(false);
-                setSelectedPlanForPricing(null);
-                setShowDynamicPricing(false);
+                    if (shouldHaveData) {
+                        console.log('[LocalStorage Check] Detected cleared localStorage, resetting all states');
+                        setIsResettingFromClearedStorage(true);
 
-                // Reset the flag after a brief delay to allow state updates to complete
-                setTimeout(() => {
-                    setIsResettingFromClearedStorage(false);
-                }, 100);
+                        // Reset all form states
+                        setCurrentStep(1);
+                        setIsCustomPlanView(false);
+                        setSelectedServices([]);
+                        setCustomPlanDescription('');
+                        setCustomPlanData(null);
+                        setIsFromCustomPlan(false);
+                        setSelectedPlanForPricing(null);
+                        setShowDynamicPricing(false);
+                        handlePlanSelection(null);
+                        
+                        // Reset form data
+                        setFormData({
+                            email: "",
+                            mobile: "",
+                            otp: "",
+                            company_name: "",
+                            company_title: "",
+                            website: "",
+                            address: "",
+                            contact_per_name: "",
+                            application_type: 0
+                        });
+
+                        // Reset errors
+                        setErrors({});
+
+                        // Reset URL to step 1
+                        if (typeof window !== 'undefined') {
+                            const currentUrl = new URL(window.location.href);
+                            currentUrl.searchParams.set('step', '1');
+                            currentUrl.searchParams.delete('view');
+                            currentUrl.searchParams.delete('plan');
+                            window.history.replaceState({ step: 1 }, '', currentUrl.toString());
+                        }
+
+                        // Reset the flag after a brief delay to allow state updates to complete
+                        setTimeout(() => {
+                            setIsResettingFromClearedStorage(false);
+                        }, 200);
+                    }
+                }
             }
-        }
-    }, []); // Run only on mount
+        };
+
+        // Check on mount
+        checkLocalStorageConsistency();
+
+        // Check when window gains focus (user might have cleared localStorage in dev tools)
+        const handleFocus = () => {
+            setTimeout(checkLocalStorageConsistency, 100);
+        };
+
+        window.addEventListener('focus', handleFocus);
+        
+        // Periodic check every 2 seconds
+        const interval = setInterval(checkLocalStorageConsistency, 2000);
+
+        return () => {
+            window.removeEventListener('focus', handleFocus);
+            clearInterval(interval);
+        };
+    }, [currentStep, isCustomPlanView, selectedServices, customPlanData, selectedPlan, formData.email, formData.mobile, formData.company_name, formData.application_type]); // Add dependencies to check when these change
 
     // Browser history management for form steps
     useEffect(() => {
@@ -977,13 +1051,10 @@ export function DemoRequestForm() {
 
         try {
             const response = await fetch('/api/get-services-list', {
-                method: 'POST',
+                method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    application_type: applicationType
-                })
+                }
             });
 
             if (!response.ok) {
@@ -992,29 +1063,25 @@ export function DemoRequestForm() {
 
             const data = await response.json();
 
-            if (data.response && data.data && Array.isArray(data.data)) {
+            if (data.response && data.data && Array.isArray(data.data) && data.data.length > 0) {
                 setAvailableServices(data.data);
                 setServicesError(null);
-                // If services are available, show custom plan option
                 setShowCustomPlan(true);
                 setCustomPlanMessage("");
             } else {
-                // If no services available, show "no custom plan available" message
+                // No services available from API
                 setAvailableServices([]);
                 setShowCustomPlan(false);
-                setCustomPlanMessage("No custom plan available for this application type");
+                setCustomPlanMessage("No services available");
+                setServicesError("No services found in the system");
             }
         } catch (error) {
-            // Fallback to static data when API fails
-            const fallbackServices = [
-                { id: 1, generic_name: 'Customer Relationship Management', external_price_per_user: "50.00", application_type: 'CRM' },
-                { id: 2, generic_name: 'Inventory Management', external_price_per_user: "30.00", application_type: 'ERP' },
-                { id: 3, generic_name: 'Advanced Reporting', external_price_per_user: "25.00", application_type: 'Analytics' },
-                { id: 4, generic_name: 'Mobile Application', external_price_per_user: "40.00", application_type: 'Mobile' }
-            ];
-            setAvailableServices(fallbackServices);
-            setServicesError("Using offline data - API unavailable");
-            setShowCustomPlan(true);
+            // No fallback data - just show error state
+            console.error('Failed to fetch services:', error);
+            setAvailableServices([]);
+            setShowCustomPlan(false);
+            setCustomPlanMessage("Services unavailable");
+            setServicesError("Failed to load services. Please try again later.");
         } finally {
             setServicesLoading(false);
         }
@@ -1140,6 +1207,19 @@ export function DemoRequestForm() {
     // Function to close result page
     const closeResultPage = () => {
         setSubmissionResult({ success: false, message: '', showResultPage: false });
+        
+        // If this was a successful submission, ensure we're on step 1
+        if (submissionResult.success) {
+            setCurrentStep(1);
+            if (typeof window !== 'undefined') {
+                const currentUrl = new URL(window.location.href);
+                currentUrl.searchParams.set('step', '1');
+                currentUrl.searchParams.delete('view');
+                currentUrl.searchParams.delete('plan');
+                currentUrl.searchParams.delete('fromCustom');
+                window.history.replaceState({ step: 1 }, '', currentUrl.toString());
+            }
+        }
     };
 
     // OTP functions
@@ -1725,6 +1805,7 @@ export function DemoRequestForm() {
         // Set reset flag to prevent auto-save during clear
         setIsResettingFromClearedStorage(true);
 
+        // Clear all localStorage items
         localStorage.removeItem('demoFormData');
         localStorage.removeItem('demoFormStep');
         localStorage.removeItem('demoFormPlan');
@@ -1734,11 +1815,10 @@ export function DemoRequestForm() {
         // Clear OTP verification status on form clear
         localStorage.removeItem('mobile_otp_verified');
         localStorage.removeItem('verified_mobile_number');
-        console.log('[Form Clear] OTP verification status cleared from localStorage');
+        console.log('[Form Clear] All localStorage data cleared');
 
+        // Reset form data
         setFormData({
-            // user_name: "",
-            // password: "",
             email: "",
             mobile: "",
             otp: "",
@@ -1746,11 +1826,14 @@ export function DemoRequestForm() {
             company_title: "",
             website: "",
             address: "",
-            // no_employees: 0,
             contact_per_name: "",
             application_type: 0
         });
+
+        // Reset plan selection
         handlePlanSelection(null);
+        
+        // Reset step to 1
         setCurrentStep(1);
         setErrors({});
 
@@ -1772,19 +1855,37 @@ export function DemoRequestForm() {
         setOtpSentMessage('');
         setOtpVerificationMessage('');
         setLastVerifiedMobile('');
-        console.log('[Form Clear] OTP states reset');
+
+        // Reset other form states
+        setHasSelectedBefore(false);
+        setPlans({});
+        setPlansError(null);
+        setAvailableServices([]);
+        setServicesError(null);
+        setSelectedTenure("yearly");
+        
+        // Reset URL to step 1 and remove all query parameters
+        if (typeof window !== 'undefined') {
+            const currentUrl = new URL(window.location.href);
+            currentUrl.searchParams.set('step', '1');
+            currentUrl.searchParams.delete('view');
+            currentUrl.searchParams.delete('plan');
+            currentUrl.searchParams.delete('fromCustom');
+            window.history.replaceState({ step: 1 }, '', currentUrl.toString());
+        }
 
         // Ensure nothing persists immediately after
         if (saveTimeoutRef.current) {
             window.clearTimeout(saveTimeoutRef.current);
             saveTimeoutRef.current = null;
         }
-        setHasSelectedBefore(false);
+
+        console.log('[Form Clear] All states reset to initial values');
 
         // Clear reset flag after state updates complete
         setTimeout(() => {
             setIsResettingFromClearedStorage(false);
-        }, 200);
+        }, 300);
     };
 
     const handleSubmit = async () => {
@@ -1906,6 +2007,16 @@ export function DemoRequestForm() {
 
                 // Clear form after successful submission
                 clearForm();
+                
+                // Immediately update the URL to show step 1
+                if (typeof window !== 'undefined') {
+                    const currentUrl = new URL(window.location.href);
+                    currentUrl.searchParams.set('step', '1');
+                    currentUrl.searchParams.delete('view');
+                    currentUrl.searchParams.delete('plan');
+                    currentUrl.searchParams.delete('fromCustom');
+                    window.history.replaceState({ step: 1 }, '', currentUrl.toString());
+                }
             } else {
                 // Failure
                 const failureMessage = responseData.message || 'Failed to submit demo request. Please try again.';

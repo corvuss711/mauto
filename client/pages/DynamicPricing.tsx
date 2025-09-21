@@ -33,6 +33,8 @@ interface DynamicPricingProps {
     onCompleteDemo: (planId: number, pricingId: number, numberOfUsers: number) => void;
     formData: any;
     isSubmitting?: boolean;
+    isFromCustomPlan?: boolean;
+    customPlanData?: any;
 }
 
 // Tenure options for the new flow
@@ -49,7 +51,9 @@ export const DynamicPricing: React.FC<DynamicPricingProps> = ({
     onGoBack,
     onCompleteDemo,
     formData,
-    isSubmitting = false
+    isSubmitting = false,
+    isFromCustomPlan = false,
+    customPlanData
 }) => {
     const [selectedTenure, setSelectedTenure] = useState("yearly");
     const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
@@ -58,9 +62,33 @@ export const DynamicPricing: React.FC<DynamicPricingProps> = ({
     const [isDemoMode, setIsDemoMode] = useState(false);
     const [showDemoAnimation, setShowDemoAnimation] = useState(false);
 
+    // Store the user count for custom plans to prevent resets
+    const [customPlanUserCount, setCustomPlanUserCount] = useState<number | null>(() => {
+        // Try to restore from localStorage for custom plans
+        if (typeof window !== 'undefined' && isFromCustomPlan) {
+            const stored = localStorage.getItem('customPlanUserCount');
+            return stored ? parseInt(stored, 10) : null;
+        }
+        return null;
+    });
+
+    // Save custom plan user count to localStorage whenever it changes
+    useEffect(() => {
+        if (isFromCustomPlan && customPlanUserCount !== null) {
+            localStorage.setItem('customPlanUserCount', customPlanUserCount.toString());
+        }
+    }, [customPlanUserCount, isFromCustomPlan]);
+
+    // Clear localStorage when not in custom plan mode
+    useEffect(() => {
+        if (!isFromCustomPlan && typeof window !== 'undefined') {
+            localStorage.removeItem('customPlanUserCount');
+        }
+    }, [isFromCustomPlan]);
+
     // Initialize selected plan based on the plan that was clicked
     useEffect(() => {
-        if (selectedPlanId && allPlans) {
+        if (selectedPlanId && allPlans && Object.keys(allPlans).length > 0) {
             const plan = Object.values(allPlans).find(p => p.plan_id === selectedPlanId);
             if (plan) {
                 setSelectedPlan(plan);
@@ -68,12 +96,23 @@ export const DynamicPricing: React.FC<DynamicPricingProps> = ({
                 const yearlyDetail = plan.plan_details.find(detail => detail.duration === "yearly");
                 if (yearlyDetail) {
                     setSelectedPricingDetail(yearlyDetail);
-                    // Set default number of users to min_users
-                    setNumberOfUsers(yearlyDetail.min_users);
+
+                    // For custom plans, try to preserve any existing user count
+                    if (isFromCustomPlan) {
+                        // Only set to min if we don't have a preserved count
+                        if (customPlanUserCount === null) {
+                            const initialCount = Math.max(yearlyDetail.min_users, 1);
+                            setNumberOfUsers(initialCount);
+                            setCustomPlanUserCount(initialCount);
+                        }
+                    } else {
+                        // For regular plans, set initial number of users to min_users
+                        setNumberOfUsers(yearlyDetail.min_users);
+                    }
                 }
             }
         }
-    }, [selectedPlanId, allPlans]);
+    }, [selectedPlanId, allPlans, isFromCustomPlan, customPlanUserCount]);
 
     // Scroll to top when component mounts
     useEffect(() => {
@@ -86,11 +125,37 @@ export const DynamicPricing: React.FC<DynamicPricingProps> = ({
             const detail = selectedPlan.plan_details.find(d => d.duration === selectedTenure);
             if (detail) {
                 setSelectedPricingDetail(detail);
-                // Always set number of users to min_users for the selected tenure
-                setNumberOfUsers(detail.min_users);
+
+                // For custom plans: NEVER reset the user count, always preserve it
+                if (isFromCustomPlan) {
+                    // If we have a stored custom plan user count, use it
+                    if (customPlanUserCount !== null && customPlanUserCount >= detail.min_users) {
+                        setNumberOfUsers(customPlanUserCount);
+                    }
+                    // If no stored count but current count is valid, keep it
+                    else if (numberOfUsers >= detail.min_users) {
+                        setCustomPlanUserCount(numberOfUsers); // Store current count
+                    }
+                    // Only as last resort, set to minimum
+                    else {
+                        const minCount = Math.max(detail.min_users, 1);
+                        setNumberOfUsers(minCount);
+                        setCustomPlanUserCount(minCount);
+                    }
+                } else {
+                    // For regular plans, reset to min_users (original behavior)
+                    setNumberOfUsers(detail.min_users);
+                }
             }
         }
-    }, [selectedTenure, selectedPlan]);
+    }, [selectedTenure, selectedPlan, isFromCustomPlan]);
+
+    // Separate effect to handle initial custom plan user count preservation
+    useEffect(() => {
+        if (isFromCustomPlan && customPlanUserCount === null && numberOfUsers > 1) {
+            setCustomPlanUserCount(numberOfUsers);
+        }
+    }, [isFromCustomPlan, customPlanUserCount, numberOfUsers]);
 
     const getPricePerUser = (planDetail: PlanDetail) => {
         // Priority: base_price_per_external_user_per_month > base_price_per_user_external > base_price_per_user
@@ -128,12 +193,24 @@ export const DynamicPricing: React.FC<DynamicPricingProps> = ({
 
     const incrementUsers = () => {
         // Always allow increment, remove max limit
-        setNumberOfUsers(prev => prev + 1);
+        const newCount = numberOfUsers + 1;
+        setNumberOfUsers(newCount);
+
+        // Store the count for custom plans to prevent resets
+        if (isFromCustomPlan) {
+            setCustomPlanUserCount(newCount);
+        }
     };
 
     const decrementUsers = () => {
         if (selectedPricingDetail && numberOfUsers > selectedPricingDetail.min_users) {
-            setNumberOfUsers(prev => prev - 1);
+            const newCount = numberOfUsers - 1;
+            setNumberOfUsers(newCount);
+
+            // Store the count for custom plans to prevent resets
+            if (isFromCustomPlan) {
+                setCustomPlanUserCount(newCount);
+            }
         }
     };
 
@@ -164,6 +241,42 @@ export const DynamicPricing: React.FC<DynamicPricingProps> = ({
             onCompleteDemo(selectedPlan.plan_id, selectedPricingDetail.id, numberOfUsers);
         }
     };
+
+    // Show loading state if data is not available
+    if (!allPlans || Object.keys(allPlans).length === 0) {
+        return (
+            <div className="min-h-screen bg-gray-50 dark:bg-slate-900 py-8">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <div className="flex items-center justify-center min-h-[400px]">
+                        <div className="text-center">
+                            <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                            <p className="text-gray-600 dark:text-gray-400">Loading pricing details...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    if (!selectedPlan) {
+        return (
+            <div className="min-h-screen bg-gray-50 dark:bg-slate-900 py-8">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <div className="flex items-center justify-center min-h-[400px]">
+                        <div className="text-center">
+                            <p className="text-gray-600 dark:text-gray-400">No plan selected</p>
+                            <button
+                                onClick={onGoBack}
+                                className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+                            >
+                                Go Back
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-slate-900 py-8">
@@ -473,9 +586,10 @@ export const DynamicPricing: React.FC<DynamicPricingProps> = ({
                                             <>
                                                 <Button
                                                     onClick={handleTakeDemo}
-                                                    className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold py-3 rounded-lg shadow-sm transition-all duration-200"
+                                                    disabled={isFromCustomPlan}
+                                                    className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-lg shadow-sm transition-all duration-200"
                                                 >
-                                                    Take Demo (₹1 only)
+                                                    {isFromCustomPlan ? 'Demo Not Available for Custom Plans' : 'Take Demo (₹1 only)'}
                                                 </Button>
                                                 <Button
                                                     onClick={handleCompleteDemo}
@@ -490,7 +604,7 @@ export const DynamicPricing: React.FC<DynamicPricingProps> = ({
                                             <>
                                                 <Button
                                                     onClick={handleCompleteDemo}
-                                                    disabled={isSubmitting}
+                                                    disabled={isSubmitting || isFromCustomPlan}
                                                     className="w-full bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-lg shadow-sm transition-all duration-200"
                                                 >
                                                     {isSubmitting ? (
@@ -498,6 +612,8 @@ export const DynamicPricing: React.FC<DynamicPricingProps> = ({
                                                             <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                                                             <span>Processing...</span>
                                                         </div>
+                                                    ) : isFromCustomPlan ? (
+                                                        'Demo Not Available for Custom Plans'
                                                     ) : (
                                                         'Start Demo (₹1)'
                                                     )}

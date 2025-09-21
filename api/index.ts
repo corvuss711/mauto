@@ -852,7 +852,34 @@ app.post('/api/times-edited', async (req, res) => {
     } catch (e) { res.status(500).json({ error: 'Failed to check times_edited' }); }
 });
 
+async function handleGetServices(req: express.Request, res: express.Response) {
+    try {
+        // For now, return static services data - in future, this could be from external API
+        const servicesData = {
+            response: true,
+            data: [
+                { id: 1, name: 'CRM', category: 'sales', generic_name: 'Customer Relationship Management', external_price_per_user: 50 },
+                { id: 2, name: 'Inventory', category: 'management', generic_name: 'Inventory Management', external_price_per_user: 30 },
+                { id: 3, name: 'Reporting', category: 'analytics', generic_name: 'Advanced Reporting', external_price_per_user: 25 },
+                { id: 4, name: 'Mobile App', category: 'mobile', generic_name: 'Mobile Application', external_price_per_user: 40 },
+                { id: 5, name: 'Analytics', category: 'analytics', generic_name: 'Business Analytics Dashboard', external_price_per_user: 35 },
+                { id: 6, name: 'API Access', category: 'integration', generic_name: 'REST API Integration', external_price_per_user: 20 }
+            ]
+        };
+
+        res.json(servicesData);
+    } catch (error) {
+        console.error('❌ Error fetching services:', error);
+        res.status(500).json({
+            response: false,
+            error: 'Failed to fetch services',
+            message: error instanceof Error ? error.message : 'Unknown error'
+        });
+    }
+};
+
 app.post("/api/get-plan", handleGetPlans);
+app.get("/api/get-services", handleGetServices);
 app.post("/api/process-payment", handleProcessPayment);
 app.post("/api/otp-request", handleOtpRequest);
 

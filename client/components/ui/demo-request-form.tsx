@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "./button";
-import { ArrowRight, ArrowLeft, Check, Eye, EyeOff, Globe, Mail, Phone, Building, User, Lock, Star, ChevronDown, Users, Briefcase, Layers, MapPin, X, CheckCircle, AlertCircle, CreditCard } from "lucide-react";
+import { ArrowRight, ArrowLeft, Check, Eye, EyeOff, Globe, Mail, Phone, Building, User, Lock, Star, ChevronDown, Users, Briefcase, Layers, MapPin, X, CheckCircle, AlertCircle, CreditCard, Settings, Plus, Minus } from "lucide-react";
 import { TrustedByCompanies } from "./trusted-by-companies";
 import { CompanyEllipse } from "./company-ellipse";
 import { DynamicPricing } from "../../pages/DynamicPricing";
@@ -431,7 +431,7 @@ const StatCounter = ({ stat, index }: { stat: typeof statsData[0], index: number
                 }
             }}
             viewport={{ once: true }}
-            whileHover={{ scale: 1.05, y: -5 }}
+            whileHover={{ scale: 1.02, y: -2 }}
         >
             {/* Animated background */}
             <div className={`absolute inset-0 bg-gradient-to-r ${stat.color} opacity-0 group-hover:opacity-10 transition-opacity duration-300`}></div>
@@ -490,6 +490,69 @@ export function DemoRequestForm() {
     const [showCompanyNameGuide, setShowCompanyNameGuide] = useState(false);
     const [isCompanyCodeFocused, setIsCompanyCodeFocused] = useState(false);
     const [isCompanyNameFocused, setIsCompanyNameFocused] = useState(false);
+
+    // Custom Plan Flow States - Simplified
+    const [isCustomPlanView, setIsCustomPlanView] = useState(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('demoFormCustomPlan');
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    return parsed.isCustomPlanView || false;
+                } catch {
+                    return false;
+                }
+            }
+        }
+        return false;
+    });
+
+    // Custom plan state variables
+    const [customPlanDescription, setCustomPlanDescription] = useState(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('demoFormCustomPlan');
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    return parsed.customPlanDescription || '';
+                } catch {
+                    return '';
+                }
+            }
+        }
+        return '';
+    });
+    
+    const [selectedServices, setSelectedServices] = useState<Array<{ id: number, name?: string, category?: string, generic_name: string, external_price_per_user: string | number, application_type?: string }>>(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('demoFormCustomPlan');
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    return parsed.selectedServices || [];
+                } catch {
+                    return [];
+                }
+            }
+        }
+        return [];
+    });
+    
+    const [customPlanPricing, setCustomPlanPricing] = useState({
+        monthly: 500,
+        quarterly: 475,
+        halfYearly: 450,
+        yearly: 400
+    });
+
+    // Additional custom plan states
+    const [showCustomPlan, setShowCustomPlan] = useState(true);
+    const [customPlanMessage, setCustomPlanMessage] = useState('');
+
+    // Services data state
+    const [availableServices, setAvailableServices] = useState<Array<{ id: number, name?: string, category?: string, generic_name: string, external_price_per_user: string | number, application_type?: string }>>([]);
+    const [servicesLoading, setServicesLoading] = useState(false);
+    const [servicesError, setServicesError] = useState<string | null>(null);
 
     const [formData, setFormData] = useState<FormData>(() => {
         if (typeof window !== 'undefined') {
@@ -561,10 +624,56 @@ export function DemoRequestForm() {
 
     // Dynamic pricing navigation state
     const [showDynamicPricing, setShowDynamicPricing] = useState(false);
-    const [selectedPlanForPricing, setSelectedPlanForPricing] = useState<number | null>(null);
+    const [selectedPlanForPricing, setSelectedPlanForPricing] = useState<number | null>(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('demoFormCustomPlan');
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    return parsed.selectedPlanForPricing || null;
+                } catch {
+                    return null;
+                }
+            }
+        }
+        return null;
+    });
+    
+    const [isFromCustomPlan, setIsFromCustomPlan] = useState(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('demoFormCustomPlan');
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    return parsed.isFromCustomPlan || false;
+                } catch {
+                    return false;
+                }
+            }
+        }
+        return false;
+    });
+    
+    const [customPlanData, setCustomPlanData] = useState<any>(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('demoFormCustomPlan');
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    return parsed.customPlanData || null;
+                } catch {
+                    return null;
+                }
+            }
+        }
+        return null;
+    });
 
     // Track if component has been initialized to avoid clearing OTP on initial load
     const [isInitialized, setIsInitialized] = useState(false);
+    
+    // Track if we're currently resetting due to localStorage being cleared
+    const [isResettingFromClearedStorage, setIsResettingFromClearedStorage] = useState(false);
 
     // OTP related states
     const [isOtpSent, setIsOtpSent] = useState(false);
@@ -608,6 +717,35 @@ export function DemoRequestForm() {
         setIsInitialized(true);
     }, []);
 
+    // Check localStorage consistency and reset custom plan states if localStorage is cleared
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const hasFormData = localStorage.getItem('demoFormData');
+            const hasCustomPlanData = localStorage.getItem('demoFormCustomPlan');
+            const hasFormStep = localStorage.getItem('demoFormStep');
+            
+            // If localStorage was manually cleared or doesn't exist, reset all states
+            if (!hasFormData && !hasCustomPlanData && !hasFormStep && (currentStep > 1 || isCustomPlanView || selectedServices.length > 0 || customPlanData)) {
+                console.log('[LocalStorage Check] Detected cleared localStorage, resetting all states');
+                setIsResettingFromClearedStorage(true);
+                
+                setCurrentStep(1);
+                setIsCustomPlanView(false);
+                setSelectedServices([]);
+                setCustomPlanDescription('');
+                setCustomPlanData(null);
+                setIsFromCustomPlan(false);
+                setSelectedPlanForPricing(null);
+                setShowDynamicPricing(false);
+                
+                // Reset the flag after a brief delay to allow state updates to complete
+                setTimeout(() => {
+                    setIsResettingFromClearedStorage(false);
+                }, 100);
+            }
+        }
+    }, []); // Run only on mount
+
     // Browser history management for form steps
     useEffect(() => {
         // Initialize browser history state on component mount
@@ -616,7 +754,7 @@ export function DemoRequestForm() {
             const urlStep = currentUrl.searchParams.get('step');
             const urlView = currentUrl.searchParams.get('view');
             const urlPlan = currentUrl.searchParams.get('plan');
-            
+
             // Handle URL parameters on initial load
             if (urlStep) {
                 const stepNum = parseInt(urlStep);
@@ -625,6 +763,13 @@ export function DemoRequestForm() {
                         // Initialize pricing view
                         setSelectedPlanForPricing(parseInt(urlPlan));
                         setShowDynamicPricing(true);
+                        if (stepNum !== currentStep) {
+                            setCurrentStep(stepNum);
+                        }
+                    } else if (urlView === 'custom') {
+                        // Initialize custom plan view
+                        setIsCustomPlanView(true);
+                        setShowDynamicPricing(false);
                         if (stepNum !== currentStep) {
                             setCurrentStep(stepNum);
                         }
@@ -643,42 +788,87 @@ export function DemoRequestForm() {
 
     // Update URL when step changes
     useEffect(() => {
+        // Don't update URL during reset process
+        if (isResettingFromClearedStorage) {
+            return;
+        }
+        
         if (typeof window !== 'undefined' && currentStep) {
             const currentUrl = new URL(window.location.href);
             currentUrl.searchParams.set('step', currentStep.toString());
-            
+
             // Use pushState for navigation (not replaceState) to create browser history
             window.history.pushState({ step: currentStep }, '', currentUrl.toString());
         }
-    }, [currentStep]);
+    }, [currentStep, isResettingFromClearedStorage]);
 
     // Listen for browser back/forward button clicks
     useEffect(() => {
         const handlePopState = (event: PopStateEvent) => {
             if (event.state && typeof event.state.step === 'number') {
                 const targetStep = event.state.step;
-                
+
                 // Prevent navigation lock issues
                 if (navLock) return;
-                
+
                 // Handle pricing view navigation
                 if (event.state.view === 'pricing' && event.state.planId) {
                     setSelectedPlanForPricing(event.state.planId);
                     setShowDynamicPricing(true);
+                    setIsCustomPlanView(false);
                     setCurrentStep(targetStep);
+                } else if (event.state.view === 'custom') {
+                    // Handle custom plan view navigation
+                    setIsCustomPlanView(true);
+                    setShowDynamicPricing(false);
+                    setSelectedPlanForPricing(null);
+                    setCurrentStep(targetStep);
+                } else if (event.state.isCustomPlan && event.state.previousStep) {
+                    // Handle back navigation from custom plan pricing
+                    // When going back from custom plan pricing, go to the previous step that was stored
+                    const previousStep = event.state.previousStep;
+                    const previousView = event.state.previousView;
+                    
+                    setShowDynamicPricing(false);
+                    setSelectedPlanForPricing(null);
+                    
+                    if (previousView === 'custom') {
+                        // Return to custom plan view
+                        setIsCustomPlanView(true);
+                        setCurrentStep(previousStep);
+                        
+                        // Update URL to show custom plan view
+                        if (typeof window !== 'undefined') {
+                            const currentUrl = new URL(window.location.href);
+                            currentUrl.searchParams.set('step', previousStep.toString());
+                            currentUrl.searchParams.set('view', 'custom');
+                            currentUrl.searchParams.delete('plan');
+                            currentUrl.searchParams.delete('fromCustom');
+                            window.history.replaceState({ step: previousStep, view: 'custom' }, '', currentUrl.toString());
+                        }
+                    } else {
+                        // Return to regular step view
+                        setIsCustomPlanView(false);
+                        
+                        // Set direction and navigate to the previous step
+                        const newDirection = previousStep > currentStep ? 1 : -1;
+                        setDirection(newDirection);
+                        setCurrentStep(previousStep);
+                    }
                 } else {
                     // Regular form navigation
                     setShowDynamicPricing(false);
                     setSelectedPlanForPricing(null);
-                    
+                    setIsCustomPlanView(false);
+
                     // Determine direction based on step comparison
                     const newDirection = targetStep > currentStep ? 1 : -1;
                     setDirection(newDirection);
-                    
+
                     // Update step without creating new history entry
                     setCurrentStep(targetStep);
                 }
-                
+
                 saveToLocalStorage();
                 window.scrollTo({ top: 0, behavior: 'smooth' });
             } else {
@@ -687,17 +877,32 @@ export function DemoRequestForm() {
                 const urlStep = urlParams.get('step');
                 const urlView = urlParams.get('view');
                 const urlPlan = urlParams.get('plan');
-                
+                const fromCustom = urlParams.get('fromCustom');
+
                 if (urlStep) {
                     const stepNum = parseInt(urlStep);
                     if (stepNum >= 1 && stepNum <= 3) {
                         if (urlView === 'pricing' && urlPlan) {
                             setSelectedPlanForPricing(parseInt(urlPlan));
                             setShowDynamicPricing(true);
+                            setIsCustomPlanView(false);
+                            setCurrentStep(stepNum);
+                        } else if (urlView === 'custom') {
+                            setIsCustomPlanView(true);
+                            setShowDynamicPricing(false);
+                            setSelectedPlanForPricing(null);
+                            setCurrentStep(stepNum);
+                        } else if (fromCustom === 'true' && urlPlan === '999') {
+                            // Handle custom plan pricing URL
+                            setSelectedPlanForPricing(999);
+                            setShowDynamicPricing(true);
+                            setIsCustomPlanView(false);
+                            setIsFromCustomPlan(true);
                             setCurrentStep(stepNum);
                         } else {
                             setShowDynamicPricing(false);
                             setSelectedPlanForPricing(null);
+                            setIsCustomPlanView(false);
                             const newDirection = stepNum > currentStep ? 1 : -1;
                             setDirection(newDirection);
                             setCurrentStep(stepNum);
@@ -711,7 +916,7 @@ export function DemoRequestForm() {
 
         if (typeof window !== 'undefined') {
             window.addEventListener('popstate', handlePopState);
-            
+
             return () => {
                 window.removeEventListener('popstate', handlePopState);
             };
@@ -764,6 +969,85 @@ export function DemoRequestForm() {
             setPlansLoading(false);
         }
     };
+
+    // API function to fetch services
+    const fetchServices = async (applicationType: string) => {
+        setServicesLoading(true);
+        setServicesError(null);
+
+        try {
+            const response = await fetch('/api/get-services-list', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    application_type: applicationType
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+
+            if (data.response && data.data && Array.isArray(data.data)) {
+                setAvailableServices(data.data);
+                setServicesError(null);
+                // If services are available, show custom plan option
+                setShowCustomPlan(true);
+                setCustomPlanMessage("");
+            } else {
+                // If no services available, show "no custom plan available" message
+                setAvailableServices([]);
+                setShowCustomPlan(false);
+                setCustomPlanMessage("No custom plan available for this application type");
+            }
+        } catch (error) {
+            // Fallback to static data when API fails
+            const fallbackServices = [
+                { id: 1, generic_name: 'Customer Relationship Management', external_price_per_user: "50.00", application_type: 'CRM' },
+                { id: 2, generic_name: 'Inventory Management', external_price_per_user: "30.00", application_type: 'ERP' },
+                { id: 3, generic_name: 'Advanced Reporting', external_price_per_user: "25.00", application_type: 'Analytics' },
+                { id: 4, generic_name: 'Mobile Application', external_price_per_user: "40.00", application_type: 'Mobile' }
+            ];
+            setAvailableServices(fallbackServices);
+            setServicesError("Using offline data - API unavailable");
+            setShowCustomPlan(true);
+        } finally {
+            setServicesLoading(false);
+        }
+    };
+
+    // Call fetchServices when component mounts - only if application type is already selected
+    useEffect(() => {
+        if (formData.application_type > 0) {
+            fetchServices(formData.application_type.toString());
+        }
+    }, []);
+
+    // Auto-save custom plan data to localStorage when it changes
+    useEffect(() => {
+        // Don't save during reset process
+        if (isResettingFromClearedStorage) {
+            return;
+        }
+        
+        // Only auto-save if localStorage has valid data or if we have actual form data
+        // This prevents re-saving when localStorage has been manually cleared
+        if (typeof window !== 'undefined') {
+            const hasFormData = localStorage.getItem('demoFormData');
+            const hasFormStep = localStorage.getItem('demoFormStep');
+            
+            // Don't auto-save if localStorage was manually cleared and we're in a reset state
+            if (!hasFormData && !hasFormStep && currentStep === 1 && !isCustomPlanView && selectedServices.length === 0) {
+                return;
+            }
+        }
+        
+        saveToLocalStorage();
+    }, [isCustomPlanView, selectedServices, customPlanDescription, customPlanData, isFromCustomPlan, selectedPlanForPricing, currentStep, isResettingFromClearedStorage]);
 
     // Function to transform API data to pricing card format - Updated to show yearly pricing
     const getCurrentPricingData = () => {
@@ -1081,6 +1365,11 @@ export function DemoRequestForm() {
     // Save to localStorage function (guarded)
     const saveToLocalStorage = () => {
         if (typeof window !== 'undefined') {
+            // Check if localStorage was manually cleared by checking for the absence of any demo form keys
+            const hasAnyDemoFormData = localStorage.getItem('demoFormData') || 
+                                     localStorage.getItem('demoFormStep') || 
+                                     localStorage.getItem('demoFormPlan') || 
+                                     localStorage.getItem('demoFormCustomPlan');
 
             // If form is effectively empty and on first step with no plan, don't persist
             const isEmptyForm =
@@ -1096,21 +1385,44 @@ export function DemoRequestForm() {
                 !formData.contact_per_name &&
                 formData.application_type === 0 &&
                 !selectedPlan &&
-                currentStep === 1;
+                currentStep === 1 &&
+                !isCustomPlanView &&
+                selectedServices.length === 0;
 
+            // If localStorage was manually cleared and form is in reset state, don't save anything
+            if (!hasAnyDemoFormData && isEmptyForm) {
+                console.log('[SaveToLocalStorage] Detected cleared localStorage with empty form, skipping save');
+                return;
+            }
+
+            // If form is empty (regardless of localStorage state), clear everything
             if (isEmptyForm) {
                 localStorage.removeItem('demoFormData');
                 localStorage.removeItem('demoFormStep');
                 localStorage.removeItem('demoFormPlan');
+                localStorage.removeItem('demoFormCustomPlan');
                 return;
             }
+            
             localStorage.setItem('demoFormData', JSON.stringify(formData));
             localStorage.setItem('demoFormStep', currentStep.toString());
+            
             if (selectedPlan) {
                 localStorage.setItem('demoFormPlan', selectedPlan);
             } else {
                 localStorage.removeItem('demoFormPlan');
             }
+
+            // Save custom plan data
+            const customPlanState = {
+                isCustomPlanView,
+                selectedServices,
+                customPlanDescription,
+                customPlanData,
+                isFromCustomPlan,
+                selectedPlanForPricing
+            };
+            localStorage.setItem('demoFormCustomPlan', JSON.stringify(customPlanState));
         }
     };
 
@@ -1178,9 +1490,13 @@ export function DemoRequestForm() {
     useEffect(() => {
         if (formData.application_type > 0) {
             fetchPlans(formData.application_type);
+            fetchServices(formData.application_type.toString());
         } else {
             setPlans({});
             setPlansError(null);
+            setAvailableServices([]);
+            setShowCustomPlan(false);
+            setCustomPlanMessage('');
         }
     }, [formData.application_type]);
 
@@ -1294,7 +1610,7 @@ export function DemoRequestForm() {
             saveToLocalStorage();
             window.scrollTo({ top: 0, behavior: 'smooth' });
             setTimeout(() => setNavLock(false), 350);
-            
+
             // Update URL
             if (typeof window !== 'undefined') {
                 const currentUrl = new URL(window.location.href);
@@ -1302,18 +1618,76 @@ export function DemoRequestForm() {
                 window.history.pushState({ step: 2 }, '', currentUrl.toString());
             }
         } else if (currentStep === 2) {
-            setDirection(1);
-            setNavLock(true);
-            setCurrentStep(3);
-            saveToLocalStorage();
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-            setTimeout(() => setNavLock(false), 350);
-            
-            // Update URL
-            if (typeof window !== 'undefined') {
-                const currentUrl = new URL(window.location.href);
-                currentUrl.searchParams.set('step', '3');
-                window.history.pushState({ step: 3 }, '', currentUrl.toString());
+            // Handle custom plan flow
+            if (isCustomPlanView && customPlanData) {
+                // User is in custom plan view and has already calculated pricing
+                // Navigate to step 3 with custom plan data
+                setDirection(1);
+                setNavLock(true);
+                setCurrentStep(3);
+                setShowDynamicPricing(true);
+                setSelectedPlanForPricing(999); // Custom plan ID
+                setIsFromCustomPlan(true);
+                saveToLocalStorage();
+                
+                // Scroll to pricing section after a delay to ensure component is rendered
+                setTimeout(() => {
+                    const pricingSection = document.querySelector('[data-pricing-section="true"]');
+                    if (pricingSection) {
+                        pricingSection.scrollIntoView({ 
+                            behavior: 'smooth', 
+                            block: 'start'
+                        });
+                    } else {
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }
+                    setNavLock(false);
+                }, 500); // Increased delay to ensure DynamicPricing component is fully rendered
+
+                // Update URL
+                if (typeof window !== 'undefined') {
+                    const currentUrl = new URL(window.location.href);
+                    currentUrl.searchParams.set('step', '3');
+                    currentUrl.searchParams.set('plan', '999');
+                    currentUrl.searchParams.set('fromCustom', 'true');
+                    currentUrl.searchParams.delete('view');
+                    window.history.pushState({ 
+                        step: 3, 
+                        planId: 999, 
+                        isCustomPlan: true,
+                        fromCustomPlan: true,
+                        previousStep: 2,
+                        previousView: 'custom'
+                    }, '', currentUrl.toString());
+                }
+            } else {
+                // Regular flow - go to step 3 (pricing selection)
+                setDirection(1);
+                setNavLock(true);
+                setCurrentStep(3);
+                saveToLocalStorage();
+                
+                // For regular flow, scroll to top initially, but if DynamicPricing appears, scroll to it
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                
+                // Check for pricing section after navigation animation
+                setTimeout(() => {
+                    const pricingSection = document.querySelector('[data-pricing-section="true"]');
+                    if (pricingSection) {
+                        pricingSection.scrollIntoView({ 
+                            behavior: 'smooth', 
+                            block: 'start'
+                        });
+                    }
+                    setNavLock(false);
+                }, 500);
+
+                // Update URL
+                if (typeof window !== 'undefined') {
+                    const currentUrl = new URL(window.location.href);
+                    currentUrl.searchParams.set('step', '3');
+                    window.history.pushState({ step: 3 }, '', currentUrl.toString());
+                }
             }
         }
     };
@@ -1328,7 +1702,7 @@ export function DemoRequestForm() {
             saveToLocalStorage();
             window.scrollTo({ top: 0, behavior: 'smooth' });
             setTimeout(() => setNavLock(false), 350);
-            
+
             // Update URL
             if (typeof window !== 'undefined') {
                 const currentUrl = new URL(window.location.href);
@@ -1344,9 +1718,14 @@ export function DemoRequestForm() {
             window.clearTimeout(saveTimeoutRef.current);
             saveTimeoutRef.current = null;
         }
+        
+        // Set reset flag to prevent auto-save during clear
+        setIsResettingFromClearedStorage(true);
+        
         localStorage.removeItem('demoFormData');
         localStorage.removeItem('demoFormStep');
         localStorage.removeItem('demoFormPlan');
+        localStorage.removeItem('demoFormCustomPlan');
         localStorage.removeItem('demoFormHasSelected');
 
         // Clear OTP verification status on form clear
@@ -1372,6 +1751,15 @@ export function DemoRequestForm() {
         setCurrentStep(1);
         setErrors({});
 
+        // Reset custom plan state variables
+        setIsCustomPlanView(false);
+        setSelectedServices([]);
+        setCustomPlanDescription('');
+        setCustomPlanData(null);
+        setIsFromCustomPlan(false);
+        setSelectedPlanForPricing(null);
+        setShowDynamicPricing(false);
+
         // Reset OTP verification states
         setIsOtpSent(false);
         setIsOtpVerified(false);
@@ -1389,10 +1777,15 @@ export function DemoRequestForm() {
             saveTimeoutRef.current = null;
         }
         setHasSelectedBefore(false);
+        
+        // Clear reset flag after state updates complete
+        setTimeout(() => {
+            setIsResettingFromClearedStorage(false);
+        }, 200);
     };
 
     const handleSubmit = async () => {
-        
+
 
         setIsSubmitting(true);
 
@@ -1544,7 +1937,7 @@ export function DemoRequestForm() {
             const [, plan] = planEntry;
             setSelectedPlanForPricing(plan.plan_id);
             setShowDynamicPricing(true);
-            
+
             // Update URL to show pricing view
             if (typeof window !== 'undefined') {
                 const currentUrl = new URL(window.location.href);
@@ -1561,7 +1954,7 @@ export function DemoRequestForm() {
     const handleBackToForm = () => {
         setShowDynamicPricing(false);
         setSelectedPlanForPricing(null);
-        
+
         // Update URL to go back to step 2 form view
         if (typeof window !== 'undefined') {
             const currentUrl = new URL(window.location.href);
@@ -1728,6 +2121,68 @@ export function DemoRequestForm() {
             });
         } finally {
             setIsSubmitting(false);
+        }
+    };
+
+    // Custom plan submit function
+    const handleCustomPlanSubmit = async () => {
+        if (selectedServices.length === 0) {
+            showAlert('error', 'No Services Selected', 'Please select at least one service for your custom plan.');
+            return;
+        }
+
+        try {
+            // Call backend API to calculate custom plan pricing
+            const response = await fetch('/api/calculate-custom-plan', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    selectedServices: selectedServices,
+                    applicationTypeId: formData.application_type
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+
+            if (data.response && data.data) {
+                // Set custom plan data and navigate to step 3
+                setCustomPlanData(data.data);
+                setSelectedPlanForPricing(999); // Set special custom plan ID
+                setIsFromCustomPlan(true);
+                setCurrentStep(3);
+                setShowDynamicPricing(true);
+
+                // Save all custom plan data to localStorage
+                saveToLocalStorage();
+
+                // Update URL
+                if (typeof window !== 'undefined') {
+                    const currentUrl = new URL(window.location.href);
+                    currentUrl.searchParams.set('step', '3');
+                    currentUrl.searchParams.set('plan', '999'); // Custom plan ID
+                    currentUrl.searchParams.set('fromCustom', 'true'); // Track that this came from custom plan
+                    currentUrl.searchParams.delete('view');
+                    window.history.pushState({ 
+                        step: 3, 
+                        planId: 999, 
+                        isCustomPlan: true,
+                        fromCustomPlan: true,
+                        previousStep: 2, // When going back, should go to step 2
+                        previousView: 'custom' // Should return to custom plan view
+                    }, '', currentUrl.toString());
+                }
+            } else {
+                throw new Error('Failed to calculate custom plan pricing');
+            }
+        } catch (error) {
+            console.error('Error calculating custom plan:', error);
+            showAlert('error', 'Calculation Error', 'Failed to calculate custom plan pricing. Please try again.');
         }
     };
 
@@ -1965,7 +2420,7 @@ export function DemoRequestForm() {
                                         <div className="text-center mb-4 lg:mb-6 xl:mb-4">
                                             <motion.div
                                                 className="relative w-12 h-12 lg:w-14 lg:h-14 xl:w-12 xl:h-12 bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-600 rounded-xl flex items-center justify-center mx-auto mb-3 lg:mb-4 xl:mb-3 shadow-xl"
-                                                whileHover={{ scale: 1.05, rotateY: 10 }}
+                                                whileHover={{ scale: 1.02 }}
                                                 initial={{ rotateX: -15 }}
                                                 animate={{ rotateX: 0 }}
                                                 transition={{ duration: 0.5 }}
@@ -2051,30 +2506,14 @@ export function DemoRequestForm() {
                                                             placeholder="Full company name (e.g., ABC Corp Pvt Ltd)"
                                                         />
 
-                                                        {/* Small screen description - shows on focus */}
+                                                        {/* Small screen description - shows when typing */}
                                                         <AnimatePresence>
-                                                            {isCompanyNameFocused && (
+                                                            {(isCompanyNameFocused || formData.company_title.length > 0) && (
                                                                 <motion.div
-                                                                    initial={{ opacity: 0, height: 0, y: -5 }}
-                                                                    animate={{
-                                                                        opacity: 1,
-                                                                        height: "auto",
-                                                                        y: 0,
-                                                                        transition: {
-                                                                            duration: 0.4,
-                                                                            ease: [0.25, 0.8, 0.25, 1],
-                                                                            opacity: { duration: 0.3, delay: 0.1 }
-                                                                        }
-                                                                    }}
-                                                                    exit={{
-                                                                        opacity: 0,
-                                                                        height: 0,
-                                                                        y: -5,
-                                                                        transition: {
-                                                                            duration: 0.3,
-                                                                            ease: [0.4, 0, 0.6, 1]
-                                                                        }
-                                                                    }}
+                                                                    initial={{ opacity: 0 }}
+                                                                    animate={{ opacity: 1 }}
+                                                                    exit={{ opacity: 0 }}
+                                                                    transition={{ duration: 0.15 }}
                                                                     className="md:hidden mt-2 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700/50 rounded-lg"
                                                                 >
                                                                     <div className="flex items-start space-x-2">
@@ -2162,30 +2601,14 @@ export function DemoRequestForm() {
                                                             placeholder="e.g. abc, company, demo123"
                                                         />
 
-                                                        {/* Small screen description - shows on focus/typing */}
+                                                        {/* Small screen description - shows when typing */}
                                                         <AnimatePresence>
-                                                            {isCompanyCodeFocused && (
+                                                            {(isCompanyCodeFocused || formData.company_name.length > 0) && (
                                                                 <motion.div
-                                                                    initial={{ opacity: 0, height: 0, y: -5 }}
-                                                                    animate={{
-                                                                        opacity: 1,
-                                                                        height: "auto",
-                                                                        y: 0,
-                                                                        transition: {
-                                                                            duration: 0.4,
-                                                                            ease: [0.25, 0.8, 0.25, 1],
-                                                                            opacity: { duration: 0.3, delay: 0.1 }
-                                                                        }
-                                                                    }}
-                                                                    exit={{
-                                                                        opacity: 0,
-                                                                        height: 0,
-                                                                        y: -5,
-                                                                        transition: {
-                                                                            duration: 0.3,
-                                                                            ease: [0.4, 0, 0.6, 1]
-                                                                        }
-                                                                    }}
+                                                                    initial={{ opacity: 0 }}
+                                                                    animate={{ opacity: 1 }}
+                                                                    exit={{ opacity: 0 }}
+                                                                    transition={{ duration: 0.15 }}
                                                                     className="md:hidden mt-2 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700/50 rounded-lg"
                                                                 >
                                                                     <div className="flex items-start space-x-2">
@@ -2589,7 +3012,91 @@ export function DemoRequestForm() {
                                         className="text-center"
                                         data-step3-container
                                     >
-                                        <div className="text-center mb-4 lg:mb-6 xl:mb-4">
+                                        <div className="text-center mb-4 lg:mb-6 xl:mb-4 relative">
+                                            {/* Customize Your Own Plan Button - Top Right */}
+                                            {showCustomPlan ? (
+                                                <>
+                                                    {/* Large screens - aligned with Previous button */}
+                                                    <motion.div
+                                                        className="absolute top-8 right-12 z-10 hidden lg:block"
+                                                        initial={{ opacity: 0, x: 20, scale: 0.9 }}
+                                                        animate={{ opacity: 1, x: 0, scale: 1 }}
+                                                        transition={{ delay: 0.3, duration: 0.4, type: "spring", stiffness: 300 }}
+                                                    >
+                                                        <motion.button
+                                                            whileHover={{ scale: 1.05, y: -2 }}
+                                                            whileTap={{ scale: 0.95 }}
+                                                            onClick={() => {
+                                                                setIsCustomPlanView(true);
+
+                                                                // Update URL to show custom plan view
+                                                                if (typeof window !== 'undefined') {
+                                                                    const currentUrl = new URL(window.location.href);
+                                                                    currentUrl.searchParams.set('step', '2');
+                                                                    currentUrl.searchParams.set('view', 'custom');
+                                                                    currentUrl.searchParams.delete('plan');
+                                                                    window.history.pushState({ step: 2, view: 'custom' }, '', currentUrl.toString());
+                                                                }
+                                                            }}
+                                                            className="group relative flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-500 via-purple-600 to-indigo-600 hover:from-purple-600 hover:via-purple-700 hover:to-indigo-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden border border-purple-400/30"
+                                                        >
+                                                            {/* Shimmer effect */}
+                                                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -skew-x-12 transform translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000" />
+
+                                                            {/* Pulsing glow */}
+                                                            <div className="absolute -inset-1 bg-gradient-to-r from-purple-400 to-indigo-400 rounded-xl opacity-30 group-hover:opacity-50 blur-sm animate-pulse" />
+
+                                                            <Settings className="w-4 h-4 relative z-10 transition-transform group-hover:rotate-45 duration-300" />
+                                                            <span className="relative z-10 text-sm">Customize Your Own Plan</span>
+
+                                                            {/* Sparkle effect */}
+                                                            <div className="absolute top-1 right-1 w-1 h-1 bg-white rounded-full animate-ping opacity-75" />
+                                                            <div className="absolute bottom-1 left-2 w-0.5 h-0.5 bg-white rounded-full animate-pulse" />
+                                                        </motion.button>
+                                                    </motion.div>
+
+                                                    {/* Medium screens - closer to edge */}
+                                                    <motion.div
+                                                        className="absolute top-0 right-0 z-10 hidden md:block lg:hidden"
+                                                        initial={{ opacity: 0, x: 20, scale: 0.9 }}
+                                                        animate={{ opacity: 1, x: 0, scale: 1 }}
+                                                        transition={{ delay: 0.3, duration: 0.4, type: "spring", stiffness: 300 }}
+                                                    >
+                                                        <motion.button
+                                                            whileHover={{ scale: 1.05, y: -2 }}
+                                                            whileTap={{ scale: 0.95 }}
+                                                            onClick={() => {
+                                                                setIsCustomPlanView(true);
+
+                                                                // Update URL to show custom plan view
+                                                                if (typeof window !== 'undefined') {
+                                                                    const currentUrl = new URL(window.location.href);
+                                                                    currentUrl.searchParams.set('step', '2');
+                                                                    currentUrl.searchParams.set('view', 'custom');
+                                                                    currentUrl.searchParams.delete('plan');
+                                                                    window.history.pushState({ step: 2, view: 'custom' }, '', currentUrl.toString());
+                                                                }
+                                                            }}
+                                                            className="group relative flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-purple-500 via-purple-600 to-indigo-600 hover:from-purple-600 hover:via-purple-700 hover:to-indigo-700 text-white font-semibold rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden border border-purple-400/30"
+                                                        >
+                                                            <Settings className="w-4 h-4 relative z-10 transition-transform group-hover:rotate-45 duration-300" />
+                                                            <span className="relative z-10 text-xs">Customize</span>
+                                                        </motion.button>
+                                                    </motion.div>
+                                                </>
+                                            ) : customPlanMessage && (
+                                                <motion.div
+                                                    className="absolute top-0 right-0 z-10"
+                                                    initial={{ opacity: 0, x: 20, scale: 0.9 }}
+                                                    animate={{ opacity: 1, x: 0, scale: 1 }}
+                                                    transition={{ delay: 0.3, duration: 0.4, type: "spring", stiffness: 300 }}
+                                                >
+                                                    <div className="px-4 py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl shadow-lg border border-gray-300 dark:border-gray-600">
+                                                        <span className="text-sm">{customPlanMessage}</span>
+                                                    </div>
+                                                </motion.div>
+                                            )}
+
                                             <AnimatePresence mode="wait">
                                                 {(() => {
                                                     const selected = applicationTypes.find(t => t.value === formData.application_type);
@@ -2690,7 +3197,7 @@ export function DemoRequestForm() {
 
                                         {/* Previous Step Button - Top Left (Large Portraits and Larger) */}
                                         <motion.div
-                                            className="absolute top-4 left-4 z-10 hidden lg:block"
+                                            className="absolute top-8 left-12 z-10 hidden lg:block"
                                             initial={{ opacity: 0, x: -20 }}
                                             animate={{ opacity: 1, x: 0 }}
                                             transition={{ delay: 0.2, duration: 0.3 }}
@@ -2717,10 +3224,11 @@ export function DemoRequestForm() {
                                         </AnimatePresence>
                                         */}
 
-                                        {/* Dynamic Pricing Cards */}
+                                        {/* Custom Plan View or Dynamic Pricing Cards */}
                                         <AnimatePresence>
-                                            {formData.application_type > 0 && (
+                                            {isCustomPlanView ? (
                                                 <motion.div
+                                                    key="custom-plan"
                                                     initial={{ opacity: 0, y: 30 }}
                                                     animate={{ opacity: 1, y: 0 }}
                                                     exit={{ opacity: 0, y: -20 }}
@@ -2729,270 +3237,698 @@ export function DemoRequestForm() {
                                                         delay: 0.1,
                                                         ease: "easeOut"
                                                     }}
+                                                    className="w-full space-y-6"
                                                 >
-                                                    {plansLoading ? (
-                                                        <div className="text-center py-8">
-                                                            <motion.div
-                                                                className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full mx-auto mb-4"
-                                                                animate={{ rotate: 360 }}
-                                                                transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                                                            />
-                                                            <p className="text-gray-600 dark:text-gray-400">Loading plans...</p>
+                                                    {/* Back Buttons - Side by Side */}
+                                                    <div className="flex gap-4 items-center">
+                                                        <motion.button
+                                                            whileHover={{ scale: 1.02 }}
+                                                            whileTap={{ scale: 0.98 }}
+                                                            onClick={() => {
+                                                                setIsCustomPlanView(false);
+
+                                                                // Update URL to go back to regular plan selection
+                                                                if (typeof window !== 'undefined') {
+                                                                    const currentUrl = new URL(window.location.href);
+                                                                    currentUrl.searchParams.set('step', '2');
+                                                                    currentUrl.searchParams.delete('view');
+                                                                    currentUrl.searchParams.delete('plan');
+                                                                    window.history.pushState({ step: 2 }, '', currentUrl.toString());
+                                                                }
+                                                            }}
+                                                            className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 font-medium transition-colors"
+                                                        >
+                                                            <ArrowLeft className="w-4 h-4" />
+                                                            Back to Plans
+                                                        </motion.button>
+
+                                                       
+                                                    </div>
+
+                                                    {/* Custom Plan Header */}
+                                                    <div className="text-center mb-6">
+                                                        <motion.h3
+                                                            className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 dark:from-purple-400 dark:to-indigo-400 bg-clip-text text-transparent mb-2"
+                                                            initial={{ opacity: 0, y: 10 }}
+                                                            animate={{ opacity: 1, y: 0 }}
+                                                            transition={{ delay: 0.2 }}
+                                                        >
+                                                            Customize Your Own Plan
+                                                        </motion.h3>
+                                                        <motion.p
+                                                            className="text-gray-600 dark:text-gray-400"
+                                                            initial={{ opacity: 0, y: 10 }}
+                                                            animate={{ opacity: 1, y: 0 }}
+                                                            transition={{ delay: 0.3 }}
+                                                        >
+                                                            Select the services you need and get a personalized pricing
+                                                        </motion.p>
+                                                    </div>
+
+                                                    {/* Plan Name Input */}
+                                                    <motion.div
+                                                        className="mb-6 max-w-5xl mx-auto"
+                                                        initial={{ opacity: 0, y: 20 }}
+                                                        animate={{ opacity: 1, y: 0 }}
+                                                        transition={{ delay: 0.4 }}
+                                                    >
+                                                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
+                                                            Plan Name
+                                                        </label>
+                                                        <input
+                                                            type="text"
+                                                            value={customPlanDescription}
+                                                            onChange={(e) => setCustomPlanDescription(e.target.value)}
+                                                            className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
+                                                            placeholder="Enter your custom plan name..."
+                                                        />
+                                                    </motion.div>
+
+                                                    {/* Services Bucketing Section */}
+                                                    <motion.div
+                                                        className="space-y-6"
+                                                        initial={{ opacity: 0, y: 20 }}
+                                                        animate={{ opacity: 1, y: 0 }}
+                                                        transition={{ delay: 0.5 }}
+                                                    >
+                                                        {/* Services Header */}
+                                                        <div className="text-center">
+                                                            <h4 className="text-xl font-bold text-gray-800 dark:text-gray-200 mb-2">
+                                                                Select Your Services
+                                                            </h4>
+                                                            <p className="text-gray-600 dark:text-gray-400">
+                                                                {formData.application_type ? `Available services for ${applicationTypes.find(t => t.value === formData.application_type)?.label}` : 'Please select an application type first'}
+                                                            </p>
                                                         </div>
-                                                    ) : plansError && Object.keys(plans).length === 0 ? (
-                                                        <div className="text-center py-8">
-                                                            <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                                                            <p className="text-gray-600 dark:text-gray-400 mb-2">No plans available for the selected application type</p>
-                                                            <p className="text-sm text-gray-500 dark:text-gray-500">Please try a different solution or contact support</p>
-                                                        </div>
-                                                    ) : getCurrentPricingData() ? (
-                                                        <>
-                                                            <motion.h3
-                                                                className="text-base lg:text-lg xl:text-base font-medium mb-3 lg:mb-4 xl:mb-3 text-gray-800 dark:text-white text-center"
-                                                                initial={{ opacity: 0, y: 10 }}
-                                                                animate={{ opacity: 1, y: 0 }}
-                                                                transition={{ delay: 0.15, duration: 0.3 }}
-                                                                data-pricing-section
-                                                            >
-                                                                {getCurrentPricingData()?.title}
-                                                                {plansError && (
-                                                                    <span className="block text-xs text-orange-600 dark:text-orange-400 mt-1 font-normal">
-                                                                        {plansError}
-                                                                    </span>
-                                                                )}
-                                                            </motion.h3>
-                                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-4 lg:gap-6 xl:gap-5 items-stretch mt-6 lg:mt-8 xl:mt-6 transform-gpu">
-                                                                {getCurrentPricingData()?.tiers.map((tier, index) => (
-                                                                    <motion.div
-                                                                        key={tier.name}
-                                                                        className={`group relative flex flex-col rounded-2xl border-2 shadow-xl transition-all duration-300 ease-out cursor-pointer overflow-visible transform-gpu will-change-transform backdrop-blur-sm ${tier.popular
-                                                                            ? 'p-4 lg:p-5 xl:p-4 pt-6 lg:pt-8 xl:pt-6 pb-5 lg:pb-6 xl:pb-5 min-h-[420px] sm:min-h-[440px] md:min-h-[480px] lg:min-h-[520px] xl:min-h-[500px] 2xl:min-h-[480px]'
-                                                                            : 'p-4 lg:p-5 xl:p-4 pt-5 lg:pt-6 xl:pt-5 pb-5 lg:pb-6 xl:pb-5 min-h-[400px] sm:min-h-[420px] md:min-h-[460px] lg:min-h-[500px] xl:min-h-[480px] 2xl:min-h-[460px]'
-                                                                            } ${selectedPlan === tier.name
-                                                                                ? tier.popular
-                                                                                    ? "border-orange-300 dark:border-orange-400 bg-gradient-to-br from-orange-50/90 via-amber-50/70 to-amber-50/90 dark:from-orange-900/25 dark:via-amber-900/20 dark:to-orange-900/25 shadow-xl shadow-orange-500/20 dark:shadow-orange-900/30 z-10 ring-2 ring-orange-300/50"
-                                                                                    : "border-orange-300 dark:border-orange-400 bg-gradient-to-br from-white via-gray-50/30 to-white dark:from-slate-800 dark:via-slate-700/50 dark:to-slate-800 shadow-xl shadow-orange-500/20 dark:shadow-orange-900/30 z-10 ring-2 ring-orange-300/50"
-                                                                                : tier.popular
-                                                                                    ? "border-gradient-to-r from-orange-50/90 bg-gradient-to-br via-amber-50/70 to-amber-50/90 dark:from-orange-900/25 dark:via-amber-900/20 dark:to-orange-900/25 shadow-orange-200/50 dark:shadow-orange-900/30"
-                                                                                    : "border-gray-200 bg-gradient-to-br from-white via-gray-50/30 to-white dark:from-slate-800 dark:via-slate-700/50 dark:to-slate-800 dark:border-slate-600 shadow-gray-200/50 dark:shadow-slate-900/50"
-                                                                            } hover:border-orange-300 dark:hover:border-orange-400 hover:shadow-xl hover:shadow-orange-500/20 dark:hover:shadow-orange-900/30`}
-                                                                        initial={{
-                                                                            opacity: 0,
-                                                                            y: 40,
-                                                                            scale: 0.9,
-                                                                            rotateX: 15
-                                                                        }}
-                                                                        animate={{
-                                                                            opacity: selectedPlan && selectedPlan !== tier.name ? 0.7 : 1,
-                                                                            y: selectedPlan === tier.name ? -4 : 0,
-                                                                            scale: selectedPlan === tier.name ? 1.02 : 1,
-                                                                            rotateX: 0,
-                                                                            boxShadow: selectedPlan === tier.name ?
-                                                                                "0 15px 30px -8px rgba(249, 115, 22, 0.2), 0 0 0 1px rgba(249, 115, 22, 0.2)" :
-                                                                                "0 10px 25px -3px rgba(0, 0, 0, 0.1)"
-                                                                        }}
-                                                                        transition={{
-                                                                            delay: 0.2 + index * 0.1,
-                                                                            duration: 0.4,
-                                                                            ease: "easeOut",
-                                                                            scale: { duration: 0.2, ease: "easeOut", delay: 0 }
-                                                                        }}
-                                                                        whileTap={{
-                                                                            scale: 0.98,
-                                                                            transition: { duration: 0.1 }
-                                                                        }}
-                                                                        onClick={() => {
-                                                                            // Find the plan entry for this tier
-                                                                            const planEntry = Object.entries(plans).find(([key, plan]) =>
-                                                                                plan.plan_name.toLowerCase() === tier.name.toLowerCase()
-                                                                            );
-                                                                            if (planEntry) {
-                                                                                const [, plan] = planEntry;
-                                                                                setSelectedPlanForPricing(plan.plan_id);
-                                                                                // Navigate to step 3 (pricing customization)
-                                                                                setDirection(1);
-                                                                                setNavLock(true);
-                                                                                setCurrentStep(3);
-                                                                                saveToLocalStorage();
-                                                                                window.scrollTo({ top: 0, behavior: 'smooth' });
-                                                                                setTimeout(() => setNavLock(false), 350);
-                                                                            }
-                                                                        }}
-                                                                    >
-                                                                        {/* Enhanced gradient overlay with shimmer effect */}
-                                                                        <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-orange-500/5 via-amber-500/10 to-yellow-500/5 dark:from-orange-400/10 dark:via-amber-400/15 dark:to-yellow-400/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
 
-                                                                        {/* Shimmer effect on hover */}
-                                                                        <div className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none overflow-hidden">
-                                                                            <motion.div
-                                                                                className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent dark:via-white/10 -skew-x-12"
-                                                                                initial={{ x: '-100%' }}
-                                                                                animate={{ x: '200%' }}
-                                                                                transition={{ duration: 1.5, repeat: Infinity, repeatDelay: 2 }}
-                                                                            />
-                                                                        </div>
-
-                                                                        {/* Subtle border glow */}
-                                                                        <div className={`absolute inset-0 rounded-2xl transition-opacity duration-300 pointer-events-none ${tier.popular || selectedPlan === tier.name ? 'opacity-100' : 'opacity-0 group-hover:opacity-60'}`}>
-                                                                            <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-orange-400/20 via-amber-400/30 to-orange-400/20 blur-sm" />
-                                                                        </div>
-                                                                        {/* Enhanced Selection indicator */}
-                                                                        {selectedPlan === tier.name && (
-                                                                            <motion.div
-                                                                                className="absolute top-3 right-3 z-20"
-                                                                                initial={{ scale: 0, rotate: -180, opacity: 0 }}
-                                                                                animate={{ scale: 1, rotate: 0, opacity: 1 }}
-                                                                                transition={{ type: "spring", stiffness: 400, damping: 25, delay: 0.1 }}
-                                                                            >
-                                                                                {/* Pulsing ring */}
-                                                                                <motion.div
-                                                                                    className="absolute inset-0 w-10 h-10 bg-gradient-to-r from-green-400 to-emerald-500 rounded-full opacity-30"
-                                                                                    animate={{ scale: [1, 1.4, 1], opacity: [0.3, 0.1, 0.3] }}
-                                                                                    transition={{ duration: 2, repeat: Infinity }}
-                                                                                />
-                                                                                <div className="relative w-10 h-10 bg-gradient-to-r from-green-500 to-emerald-600 rounded-full flex items-center justify-center shadow-xl border-2 border-white dark:border-slate-800">
-                                                                                    <motion.div
-                                                                                        initial={{ scale: 0 }}
-                                                                                        animate={{ scale: 1 }}
-                                                                                        transition={{ delay: 0.2, type: "spring", stiffness: 500 }}
-                                                                                    >
-                                                                                        <Check className="w-5 h-5 text-white font-bold" />
-                                                                                    </motion.div>
-                                                                                </div>
-                                                                            </motion.div>
-                                                                        )}
-
-                                                                        {/* Gentle glow for selected card */}
-                                                                        {selectedPlan === tier.name && (
-                                                                            <motion.div
-                                                                                className="absolute inset-0 pointer-events-none overflow-hidden rounded-2xl"
-                                                                                initial={{ opacity: 0 }}
-                                                                                animate={{ opacity: 1 }}
-                                                                                transition={{ duration: 0.3 }}
-                                                                            >
-                                                                                {/* Subtle glow */}
-                                                                                <motion.div
-                                                                                    className="absolute inset-0 bg-gradient-to-r from-orange-400/10 via-amber-400/15 to-orange-400/10 rounded-2xl"
-                                                                                    animate={{
-                                                                                        opacity: [0.1, 0.2, 0.1]
-                                                                                    }}
-                                                                                    transition={{
-                                                                                        duration: 3,
-                                                                                        repeat: Infinity,
-                                                                                        ease: "easeInOut"
-                                                                                    }}
-                                                                                />
-                                                                            </motion.div>
-                                                                        )}
-
-                                                                        {tier.popular && (
-                                                                            <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 z-20">
-                                                                                <motion.div
-                                                                                    className="relative"
-                                                                                    animate={selectedPlan === tier.name ? { scale: [1, 1.1, 1] } : {}}
-                                                                                    transition={selectedPlan === tier.name ? { duration: 2, repeat: Infinity } : {}}
-                                                                                >
-                                                                                    {/* Glow effect behind badge */}
-                                                                                    <div className="absolute inset-0 bg-gradient-to-r from-orange-400 to-amber-400 rounded-full blur-md opacity-60 animate-pulse" />
-                                                                                    <span className="relative bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 text-white px-4 py-1.5 md:px-3 md:py-1 rounded-full text-sm md:text-xs font-bold shadow-xl whitespace-nowrap border border-orange-400/50 backdrop-blur-sm">
-                                                                                        ⭐ Most Popular
-                                                                                    </span>
-                                                                                </motion.div>
-                                                                            </div>
-                                                                        )}
-
-                                                                        <div className="text-center mb-4 relative z-10">
-                                                                            <h4 className="text-xl font-bold text-gray-800 dark:text-white mb-3 tracking-tight">
-                                                                                {tier.name}
-                                                                            </h4>
-                                                                            <div className="relative">
-                                                                                <div className="relative text-3xl font-black bg-gradient-to-r from-orange-600 via-amber-600 to-orange-700 dark:from-orange-400 dark:via-amber-400 dark:to-orange-500 bg-clip-text text-transparent">
-                                                                                    {tier.price}
-                                                                                    <span className="text-lg font-semibold text-gray-500 dark:text-gray-400 ml-1">
-                                                                                        {tier.period}
-                                                                                    </span>
-                                                                                </div>
-                                                                                <div className="text-sm font-semibold text-orange-600 dark:text-orange-400 mt-1">
-                                                                                    per user
-                                                                                </div>
-                                                                            </div>
-                                                                        </div>
-                                                                        <ul className="space-y-3 text-left flex-1 relative z-10 overflow-y-auto custom-scrollbar">
-                                                                            {tier.features.map((feature, featureIndex) => (
-                                                                                <motion.li
-                                                                                    key={featureIndex}
-                                                                                    className="flex items-center text-gray-700 dark:text-gray-200 font-medium"
-                                                                                    initial={{ opacity: 0, x: -10 }}
-                                                                                    animate={{ opacity: 1, x: 0 }}
-                                                                                    transition={{ delay: 0.3 + featureIndex * 0.1 }}
-                                                                                >
-                                                                                    <div className="w-5 h-5 rounded-full bg-gradient-to-r from-green-400 to-emerald-500 flex items-center justify-center mr-3 flex-shrink-0 shadow-sm">
-                                                                                        <Check className="w-3 h-3 text-white font-bold" />
+                                                        {servicesLoading ? (
+                                                            <div className="text-center py-8">
+                                                                <motion.div
+                                                                    className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full mx-auto mb-4"
+                                                                    animate={{ rotate: 360 }}
+                                                                    transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                                                                />
+                                                                <p className="text-gray-600 dark:text-gray-400">Loading services...</p>
+                                                            </div>
+                                                        ) : availableServices.length > 0 ? (
+                                                            <>
+                                                                {/* Desktop: Side by side layout with drag and drop */}
+                                                                <div className="hidden md:block">
+                                                                    <div className="grid grid-cols-2 gap-4 max-w-5xl mx-auto">
+                                                                        {/* Available Services */}
+                                                                        <div className="bg-white dark:bg-slate-800 rounded-xl p-4 border border-gray-200 dark:border-slate-600">
+                                                                            <h5 className="font-semibold text-gray-800 dark:text-gray-200 mb-4 flex items-center gap-2">
+                                                                                <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                                                                                Available Services
+                                                                            </h5>
+                                                                            <div className="space-y-3 max-h-96">
+                                                                                {availableServices.filter(service =>
+                                                                                    !selectedServices.find(selected => selected.id === service.id)
+                                                                                ).length === 0 ? (
+                                                                                    <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                                                                                        <div className="w-8 h-8 mx-auto mb-2 opacity-50 bg-gray-200 dark:bg-gray-600 rounded-full flex items-center justify-center">
+                                                                                            <span className="text-xs font-bold">✓</span>
+                                                                                        </div>
+                                                                                        <p className="text-sm">No services for selection</p>
+                                                                                        <p className="text-xs mt-1 opacity-75">All services have been added</p>
                                                                                     </div>
-                                                                                    <span className="leading-relaxed">{feature}</span>
-                                                                                </motion.li>
-                                                                            ))}
-                                                                        </ul>
+                                                                                ) : (
+                                                                                    availableServices.filter(service =>
+                                                                                        !selectedServices.find(selected => selected.id === service.id)
+                                                                                    ).map((service) => (
+                                                                                        <div
+                                                                                            key={service.id}
+                                                                                            className="group p-3 bg-gray-50 dark:bg-slate-700 rounded-lg border border-gray-200 dark:border-slate-600 cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-300 dark:hover:border-blue-600 transition-all duration-300 hover:shadow-md"
+                                                                                            onClick={() => {
+                                                                                                setSelectedServices(prev => [...prev, service]);
+                                                                                            }}
+                                                                                            draggable
+                                                                                            onDragStart={(e: React.DragEvent) => {
+                                                                                                e.dataTransfer.setData('service', JSON.stringify(service));
+                                                                                            }}
+                                                                                        >
+                                                                                            <div className="flex items-start justify-between">
+                                                                                                <div className="flex-1 min-w-0">
+                                                                                                    <p className="font-medium text-gray-800 dark:text-gray-200 text-sm leading-tight truncate">
+                                                                                                        {service.generic_name}
+                                                                                                    </p>
+                                                                                                    <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">
+                                                                                                        ₹{service.external_price_per_user}/user/day
+                                                                                                    </p>
+                                                                                                </div>
+                                                                                                <div className="text-blue-500 group-hover:text-blue-600 transition-colors flex-shrink-0 ml-2">
+                                                                                                    <Plus className="w-4 h-4" />
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    ))
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
 
-                                                                        {/* Plan Details Section */}
-                                                                        <motion.div
-                                                                            className="mt-auto pt-4 border-t border-gray-200 dark:border-gray-600 text-center relative z-10"
-                                                                            initial={{ opacity: 0, y: 10 }}
-                                                                            animate={{ opacity: 1, y: 0 }}
-                                                                            transition={{ delay: 0.6 }}
+                                                                        {/* Selected Services */}
+                                                                        <div
+                                                                            className="bg-gradient-to-br from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 rounded-xl p-4 border border-purple-200 dark:border-purple-700 min-h-[320px]"
+                                                                            onDragOver={(e) => e.preventDefault()}
+                                                                            onDrop={(e) => {
+                                                                                e.preventDefault();
+                                                                                const serviceData = e.dataTransfer.getData('service');
+                                                                                if (serviceData) {
+                                                                                    const service = JSON.parse(serviceData);
+                                                                                    if (!selectedServices.find(selected => selected.id === service.id)) {
+                                                                                        setSelectedServices(prev => [...prev, service]);
+                                                                                    }
+                                                                                }
+                                                                            }}
                                                                         >
-                                                                            <div className="grid grid-cols-1 gap-2 text-sm">
-                                                                                <div className="flex justify-center items-center space-x-4">
-                                                                                    <div className="text-gray-600 dark:text-gray-400">
-                                                                                        <span className="font-semibold text-orange-600 dark:text-orange-400">{tier.minUsers}</span>
-                                                                                        <span className="mx-1">-</span>
-                                                                                        <span className="font-semibold text-orange-600 dark:text-orange-400">{tier.maxUsers}</span>
-                                                                                        <span className="ml-1">users</span>
+                                                                            <h5 className="font-semibold text-gray-800 dark:text-gray-200 mb-4 flex items-center gap-2">
+                                                                                <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
+                                                                                Selected Services ({selectedServices.length})
+                                                                            </h5>
+                                                                            <div className="space-y-3 max-h-96">
+                                                                                {selectedServices.length === 0 ? (
+                                                                                    <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                                                                                        <Settings className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                                                                                        <p className="text-sm">Drag services here or click to add</p>
                                                                                     </div>
+                                                                                ) : (
+                                                                                    selectedServices.map((service) => (
+                                                                                        <motion.div
+                                                                                            key={service.id}
+                                                                                            className="group p-3 bg-white dark:bg-slate-800 rounded-lg border border-purple-200 dark:border-purple-600 shadow-sm"
+                                                                                            layout
+                                                                                        >
+                                                                                            <div className="flex items-start justify-between">
+                                                                                                <div className="flex-1 min-w-0">
+                                                                                                    <p className="font-medium text-gray-800 dark:text-gray-200 text-sm leading-tight truncate">
+                                                                                                        {service.generic_name}
+                                                                                                    </p>
+                                                                                                    <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">
+                                                                                                        ₹{service.external_price_per_user}/user/day
+                                                                                                    </p>
+                                                                                                </div>
+                                                                                                <button
+                                                                                                    onClick={() => {
+                                                                                                        setSelectedServices(prev =>
+                                                                                                            prev.filter(s => s.id !== service.id)
+                                                                                                        );
+                                                                                                    }}
+                                                                                                    className="text-red-500 hover:text-red-600 transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0 ml-2 p-1"
+                                                                                                >
+                                                                                                    <X className="w-4 h-4" />
+                                                                                                </button>
+                                                                                            </div>
+                                                                                        </motion.div>
+                                                                                    ))
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* Mobile: Simple checkboxes layout */}
+                                                                <div className="md:hidden">
+                                                                    <div className="bg-white dark:bg-slate-800 rounded-xl p-4 border border-gray-200 dark:border-slate-600">
+                                                                        <div className="space-y-3">
+                                                                            {availableServices.length === 0 ? (
+                                                                                <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                                                                                    <div className="w-8 h-8 mx-auto mb-2 opacity-50 bg-gray-200 dark:bg-gray-600 rounded-full flex items-center justify-center">
+                                                                                        <span className="text-xs font-bold">✓</span>
+                                                                                    </div>
+                                                                                    <p className="text-sm">No services available</p>
+                                                                                    <p className="text-xs mt-1 opacity-75">Please select an application type</p>
                                                                                 </div>
-                                                                                <div className="text-gray-600 dark:text-gray-400">
-                                                                                    <span className="font-semibold text-green-600 dark:text-green-400">{tier.trialDays}</span>
-                                                                                    <span className="ml-1">days free trial</span>
+                                                                            ) : (
+                                                                                <>
+                                                                                    {availableServices.map((service) => (
+                                                                                        <motion.label
+                                                                                            key={service.id}
+                                                                                            className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-slate-700 rounded-lg border border-gray-200 dark:border-slate-600 cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                                                                                            whileTap={{ scale: 0.98 }}
+                                                                                        >
+                                                                                            {/* Custom styled checkbox */}
+                                                                                            <div className="relative">
+                                                                                                <input
+                                                                                                    type="checkbox"
+                                                                                                    checked={selectedServices.find(s => s.id === service.id) !== undefined}
+                                                                                                    onChange={(e) => {
+                                                                                                        if (e.target.checked) {
+                                                                                                            setSelectedServices(prev => [...prev, service]);
+                                                                                                        } else {
+                                                                                                            setSelectedServices(prev =>
+                                                                                                                prev.filter(s => s.id !== service.id)
+                                                                                                            );
+                                                                                                        }
+                                                                                                    }}
+                                                                                                    className="peer sr-only"
+                                                                                                />
+                                                                                                <div className="w-5 h-5 bg-white dark:bg-slate-600 border-2 border-gray-300 dark:border-slate-500 rounded-md transition-all duration-200 peer-checked:bg-gradient-to-r peer-checked:from-purple-500 peer-checked:to-indigo-600 peer-checked:border-purple-500 flex items-center justify-center shadow-sm">
+                                                                                                    <svg 
+                                                                                                        className={`w-3 h-3 text-white transition-opacity duration-200 ${selectedServices.find(s => s.id === service.id) ? 'opacity-100' : 'opacity-0'}`}
+                                                                                                        fill="currentColor" 
+                                                                                                        viewBox="0 0 20 20"
+                                                                                                    >
+                                                                                                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                                                                                    </svg>
+                                                                                                </div>
+                                                                                            </div>
+                                                                                            <div className="flex-1 min-w-0">
+                                                                                                <p className="font-medium text-gray-800 dark:text-gray-200 text-sm leading-tight truncate">
+                                                                                                    {service.generic_name}
+                                                                                                </p>
+                                                                                                <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">
+                                                                                                    ₹{service.external_price_per_user}/user/day
+                                                                                                </p>
+                                                                                            </div>
+                                                                                        </motion.label>
+                                                                                    ))}
+                                                                                    
+                                                                                    {/* Show message when all services are selected */}
+                                                                                    {availableServices.length > 0 && selectedServices.length === availableServices.length && (
+                                                                                        <motion.div
+                                                                                            initial={{ opacity: 0, y: 10 }}
+                                                                                            animate={{ opacity: 1, y: 0 }}
+                                                                                            transition={{ delay: 0.2 }}
+                                                                                            className="text-center py-4 mt-4 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-lg border border-green-200 dark:border-green-700"
+                                                                                        >
+                                                                                            <div className="w-6 h-6 mx-auto mb-2 bg-gradient-to-r from-green-500 to-emerald-600 rounded-full flex items-center justify-center">
+                                                                                                <span className="text-xs font-bold text-white">✓</span>
+                                                                                            </div>
+                                                                                            <p className="text-sm font-medium text-green-700 dark:text-green-300">All services selected</p>
+                                                                                            <p className="text-xs text-green-600 dark:text-green-400 mt-1">Uncheck any service above to remove it</p>
+                                                                                        </motion.div>
+                                                                                    )}
+                                                                                </>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* Pricing Summary */}
+                                                                {selectedServices.length > 0 && (
+                                                                    <div className="flex justify-center">
+                                                                        <motion.div
+                                                                            className="bg-gradient-to-r from-purple-500 to-indigo-600 rounded-xl p-6 text-white max-w-md w-full"
+                                                                            initial={{ opacity: 0, y: 20 }}
+                                                                            animate={{ opacity: 1, y: 0 }}
+                                                                            layout
+                                                                        >
+                                                                            <h5 className="font-bold text-lg mb-4 text-center">Custom Plan Pricing</h5>
+                                                                            <div className="text-center">
+                                                                                <div className="bg-white/20 rounded-lg p-4">
+                                                                                    <p className="text-purple-100 text-sm mb-2">Yearly Subscription</p>
+                                                                                    {(() => {
+                                                                                        // Calculate total price from selected services
+                                                                                        const totalPrice = selectedServices.reduce((total, service) => {
+                                                                                            const price = typeof service.external_price_per_user === 'string'
+                                                                                                ? parseFloat(service.external_price_per_user)
+                                                                                                : service.external_price_per_user || 0;
+                                                                                            return total + price;
+                                                                                        }, 0);
+
+                                                                                        // Apply formula: (price * 30 * 12 * 0.8) / 12 = price * 30 * 0.8
+                                                                                        const yearlyTotal = totalPrice * 30 * 12; // Convert daily to yearly
+                                                                                        const discountedYearly = yearlyTotal * 0.8; // Apply 20% discount
+                                                                                        const monthlyEquivalent = discountedYearly / 12; // Convert back to monthly
+
+                                                                                        return (
+                                                                                            <>
+                                                                                                <p className="font-bold text-3xl mb-1">₹{monthlyEquivalent.toFixed(0)}</p>
+                                                                                                <p className="text-purple-200 text-sm">per user per month</p>
+                                                                                                <p className="text-purple-300 text-xs">(billed annually)</p>
+                                                                                                <div className="mt-2 text-center">
+                                                                                                    <span className="bg-green-500 text-white px-3 py-1 rounded-full text-xs font-medium">
+                                                                                                        20% discount applied
+                                                                                                    </span>
+                                                                                                </div>
+                                                                                            </>
+                                                                                        );
+                                                                                    })()}
                                                                                 </div>
                                                                             </div>
 
-                                                                            {/* Select plan button */}
+                                                                            {/* Continue Button */}
                                                                             <motion.button
-                                                                                className={`mt-4 w-full font-semibold py-3 px-6 rounded-lg transition-all duration-300 transform hover:scale-105 hover:shadow-lg ${
-                                                                                    selectedPlanForPricing === plans[tier.name.toLowerCase().replace(/\s+/g, '_')]?.plan_id
-                                                                                        ? 'bg-gradient-to-r from-green-500 to-green-600 text-white'
-                                                                                        : 'bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white'
-                                                                                }`}
                                                                                 whileHover={{ scale: 1.02 }}
                                                                                 whileTap={{ scale: 0.98 }}
-                                                                                onClick={(e) => {
-                                                                                    e.stopPropagation();
-                                                                                    const planEntry = Object.entries(plans).find(([key, plan]) =>
-                                                                                        plan.plan_name.toLowerCase() === tier.name.toLowerCase()
-                                                                                    );
-                                                                                    if (planEntry) {
-                                                                                        setSelectedPlanForPricing(planEntry[1].plan_id);
-                                                                                        // Navigate to step 3 (pricing customization)
-                                                                                        setDirection(1);
-                                                                                        setNavLock(true);
-                                                                                        setCurrentStep(3);
-                                                                                        saveToLocalStorage();
-                                                                                        window.scrollTo({ top: 0, behavior: 'smooth' });
-                                                                                        setTimeout(() => setNavLock(false), 350);
-                                                                                    }
-                                                                                }}
+                                                                                onClick={handleCustomPlanSubmit}
+                                                                                disabled={isSubmitting || selectedServices.length === 0}
+                                                                                className="w-full mt-6 bg-white text-purple-600 font-bold py-3 rounded-lg hover:bg-purple-50 transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                                                                             >
-                                                                                Go with this plan
+                                                                                {isSubmitting ? (
+                                                                                    <div className="flex items-center justify-center gap-2">
+                                                                                        <motion.div
+                                                                                            animate={{ rotate: 360 }}
+                                                                                            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                                                                                            className="w-4 h-4 border-2 border-purple-600 border-t-transparent rounded-full"
+                                                                                        />
+                                                                                        Submitting...
+                                                                                    </div>
+                                                                                ) : 'Submit Custom Plan Request'}
                                                                             </motion.button>
                                                                         </motion.div>
-                                                                    </motion.div>
-                                                                )) || []}
+                                                                    </div>
+                                                                )}
+                                                            </>
+                                                        ) : (
+                                                            <div className="text-center py-8">
+                                                                <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                                                                <p className="text-gray-600 dark:text-gray-400 mb-2">No services available</p>
+                                                                <p className="text-sm text-gray-500 dark:text-gray-500">Please try selecting a different application type</p>
                                                             </div>
-                                                        </>
-                                                    ) : null}
-
-                                                    {/* Enhanced Selection prompt */}
+                                                        )}
+                                                    </motion.div>
                                                 </motion.div>
+                                            ) : (
+                                                formData.application_type > 0 && (
+                                                    <motion.div
+                                                        initial={{ opacity: 0, y: 30 }}
+                                                        animate={{ opacity: 1, y: 0 }}
+                                                        exit={{ opacity: 0, y: -20 }}
+                                                        transition={{
+                                                            duration: 0.4,
+                                                            delay: 0.1,
+                                                            ease: "easeOut"
+                                                        }}
+                                                    >
+                                                        {plansLoading ? (
+                                                            <div className="text-center py-8">
+                                                                <motion.div
+                                                                    className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full mx-auto mb-4"
+                                                                    animate={{ rotate: 360 }}
+                                                                    transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                                                                />
+                                                                <p className="text-gray-600 dark:text-gray-400">Loading plans...</p>
+                                                            </div>
+                                                        ) : plansError && Object.keys(plans).length === 0 ? (
+                                                            <div className="text-center py-8">
+                                                                <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                                                                <p className="text-gray-600 dark:text-gray-400 mb-2">No plans available for the selected application type</p>
+                                                                <p className="text-sm text-gray-500 dark:text-gray-500">Please try a different solution or contact support</p>
+                                                            </div>
+                                                        ) : getCurrentPricingData() ? (
+                                                            <>
+                                                                <motion.h3
+                                                                    className="text-base lg:text-lg xl:text-base font-medium mb-3 lg:mb-4 xl:mb-3 text-gray-800 dark:text-white text-center"
+                                                                    initial={{ opacity: 0, y: 10 }}
+                                                                    animate={{ opacity: 1, y: 0 }}
+                                                                    transition={{ delay: 0.15, duration: 0.3 }}
+                                                                    data-pricing-section
+                                                                >
+                                                                    {getCurrentPricingData()?.title}
+                                                                    {plansError && (
+                                                                        <span className="block text-xs text-orange-600 dark:text-orange-400 mt-1 font-normal">
+                                                                            {plansError}
+                                                                        </span>
+                                                                    )}
+                                                                </motion.h3>
+                                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-4 lg:gap-6 xl:gap-5 items-stretch mt-6 lg:mt-8 xl:mt-6 transform-gpu">
+                                                                    {getCurrentPricingData()?.tiers.map((tier, index) => (
+                                                                        <motion.div
+                                                                            key={tier.name}
+                                                                            className={`group relative flex flex-col rounded-2xl border-2 shadow-xl transition-all duration-300 ease-out cursor-pointer overflow-visible transform-gpu will-change-transform backdrop-blur-sm ${tier.popular
+                                                                                ? 'p-4 lg:p-5 xl:p-4 pt-6 lg:pt-8 xl:pt-6 pb-5 lg:pb-6 xl:pb-5 min-h-[420px] sm:min-h-[440px] md:min-h-[480px] lg:min-h-[520px] xl:min-h-[500px] 2xl:min-h-[480px]'
+                                                                                : 'p-4 lg:p-5 xl:p-4 pt-5 lg:pt-6 xl:pt-5 pb-5 lg:pb-6 xl:pb-5 min-h-[400px] sm:min-h-[420px] md:min-h-[460px] lg:min-h-[500px] xl:min-h-[480px] 2xl:min-h-[460px]'
+                                                                                } ${selectedPlan === tier.name
+                                                                                    ? tier.popular
+                                                                                        ? "border-orange-300 dark:border-orange-400 bg-gradient-to-br from-orange-50/90 via-amber-50/70 to-amber-50/90 dark:from-orange-900/25 dark:via-amber-900/20 dark:to-orange-900/25 shadow-xl shadow-orange-500/20 dark:shadow-orange-900/30 z-10 ring-2 ring-orange-300/50"
+                                                                                        : "border-orange-300 dark:border-orange-400 bg-gradient-to-br from-white via-gray-50/30 to-white dark:from-slate-800 dark:via-slate-700/50 dark:to-slate-800 shadow-xl shadow-orange-500/20 dark:shadow-orange-900/30 z-10 ring-2 ring-orange-300/50"
+                                                                                    : tier.popular
+                                                                                        ? "border-gradient-to-r from-orange-50/90 bg-gradient-to-br via-amber-50/70 to-amber-50/90 dark:from-orange-900/25 dark:via-amber-900/20 dark:to-orange-900/25 shadow-orange-200/50 dark:shadow-orange-900/30"
+                                                                                        : "border-gray-200 bg-gradient-to-br from-white via-gray-50/30 to-white dark:from-slate-800 dark:via-slate-700/50 dark:to-slate-800 dark:border-slate-600 shadow-gray-200/50 dark:shadow-slate-900/50"
+                                                                                } hover:border-orange-300 dark:hover:border-orange-400 hover:shadow-xl hover:shadow-orange-500/20 dark:hover:shadow-orange-900/30`}
+                                                                            initial={{
+                                                                                opacity: 0,
+                                                                                y: 40,
+                                                                                scale: 0.9,
+                                                                                rotateX: 15
+                                                                            }}
+                                                                            animate={{
+                                                                                opacity: selectedPlan && selectedPlan !== tier.name ? 0.7 : 1,
+                                                                                y: selectedPlan === tier.name ? -4 : 0,
+                                                                                scale: selectedPlan === tier.name ? 1.02 : 1,
+                                                                                rotateX: 0,
+                                                                                boxShadow: selectedPlan === tier.name ?
+                                                                                    "0 15px 30px -8px rgba(249, 115, 22, 0.2), 0 0 0 1px rgba(249, 115, 22, 0.2)" :
+                                                                                    "0 10px 25px -3px rgba(0, 0, 0, 0.1)"
+                                                                            }}
+                                                                            transition={{
+                                                                                delay: 0.2 + index * 0.1,
+                                                                                duration: 0.4,
+                                                                                ease: "easeOut",
+                                                                                scale: { duration: 0.2, ease: "easeOut", delay: 0 }
+                                                                            }}
+                                                                            whileTap={{
+                                                                                scale: 0.98,
+                                                                                transition: { duration: 0.1 }
+                                                                            }}
+                                                                            onClick={() => {
+                                                                                // Find the plan entry for this tier
+                                                                                const planEntry = Object.entries(plans).find(([key, plan]) =>
+                                                                                    plan.plan_name.toLowerCase() === tier.name.toLowerCase()
+                                                                                );
+                                                                                if (planEntry) {
+                                                                                    const [, plan] = planEntry;
+                                                                                    setSelectedPlanForPricing(plan.plan_id);
+                                                                                    // Navigate to step 3 (pricing customization)
+                                                                                    setDirection(1);
+                                                                                    setNavLock(true);
+                                                                                    setCurrentStep(3);
+                                                                                    saveToLocalStorage();
+                                                                                    
+                                                                                    // Scroll to pricing section after navigation
+                                                                                    setTimeout(() => {
+                                                                                        const pricingSection = document.querySelector('[data-pricing-section="true"]');
+                                                                                        if (pricingSection) {
+                                                                                            pricingSection.scrollIntoView({ 
+                                                                                                behavior: 'smooth', 
+                                                                                                block: 'start'
+                                                                                            });
+                                                                                        } else {
+                                                                                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                                                                                        }
+                                                                                        setNavLock(false);
+                                                                                    }, 500);
+                                                                                }
+                                                                            }}
+                                                                        >
+                                                                            {/* Simplified hover effect */}
+                                                                            <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-orange-500/5 via-amber-500/8 to-yellow-500/5 dark:from-orange-400/8 dark:via-amber-400/10 dark:to-yellow-400/8 opacity-0 group-hover:opacity-100 transition-opacity duration-200 ease-out pointer-events-none" />
+
+                                                                            {/* Subtle border glow */}
+                                                                            <div className={`absolute inset-0 rounded-2xl transition-opacity duration-200 ease-out pointer-events-none ${tier.popular || selectedPlan === tier.name ? 'opacity-100' : 'opacity-0 group-hover:opacity-40'}`}>
+                                                                                <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-orange-400/15 via-amber-400/20 to-orange-400/15 blur-sm" />
+                                                                            </div>
+                                                                            {/* Enhanced Selection indicator */}
+                                                                            {selectedPlan === tier.name && (
+                                                                                <motion.div
+                                                                                    className="absolute top-3 right-3 z-20"
+                                                                                    initial={{ scale: 0, rotate: -180, opacity: 0 }}
+                                                                                    animate={{ scale: 1, rotate: 0, opacity: 1 }}
+                                                                                    transition={{ type: "spring", stiffness: 400, damping: 25, delay: 0.1 }}
+                                                                                >
+                                                                                    {/* Pulsing ring */}
+                                                                                    <motion.div
+                                                                                        className="absolute inset-0 w-10 h-10 bg-gradient-to-r from-green-400 to-emerald-500 rounded-full opacity-30"
+                                                                                        animate={{ scale: [1, 1.4, 1], opacity: [0.3, 0.1, 0.3] }}
+                                                                                        transition={{ duration: 2, repeat: Infinity }}
+                                                                                    />
+                                                                                    <div className="relative w-10 h-10 bg-gradient-to-r from-green-500 to-emerald-600 rounded-full flex items-center justify-center shadow-xl border-2 border-white dark:border-slate-800">
+                                                                                        <motion.div
+                                                                                            initial={{ scale: 0 }}
+                                                                                            animate={{ scale: 1 }}
+                                                                                            transition={{ delay: 0.2, type: "spring", stiffness: 500 }}
+                                                                                        >
+                                                                                            <Check className="w-5 h-5 text-white font-bold" />
+                                                                                        </motion.div>
+                                                                                    </div>
+                                                                                </motion.div>
+                                                                            )}
+
+                                                                            {/* Gentle glow for selected card */}
+                                                                            {selectedPlan === tier.name && (
+                                                                                <motion.div
+                                                                                    className="absolute inset-0 pointer-events-none overflow-hidden rounded-2xl"
+                                                                                    initial={{ opacity: 0 }}
+                                                                                    animate={{ opacity: 1 }}
+                                                                                    transition={{ duration: 0.3 }}
+                                                                                >
+                                                                                    {/* Subtle glow */}
+                                                                                    <motion.div
+                                                                                        className="absolute inset-0 bg-gradient-to-r from-orange-400/10 via-amber-400/15 to-orange-400/10 rounded-2xl"
+                                                                                        animate={{
+                                                                                            opacity: [0.1, 0.2, 0.1]
+                                                                                        }}
+                                                                                        transition={{
+                                                                                            duration: 3,
+                                                                                            repeat: Infinity,
+                                                                                            ease: "easeInOut"
+                                                                                        }}
+                                                                                    />
+                                                                                </motion.div>
+                                                                            )}
+
+                                                                            {tier.popular && (
+                                                                                <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 z-20">
+                                                                                    <motion.div
+                                                                                        className="relative"
+                                                                                        animate={selectedPlan === tier.name ? { scale: [1, 1.1, 1] } : {}}
+                                                                                        transition={selectedPlan === tier.name ? { duration: 2, repeat: Infinity } : {}}
+                                                                                    >
+                                                                                        {/* Glow effect behind badge */}
+                                                                                        <div className="absolute inset-0 bg-gradient-to-r from-orange-400 to-amber-400 rounded-full blur-md opacity-60 animate-pulse" />
+                                                                                        <span className="relative bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 text-white px-4 py-1.5 md:px-3 md:py-1 rounded-full text-sm md:text-xs font-bold shadow-xl whitespace-nowrap border border-orange-400/50 backdrop-blur-sm">
+                                                                                            ⭐ Most Popular
+                                                                                        </span>
+                                                                                    </motion.div>
+                                                                                </div>
+                                                                            )}
+
+                                                                            <div className="text-center mb-4 relative z-10">
+                                                                                <h4 className="text-xl font-bold text-gray-800 dark:text-white mb-3 tracking-tight">
+                                                                                    {tier.name}
+                                                                                </h4>
+                                                                                <div className="relative">
+                                                                                    <div className="relative text-3xl font-black bg-gradient-to-r from-orange-600 via-amber-600 to-orange-700 dark:from-orange-400 dark:via-amber-400 dark:to-orange-500 bg-clip-text text-transparent">
+                                                                                        {tier.price}
+                                                                                        <span className="text-lg font-semibold text-gray-500 dark:text-gray-400 ml-1">
+                                                                                            {tier.period}
+                                                                                        </span>
+                                                                                    </div>
+                                                                                    <div className="text-sm font-semibold text-orange-600 dark:text-orange-400 mt-1">
+                                                                                        per user
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                            <ul className="space-y-3 text-left flex-1 relative z-10 overflow-y-auto custom-scrollbar">
+                                                                                {tier.features.map((feature, featureIndex) => (
+                                                                                    <motion.li
+                                                                                        key={featureIndex}
+                                                                                        className="flex items-center text-gray-700 dark:text-gray-200 font-medium"
+                                                                                        initial={{ opacity: 0, x: -10 }}
+                                                                                        animate={{ opacity: 1, x: 0 }}
+                                                                                        transition={{ delay: 0.3 + featureIndex * 0.1 }}
+                                                                                    >
+                                                                                        <div className="w-5 h-5 rounded-full bg-gradient-to-r from-green-400 to-emerald-500 flex items-center justify-center mr-3 flex-shrink-0 shadow-sm">
+                                                                                            <Check className="w-3 h-3 text-white font-bold" />
+                                                                                        </div>
+                                                                                        <span className="leading-relaxed">{feature}</span>
+                                                                                    </motion.li>
+                                                                                ))}
+                                                                            </ul>
+
+                                                                            {/* Plan Details Section */}
+                                                                            <motion.div
+                                                                                className="mt-auto pt-4 border-t border-gray-200 dark:border-gray-600 text-center relative z-10"
+                                                                                initial={{ opacity: 0, y: 10 }}
+                                                                                animate={{ opacity: 1, y: 0 }}
+                                                                                transition={{ delay: 0.6 }}
+                                                                            >
+                                                                                <div className="grid grid-cols-1 gap-2 text-sm">
+                                                                                    <div className="flex justify-center items-center space-x-4">
+                                                                                        <div className="text-gray-600 dark:text-gray-400">
+                                                                                            <span className="font-semibold text-orange-600 dark:text-orange-400">{tier.minUsers}</span>
+                                                                                            <span className="mx-1">-</span>
+                                                                                            <span className="font-semibold text-orange-600 dark:text-orange-400">{tier.maxUsers}</span>
+                                                                                            <span className="ml-1">users</span>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    <div className="text-gray-600 dark:text-gray-400">
+                                                                                        <span className="font-semibold text-green-600 dark:text-green-400">{tier.trialDays}</span>
+                                                                                        <span className="ml-1">days free trial</span>
+                                                                                    </div>
+                                                                                </div>
+
+                                                                                {/* Select plan button */}
+                                                                                <motion.button
+                                                                                    className={`mt-4 w-full font-semibold py-3 px-6 rounded-lg transition-all duration-300 transform hover:scale-105 hover:shadow-lg ${selectedPlanForPricing === plans[tier.name.toLowerCase().replace(/\s+/g, '_')]?.plan_id
+                                                                                        ? 'bg-gradient-to-r from-green-500 to-green-600 text-white'
+                                                                                        : 'bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white'
+                                                                                        }`}
+                                                                                    whileHover={{ scale: 1.02 }}
+                                                                                    whileTap={{ scale: 0.98 }}
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        const planEntry = Object.entries(plans).find(([key, plan]) =>
+                                                                                            plan.plan_name.toLowerCase() === tier.name.toLowerCase()
+                                                                                        );
+                                                                                        if (planEntry) {
+                                                                                            setSelectedPlanForPricing(planEntry[1].plan_id);
+                                                                                            // Navigate to step 3 (pricing customization)
+                                                                                            setDirection(1);
+                                                                                            setNavLock(true);
+                                                                                            setCurrentStep(3);
+                                                                                            saveToLocalStorage();
+                                                                                            
+                                                                                            // Scroll to pricing section after navigation
+                                                                                            setTimeout(() => {
+                                                                                                const pricingSection = document.querySelector('[data-pricing-section="true"]');
+                                                                                                if (pricingSection) {
+                                                                                                    pricingSection.scrollIntoView({ 
+                                                                                                        behavior: 'smooth', 
+                                                                                                        block: 'start'
+                                                                                                    });
+                                                                                                } else {
+                                                                                                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                                                                                                }
+                                                                                                setNavLock(false);
+                                                                                            }, 500);
+                                                                                        }
+                                                                                    }}
+                                                                                >
+                                                                                    Go with this plan
+                                                                                </motion.button>
+                                                                            </motion.div>
+                                                                        </motion.div>
+                                                                    )) || []}
+                                                                </div>
+                                                            </>
+                                                        ) : null}
+
+                                                        {/* Mobile Customize Your Own Plan Button - After Plan Cards */}
+                                                        {showCustomPlan && (
+                                                            <motion.div
+                                                                className="flex justify-center mt-6 md:hidden"
+                                                                initial={{ opacity: 0, y: 20, scale: 0.9 }}
+                                                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                                                transition={{ delay: 0.6, duration: 0.4, type: "spring", stiffness: 300 }}
+                                                            >
+                                                                <motion.button
+                                                                    whileHover={{ scale: 1.05, y: -2 }}
+                                                                    whileTap={{ scale: 0.95 }}
+                                                                    onClick={() => {
+                                                                        setIsCustomPlanView(true);
+
+                                                                        // Update URL to show custom plan view
+                                                                        if (typeof window !== 'undefined') {
+                                                                            const currentUrl = new URL(window.location.href);
+                                                                            currentUrl.searchParams.set('step', '2');
+                                                                            currentUrl.searchParams.set('view', 'custom');
+                                                                            currentUrl.searchParams.delete('plan');
+                                                                            window.history.pushState({ step: 2, view: 'custom' }, '', currentUrl.toString());
+                                                                        }
+                                                                    }}
+                                                                    className="group relative flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-500 via-purple-600 to-indigo-600 hover:from-purple-600 hover:via-purple-700 hover:to-indigo-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden border border-purple-400/30"
+                                                                >
+                                                                    {/* Shimmer effect */}
+                                                                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -skew-x-12 transform translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000" />
+
+                                                                    {/* Pulsing glow */}
+                                                                    <div className="absolute -inset-1 bg-gradient-to-r from-purple-400 to-indigo-400 rounded-xl opacity-30 group-hover:opacity-50 blur-sm animate-pulse" />
+
+                                                                    <Settings className="w-5 h-5 relative z-10 transition-transform group-hover:rotate-45 duration-300" />
+                                                                    <span className="relative z-10 text-base">Customize Your Own Plan</span>
+
+                                                                    {/* Sparkle effect */}
+                                                                    <div className="absolute top-1 right-1 w-1 h-1 bg-white rounded-full animate-ping opacity-75" />
+                                                                    <div className="absolute bottom-1 left-2 w-0.5 h-0.5 bg-white rounded-full animate-pulse" />
+                                                                </motion.button>
+                                                            </motion.div>
+                                                        )}
+
+                                                        {/* Enhanced Selection prompt */}
+                                                    </motion.div>
+                                                )
                                             )}
                                         </AnimatePresence>
                                     </motion.div>
@@ -3011,7 +3947,7 @@ export function DemoRequestForm() {
                                         <div className="text-center mb-6">
                                             <motion.div
                                                 className="relative w-12 h-12 lg:w-14 lg:h-14 xl:w-12 xl:h-12 bg-gradient-to-br from-purple-500 via-purple-400 to-indigo-500 rounded-xl flex items-center justify-center mx-auto mb-3 lg:mb-4 xl:mb-3 shadow-xl"
-                                                whileHover={{ scale: 1.05, rotateY: 10 }}
+                                                whileHover={{ scale: 1.02 }}
                                                 initial={{ rotateX: -15 }}
                                                 animate={{ rotateX: 0 }}
                                                 transition={{ duration: 0.5 }}
@@ -3021,7 +3957,7 @@ export function DemoRequestForm() {
                                                 <CreditCard className="w-5 h-5 lg:w-6 lg:h-6 xl:w-5 xl:h-5 text-white relative z-10 drop-shadow-lg" />
                                                 <div className="absolute -inset-1 bg-gradient-to-r from-purple-400 to-indigo-400 rounded-xl opacity-30 blur-md animate-pulse" />
                                             </motion.div>
-                                            
+
                                             <motion.h3
                                                 className="text-xl lg:text-2xl xl:text-xl font-bold text-gray-800 dark:text-white mb-2"
                                                 initial={{ opacity: 0, y: 10 }}
@@ -3030,7 +3966,7 @@ export function DemoRequestForm() {
                                             >
                                                 Customize Your Pricing
                                             </motion.h3>
-                                            
+
                                             <motion.p
                                                 className="text-gray-600 dark:text-gray-300 text-sm lg:text-base xl:text-sm"
                                                 initial={{ opacity: 0, y: 10 }}
@@ -3047,17 +3983,38 @@ export function DemoRequestForm() {
                                             animate={{ opacity: 1, y: 0 }}
                                             transition={{ delay: 0.4 }}
                                             className="w-full"
+                                            data-pricing-section="true"
                                         >
                                             <DynamicPricing
                                                 selectedPlanId={selectedPlanForPricing}
-                                                allPlans={plans}
+                                                allPlans={isFromCustomPlan && customPlanData ? { [customPlanData.plan_id]: customPlanData } : plans}
                                                 onGoBack={() => {
-                                                    setCurrentStep(2);
-                                                    setDirection(-1);
+                                                    if (isFromCustomPlan) {
+                                                        setCurrentStep(2);
+                                                        setIsCustomPlanView(true);
+                                                        setIsFromCustomPlan(false);
+                                                        setCustomPlanData(null);
+                                                        setSelectedPlanForPricing(null);
+                                                        setDirection(-1);
+
+                                                        // Update URL to go back to custom plan view
+                                                        if (typeof window !== 'undefined') {
+                                                            const currentUrl = new URL(window.location.href);
+                                                            currentUrl.searchParams.set('step', '2');
+                                                            currentUrl.searchParams.set('view', 'custom');
+                                                            currentUrl.searchParams.delete('plan');
+                                                            window.history.pushState({ step: 2, view: 'custom' }, '', currentUrl.toString());
+                                                        }
+                                                    } else {
+                                                        setCurrentStep(2);
+                                                        setDirection(-1);
+                                                    }
                                                 }}
                                                 onCompleteDemo={handleCompleteDemoFromPricing}
                                                 formData={formData}
                                                 isSubmitting={isSubmitting}
+                                                isFromCustomPlan={isFromCustomPlan}
+                                                customPlanData={customPlanData}
                                             />
                                         </motion.div>
                                     </motion.div>
@@ -3097,15 +4054,13 @@ export function DemoRequestForm() {
                                         <Button
                                             onClick={handleNext}
                                             disabled={currentStep === 2 && !selectedPlanForPricing}
-                                            className={`relative flex items-center justify-center gap-2 lg:gap-3 xl:gap-2 px-6 lg:px-8 xl:px-6 py-3 lg:py-4 xl:py-3 w-full sm:w-auto font-bold shadow-xl hover:shadow-2xl transition-all duration-300 rounded-xl group overflow-hidden ${
-                                                currentStep === 2 && !selectedPlanForPricing
-                                                    ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
-                                                    : 'bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 hover:from-orange-600 hover:via-amber-600 hover:to-orange-700 text-white'
-                                            }`}
+                                            className={`relative flex items-center justify-center gap-2 lg:gap-3 xl:gap-2 px-6 lg:px-8 xl:px-6 py-3 lg:py-4 xl:py-3 w-full sm:w-auto font-bold shadow-xl hover:shadow-2xl transition-all duration-300 rounded-xl group overflow-hidden ${currentStep === 2 && !selectedPlanForPricing
+                                                ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                                                : 'bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 hover:from-orange-600 hover:via-amber-600 hover:to-orange-700 text-white'
+                                                }`}
                                         >
-                                            <div className={`absolute inset-0 bg-gradient-to-r from-white/20 to-transparent transition-opacity duration-300 ${
-                                                currentStep === 2 && !selectedPlanForPricing ? 'opacity-0' : 'opacity-0 group-hover:opacity-100'
-                                            }`} />
+                                            <div className={`absolute inset-0 bg-gradient-to-r from-white/20 to-transparent transition-opacity duration-300 ${currentStep === 2 && !selectedPlanForPricing ? 'opacity-0' : 'opacity-0 group-hover:opacity-100'
+                                                }`} />
                                             <span className="relative z-10">Continue</span>
                                             <ArrowRight className="w-5 h-5 relative z-10 transition-transform group-hover:translate-x-0.5" />
                                         </Button>
@@ -3249,7 +4204,7 @@ export function DemoRequestForm() {
                                                             : 'bg-gray-300 dark:bg-gray-600 hover:bg-orange-300'
                                                             }`}
                                                         onClick={() => setTestimonialIndex(index)}
-                                                        whileHover={{ scale: 1.2 }}
+                                                        whileHover={{ scale: 1.1 }}
                                                         whileTap={{ scale: 0.9 }}
                                                     />
                                                 ))}

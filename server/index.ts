@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import express from "express";
 import cors from "cors";
-import { handleDemo, handleGetPlans, handleProcessPayment } from "./routes/demo";
+import { handleDemo, handleGetPlans, handleProcessPayment, handleGetServicesList, handleCalculateCustomPlan } from "./routes/demo";
 import {
   handleSaveCompanyDetails,
   handleGenerateSite,
@@ -230,6 +230,8 @@ export function createServer() {
   // API Routes
   app.post("/api/demo", handleDemo);
   app.post("/api/get-plan", handleGetPlans);
+  app.post("/api/get-services-list", handleGetServicesList);
+  app.post("/api/calculate-custom-plan", handleCalculateCustomPlan);
   app.post("/api/otp-request", handleOtpRequest);
   app.post("/api/process-payment", handleProcessPayment);  // Google auth routes
   app.get('/api/auth/google', (req, res, next) => {

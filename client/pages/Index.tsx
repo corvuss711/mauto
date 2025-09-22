@@ -12,6 +12,7 @@ import { useToast } from '@/components/ui/use-toast';
 
 // Lazy load heavy components for better initial load
 const TrustedByCompanies = lazy(() => import("../components/ui/trusted-by-companies").then(module => ({ default: module.TrustedByCompanies })));
+// Ensure the file exists at the specified path, or update the path if necessary
 const HowHelpingCompanies = lazy(() => import("../components/ui/how-helping-companies"));
 const CustomerCarousel = lazy(() => import("../components/ui/customer-carousel"));
 const RetailTransformation = lazy(() => import("../components/ui/retail-transformation"));

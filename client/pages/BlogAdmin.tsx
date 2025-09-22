@@ -56,6 +56,29 @@ interface Category {
     color: string;
 }
 
+// Hook: detect md breakpoint for responsive animation/positioning
+function useIsMdUp() {
+    const [isMdUp, setIsMdUp] = useState(false);
+    useEffect(() => {
+        if (typeof window === 'undefined' || !window.matchMedia) return;
+        const mql = window.matchMedia('(min-width: 768px)');
+        const handler = (e: MediaQueryListEvent | MediaQueryList) => {
+            // Support both event and direct list call
+            setIsMdUp('matches' in e ? e.matches : (e as MediaQueryList).matches);
+        };
+        // Initialize
+        setIsMdUp(mql.matches);
+        // Subscribe with fallback for older browsers
+        if (mql.addEventListener) mql.addEventListener('change', handler as (e: MediaQueryListEvent) => void);
+        else if (mql.addListener) mql.addListener(handler as (this: MediaQueryList, ev: MediaQueryListEvent) => void);
+        return () => {
+            if (mql.removeEventListener) mql.removeEventListener('change', handler as (e: MediaQueryListEvent) => void);
+            else if (mql.removeListener) mql.removeListener(handler as (this: MediaQueryList, ev: MediaQueryListEvent) => void);
+        };
+    }, []);
+    return isMdUp;
+}
+
 // Custom Dropdown Component
 interface CustomDropdownProps {
     value: string;
@@ -132,6 +155,7 @@ function CustomDropdown({ value, options, onChange, placeholder = "Select option
 }
 
 export default function BlogAdmin() {
+    const isMdUp = useIsMdUp();
     const [blogs, setBlogs] = useState<Blog[]>([]);
     const [categories, setCategories] = useState<Category[]>([]);
     const [loading, setLoading] = useState(true);
@@ -440,10 +464,10 @@ export default function BlogAdmin() {
                 <AnimatePresence>
                     {success && (
                         <motion.div
-                            initial={{ opacity: 0, y: -50 }}
+                            initial={{ opacity: 0, y: isMdUp ? 50 : -50 }}
                             animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -50 }}
-                            className="fixed top-20 left-1/2 transform -translate-x-1/2 z-[60] bg-green-500 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg shadow-lg flex items-center gap-2 mx-4 max-w-sm sm:max-w-md text-sm sm:text-base"
+                            exit={{ opacity: 0, y: isMdUp ? 50 : -50 }}
+                            className="fixed inset-x-0 mx-auto w-max top-[calc(env(safe-area-inset-top)+1rem)] md:top-auto md:inset-x-auto md:mx-0 md:w-auto md:bottom-6 md:right-6 z-[60] bg-green-500 text-white px-4 md:px-6 py-2 md:py-3 rounded-lg shadow-lg flex items-center gap-2 max-w-[95vw] md:max-w-md text-sm md:text-base"
                         >
                             <CheckCircle size={16} className="sm:w-5 sm:h-5 flex-shrink-0" />
                             <span className="truncate">{success}</span>
@@ -452,10 +476,10 @@ export default function BlogAdmin() {
 
                     {error && (
                         <motion.div
-                            initial={{ opacity: 0, y: -50 }}
+                            initial={{ opacity: 0, y: isMdUp ? 50 : -50 }}
                             animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -50 }}
-                            className="fixed top-20 left-1/2 transform -translate-x-1/2 z-[60] bg-red-500 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg shadow-lg flex items-center gap-2 mx-4 max-w-sm sm:max-w-md text-sm sm:text-base"
+                            exit={{ opacity: 0, y: isMdUp ? 50 : -50 }}
+                            className="fixed inset-x-0 mx-auto w-max top-[calc(env(safe-area-inset-top)+1rem)] md:top-auto md:inset-x-auto md:mx-0 md:w-auto md:bottom-6 md:right-6 z-[60] bg-red-500 text-white px-4 md:px-6 py-2 md:py-3 rounded-lg shadow-lg flex items-center gap-2 max-w-[95vw] md:max-w-md text-sm md:text-base"
                         >
                             <AlertCircle size={16} className="sm:w-5 sm:h-5 flex-shrink-0" />
                             <span className="truncate">{error}</span>
@@ -836,7 +860,7 @@ export default function BlogAdmin() {
 
                                             {/* File Upload Area */}
                                             <div className="space-y-4">
-                                                <div className="flex items-center gap-4">
+                                                <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 md:gap-4">
                                                     <input
                                                         type="file"
                                                         accept="image/*"
@@ -848,7 +872,7 @@ export default function BlogAdmin() {
                                                     />
                                                     <label
                                                         htmlFor="thumbnail-upload"
-                                                        className={`cursor-pointer inline-flex items-center gap-2 px-4 py-2 border border-border rounded-lg hover:bg-muted/50 transition-colors text-foreground ${uploading ? 'opacity-50 cursor-not-allowed' : ''
+                                                        className={`cursor-pointer inline-flex items-center justify-center gap-2 px-4 py-2 border border-border rounded-lg hover:bg-muted/50 transition-colors text-foreground w-full md:w-auto ${uploading ? 'opacity-50 cursor-not-allowed' : ''
                                                             }`}
                                                     >
                                                         <Upload size={16} />
@@ -856,7 +880,7 @@ export default function BlogAdmin() {
                                                     </label>
 
                                                     {/* Manual URL Input (Alternative) */}
-                                                    <div className="flex-1">
+                                                    <div className="flex-1 w-full min-w-0">
                                                         <input
                                                             type="url"
                                                             value={formData.thumbnail_url}

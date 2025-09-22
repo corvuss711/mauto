@@ -26,6 +26,10 @@
       "destination": "/api/index.ts"
     },
     {
+      "source": "/admin/blogs",
+      "destination": "index.html"
+    },
+    {
       "source": "/auth/(.*)",
       "destination": "/index.html"
     },

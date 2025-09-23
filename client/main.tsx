@@ -143,7 +143,7 @@ const App = () => (
             <Route path="/whatsapp-ordering-system" element={<Whatsapp_Ordering />} />
             <Route path="/blogs" element={<Blogs />} />
             {/* TODO: Re-enable ProtectedRoute for production */}
-            <Route path="/admin/blogs" element={<BlogAdmin />} />
+            {/* <Route path="/admin/blogs" element={<BlogAdmin />} /> */}
             {/* <Route path="/admin/blogs" element={
               <ProtectedRoute>
                 <BlogAdmin />

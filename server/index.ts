@@ -21,7 +21,13 @@ import { formProgressRouter } from './routes/auto-site';
 import mysql from 'mysql2';
 
 // Create a separate connection pool specifically for blog database
-const blogDbConfig = { host: 'localhost', user: 'root', password: '', port: 3306, database: 'manacle_blogs' };
+const blogDbConfig = { 
+  host: process.env.DB_HOST || 'localhost', 
+  user: process.env.DB_USER || 'root', 
+  password: process.env.DB_PASS || '', 
+  port: process.env.DB_PORT ? Number(process.env.DB_PORT) : 3306, 
+  database: process.env.DB_NAME || 'manacle_blogs' 
+};
 const blogPool = mysql.createPool({
   ...blogDbConfig,
   waitForConnections: true,

@@ -4,6 +4,7 @@ import Footer from '@/components/ui/footer';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { ThemeProvider } from '../components/ui/theme-provider';
+import { LoadingSpinner } from '../components/ui/loading-spinner';
 
 interface BlogMeta {
     id: number;
@@ -160,9 +161,56 @@ export default function Blogs() {
 
                         {/* Loading State */}
                         {loading && (
-                            <div className="flex justify-center items-center py-20">
-                                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-                            </div>
+                            <motion.div
+                                className="flex flex-col justify-center items-center py-20"
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -20 }}
+                                transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+                            >
+                                <LoadingSpinner size="lg" className="mb-6" />
+                                <motion.p
+                                    className="text-base text-foreground/70 font-medium tracking-wide"
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: 0.3, duration: 0.4 }}
+                                >
+                                    Loading latest articles
+                                    <motion.span
+                                        animate={{ opacity: [0, 1, 0] }}
+                                        transition={{
+                                            duration: 1.5,
+                                            repeat: Infinity,
+                                            ease: "easeInOut"
+                                        }}
+                                    >
+                                        ...
+                                    </motion.span>
+                                </motion.p>
+                                <motion.div
+                                    className="mt-4 flex space-x-1"
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    transition={{ delay: 0.5 }}
+                                >
+                                    {[...Array(3)].map((_, i) => (
+                                        <motion.div
+                                            key={i}
+                                            className="w-2 h-2 bg-primary/40 rounded-full"
+                                            animate={{
+                                                scale: [1, 1.2, 1],
+                                                opacity: [0.4, 1, 0.4],
+                                            }}
+                                            transition={{
+                                                duration: 1.5,
+                                                repeat: Infinity,
+                                                delay: i * 0.2,
+                                                ease: "easeInOut"
+                                            }}
+                                        />
+                                    ))}
+                                </motion.div>
+                            </motion.div>
                         )}
 
                         {/* Error State */}
@@ -195,6 +243,10 @@ export default function Blogs() {
                                             exit="exit"
                                             className="group flex flex-col rounded-2xl overflow-hidden bg-card/80 backdrop-blur border border-glass-border hover:shadow-xl hover:border-primary/40 transition-[border-color,box-shadow,transform] duration-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                                             aria-label={`Read article: ${b.title}`}
+                                            onClick={() => {
+                                                // Ensure page will scroll to top on navigation
+                                                window.scrollTo({ top: 0, behavior: 'instant' });
+                                            }}
                                         >
                                             <div className="relative aspect-[20/10] overflow-hidden">
                                                 <img src={b.thumbnail_url} alt={b.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />

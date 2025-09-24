@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { Header } from '@/components/ui/header';
 import Footer from '@/components/ui/footer';
 import { ThemeProvider } from '../components/ui/theme-provider';
+import { LoadingSpinner } from '../components/ui/loading-spinner';
 import {
     ArrowLeft,
     Calendar,
@@ -43,6 +44,9 @@ export default function BlogPost() {
 
     useEffect(() => {
         if (!slug) return;
+
+        // Scroll to top when component mounts (when navigating from blogs page)
+        window.scrollTo({ top: 0, behavior: 'smooth' });
 
         const fetchBlog = async () => {
             try {
@@ -251,11 +255,57 @@ export default function BlogPost() {
             <ThemeProvider defaultTheme="dark" storageKey="manacle_theme">
                 <div className="min-h-screen flex flex-col bg-background text-foreground">
                     <Header />
-                    <main className="flex-1 pt-20 sm:pt-24 md:pt-28 lg:pt-32 pb-12 min-h-screen">
+                    <main className="flex-1 pt-24 sm:pt-28 md:pt-32 lg:pt-36 pb-12 min-h-screen">
                         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-10">
-                            <div className="flex justify-center items-center py-12 sm:py-20">
-                                <div className="animate-spin rounded-full h-8 w-8 sm:h-12 sm:w-12 border-b-2 border-primary"></div>
-                            </div>
+                            <motion.div
+                                className="flex flex-col justify-center items-center py-12 sm:py-20"
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+                            >
+                                <LoadingSpinner size="lg" className="mb-6" />
+                                <motion.p
+                                    className="text-base text-foreground/70 font-medium tracking-wide"
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: 0.3, duration: 0.4 }}
+                                >
+                                    Loading article
+                                    <motion.span
+                                        animate={{ opacity: [0, 1, 0] }}
+                                        transition={{
+                                            duration: 1.5,
+                                            repeat: Infinity,
+                                            ease: "easeInOut"
+                                        }}
+                                    >
+                                        ...
+                                    </motion.span>
+                                </motion.p>
+                                <motion.div
+                                    className="mt-4 flex space-x-1"
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    transition={{ delay: 0.5 }}
+                                >
+                                    {[...Array(3)].map((_, i) => (
+                                        <motion.div
+                                            key={i}
+                                            className="w-2 h-2 bg-primary/40 rounded-full"
+                                            animate={{
+                                                scale: [1, 1.2, 1],
+                                                opacity: [0.4, 1, 0.4],
+                                            }}
+                                            transition={{
+                                                duration: 1.5,
+                                                repeat: Infinity,
+                                                delay: i * 0.2,
+                                                ease: "easeInOut"
+                                            }}
+                                        />
+                                    ))}
+                                </motion.div>
+                            </motion.div>
                         </div>
                     </main>
                     <Footer />
@@ -269,19 +319,52 @@ export default function BlogPost() {
             <ThemeProvider defaultTheme="dark" storageKey="manacle_theme">
                 <div className="min-h-screen flex flex-col bg-background text-foreground">
                     <Header />
-                    <main className="flex-1 pt-20 sm:pt-24 md:pt-28 lg:pt-32 pb-12 min-h-screen">
+                    <main className="flex-1 pt-24 sm:pt-28 md:pt-32 lg:pt-36 pb-12 min-h-screen">
                         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-10">
-                            <div className="text-center py-12 sm:py-20">
-                                <h1 className="text-xl sm:text-2xl font-bold mb-4">Blog Not Found</h1>
-                                <p className="text-sm sm:text-base text-foreground/70 mb-6">{error || 'The blog post you are looking for does not exist.'}</p>
-                                <Link
-                                    to="/blogs"
-                                    className="inline-flex items-center gap-2 text-primary hover:underline text-sm sm:text-base"
+                            <motion.div
+                                className="text-center py-12 sm:py-20"
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+                            >
+                                <motion.div
+                                    className="w-16 h-16 mx-auto mb-6 bg-destructive/10 rounded-full flex items-center justify-center"
+                                    initial={{ scale: 0 }}
+                                    animate={{ scale: 1 }}
+                                    transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
                                 >
-                                    <ArrowLeft size={14} className="sm:w-4 sm:h-4" />
-                                    Back to Blogs
-                                </Link>
-                            </div>
+                                    <span className="text-2xl">📄</span>
+                                </motion.div>
+                                <motion.h1
+                                    className="text-xl sm:text-2xl font-bold mb-4"
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: 0.3 }}
+                                >
+                                    Blog Not Found
+                                </motion.h1>
+                                <motion.p
+                                    className="text-sm sm:text-base text-foreground/70 mb-6 max-w-md mx-auto"
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: 0.4 }}
+                                >
+                                    {error || 'The blog post you are looking for does not exist.'}
+                                </motion.p>
+                                <motion.div
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: 0.5 }}
+                                >
+                                    <Link
+                                        to="/blogs"
+                                        className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors text-sm sm:text-base"
+                                    >
+                                        <ArrowLeft size={14} className="sm:w-4 sm:h-4" />
+                                        Back to Blogs
+                                    </Link>
+                                </motion.div>
+                            </motion.div>
                         </div>
                     </main>
                     <Footer />
@@ -295,20 +378,20 @@ export default function BlogPost() {
             <div className="min-h-screen flex flex-col bg-background text-foreground">
                 <Header />
 
-                <main className="flex-1 pt-20 sm:pt-24 md:pt-28 lg:pt-32 pb-12 min-h-screen">
+                <main className="flex-1 pt-24 sm:pt-28 md:pt-32 lg:pt-36 pb-12 min-h-screen">
                     <article className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-10">
 
                         {/* Back Button */}
                         <motion.div
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
-                            className="mb-6 sm:mb-8"
+                            className="mb-8 sm:mb-8"
                         >
                             <Link
                                 to="/blogs"
-                                className="inline-flex items-center gap-2 text-foreground/70 hover:text-foreground transition-colors"
+                                className="inline-flex items-center gap-2 text-foreground/70 hover:text-foreground transition-colors text-sm sm:text-base"
                             >
-                                <ArrowLeft size={16} />
+                                <ArrowLeft size={16} className="sm:w-4 sm:h-4" />
                                 Back to Blogs
                             </Link>
                         </motion.div>
@@ -318,62 +401,62 @@ export default function BlogPost() {
                             initial={{ opacity: 0, y: 30 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: 0.1 }}
-                            className="mb-6 sm:mb-8"
+                            className="mb-8 sm:mb-8"
                         >
                             {/* Category Badge */}
-                            <div className="mb-4">
+                            <div className="mb-6 sm:mb-4">
                                 <span className="px-3 py-1 bg-primary/10 text-primary rounded-full text-sm font-medium">
                                     {blog.category}
                                 </span>
                             </div>
 
                             {/* Title */}
-                            <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-4 sm:mb-6 leading-tight">
+                            <h1 className="text-3xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-6 sm:mb-6 leading-tight">
                                 {blog.title}
                             </h1>
 
                             {/* Meta Info */}
-                            <div className="flex flex-wrap items-center gap-4 sm:gap-6 text-sm sm:text-base text-foreground/70 mb-4 sm:mb-6">
+                            <div className="flex flex-wrap items-center gap-4 sm:gap-6 text-sm sm:text-base text-foreground/70 mb-6 sm:mb-6">
                                 <div className="flex items-center gap-2">
-                                    <User size={14} className="sm:w-4 sm:h-4" />
+                                    <User size={16} className="sm:w-4 sm:h-4" />
                                     <span>{blog.author_name}</span>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <Calendar size={14} className="sm:w-4 sm:h-4" />
+                                    <Calendar size={16} className="sm:w-4 sm:h-4" />
                                     <span>{blog.formatted_date}</span>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <Clock size={14} className="sm:w-4 sm:h-4" />
+                                    <Clock size={16} className="sm:w-4 sm:h-4" />
                                     <span>{blog.read_time} min read</span>
                                 </div>
                             </div>
 
                             {/* Share Buttons */}
-                            <div className="flex flex-wrap items-center gap-3 sm:gap-4 mb-6 sm:mb-8">
-                                <span className="text-xs sm:text-sm text-foreground/70 flex items-center gap-2">
-                                    <Share2 size={14} className="sm:w-4 sm:h-4" />
+                            <div className="flex flex-wrap items-center gap-4 sm:gap-4 mb-8 sm:mb-8">
+                                <span className="text-sm sm:text-sm text-foreground/70 flex items-center gap-2">
+                                    <Share2 size={16} className="sm:w-4 sm:h-4" />
                                     Share:
                                 </span>
                                 <button
                                     onClick={() => handleShare('twitter')}
-                                    className="p-1.5 sm:p-2 rounded-full bg-blue-500 hover:bg-blue-600 text-white transition-colors"
+                                    className="p-2 sm:p-2 rounded-full bg-blue-500 hover:bg-blue-600 text-white transition-colors"
                                     aria-label="Share on Twitter"
                                 >
-                                    <Twitter size={14} className="sm:w-4 sm:h-4" />
+                                    <Twitter size={16} className="sm:w-4 sm:h-4" />
                                 </button>
                                 <button
                                     onClick={() => handleShare('facebook')}
-                                    className="p-1.5 sm:p-2 rounded-full bg-blue-600 hover:bg-blue-700 text-white transition-colors"
+                                    className="p-2 sm:p-2 rounded-full bg-blue-600 hover:bg-blue-700 text-white transition-colors"
                                     aria-label="Share on Facebook"
                                 >
-                                    <Facebook size={14} className="sm:w-4 sm:h-4" />
+                                    <Facebook size={16} className="sm:w-4 sm:h-4" />
                                 </button>
                                 <button
                                     onClick={() => handleShare('linkedin')}
-                                    className="p-1.5 sm:p-2 rounded-full bg-blue-700 hover:bg-blue-800 text-white transition-colors"
+                                    className="p-2 sm:p-2 rounded-full bg-blue-700 hover:bg-blue-800 text-white transition-colors"
                                     aria-label="Share on LinkedIn"
                                 >
-                                    <Linkedin size={14} className="sm:w-4 sm:h-4" />
+                                    <Linkedin size={16} className="sm:w-4 sm:h-4" />
                                 </button>
                             </div>
                         </motion.header>

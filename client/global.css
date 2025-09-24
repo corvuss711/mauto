@@ -1438,3 +1438,91 @@ html:focus-within {
     background: hsl(var(--muted-foreground));
   }
 }
+
+/* Enhanced Loading Spinner Animations */
+@layer utilities {
+
+  /* Smooth spin animation with easing */
+  .animate-spin-smooth {
+    animation: spin-smooth 1.5s cubic-bezier(0.4, 0.0, 0.2, 1) infinite;
+  }
+
+  .animate-spin-reverse {
+    animation: spin-reverse 1s cubic-bezier(0.4, 0.0, 0.2, 1) infinite;
+  }
+
+  .animate-glow-pulse {
+    animation: glow-pulse 2.5s ease-in-out infinite;
+  }
+
+  .animate-ripple {
+    animation: ripple 1.5s ease-out infinite;
+  }
+
+  /* Keyframes for enhanced spinner */
+  @keyframes spin-smooth {
+    from {
+      transform: rotate(0deg);
+    }
+
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @keyframes spin-reverse {
+    from {
+      transform: rotate(360deg);
+    }
+
+    to {
+      transform: rotate(0deg);
+    }
+  }
+
+  @keyframes glow-pulse {
+
+    0%,
+    100% {
+      opacity: 0.6;
+      box-shadow: 0 0 8px hsl(var(--primary) / 0.3);
+    }
+
+    50% {
+      opacity: 1;
+      box-shadow: 0 0 16px hsl(var(--primary) / 0.6);
+    }
+  }
+
+  @keyframes ripple {
+    0% {
+      transform: scale(1);
+      opacity: 0.8;
+    }
+
+    100% {
+      transform: scale(1.4);
+      opacity: 0;
+    }
+  }
+
+  /* Loading shimmer effect */
+  .animate-shimmer {
+    animation: shimmer 2s linear infinite;
+    background: linear-gradient(90deg,
+        transparent,
+        hsl(var(--primary) / 0.1),
+        transparent);
+    background-size: 200% 100%;
+  }
+
+  @keyframes shimmer {
+    0% {
+      background-position: -200% 0;
+    }
+
+    100% {
+      background-position: 200% 0;
+    }
+  }
+}

@@ -1011,24 +1011,24 @@ function calculateReadTime(content: string): number {
 // GET /api/blogs - Get all published blogs
 app.get('/api/blogs', async (req, res) => {
     try {
-        const { category, limit = 50, offset = 0, status = 'published' } = req.query;
+        const { category_id, limit = 50, offset = 0, status = 'published' } = req.query;
 
         let query = `
             SELECT 
                 b.id, b.title, b.slug, b.excerpt, b.thumbnail_url, 
-                bc.name as category, b.author_name, b.read_time, 
+                bc.name as category_id, b.author_name, b.read_time, 
                 b.published_at, b.featured, b.status,
                 DATE_FORMAT(b.published_at, '%b %d, %Y') as formatted_date
             FROM blogs b
-            LEFT JOIN blog_categories bc ON b.category_id = bc.id
+            LEFT JOIN blog_categories bc ON b.category_id_id = bc.id
             WHERE b.status = ?
         `;
 
         const params: any[] = [status];
 
-        if (category && category !== 'All') {
+        if (category_id && category_id !== 'All') {
             query += ' AND bc.name = ?';
-            params.push(category);
+            params.push(category_id);
         }
 
         query += ' ORDER BY b.published_at DESC, b.created_at DESC LIMIT ? OFFSET ?';
@@ -1058,7 +1058,7 @@ app.get('/api/blogs/:slug', async (req, res) => {
 
         const [rows] = await blogDb.promise().execute(
             `SELECT 
-                id, title, slug, excerpt, content, thumbnail_url, category,
+                id, title, slug, excerpt, content, thumbnail_url, category_id,
                 author_name, author_email, read_time, published_at, featured,
                 meta_title, meta_description, tags, status,
                 DATE_FORMAT(published_at, '%b %d, %Y') as formatted_date,
@@ -1125,18 +1125,18 @@ app.get('/api/blog-categories', async (req, res) => {
 // GET /api/admin/blogs - Get all blogs (including drafts)  
 app.get('/api/admin/blogs', async (req, res) => {
     try {
-        const { status, category, search, limit = 50, offset = 0 } = req.query;
+        const { status, category_id, search, limit = 50, offset = 0 } = req.query;
 
         let query = `
             SELECT 
                 b.id, b.title, b.slug, b.excerpt, b.content, b.thumbnail_url, 
-                bc.name as category, b.author_name, b.read_time, 
+                bc.name as category_id, b.author_name, b.read_time, 
                 b.status, b.featured, b.tags, b.meta_title, b.meta_description,
                 DATE_FORMAT(b.published_at, '%b %d, %Y') as formatted_date,
                 DATE_FORMAT(b.created_at, '%b %d, %Y at %h:%i %p') as created_date,
                 DATE_FORMAT(b.updated_at, '%b %d, %Y at %h:%i %p') as updated_date
             FROM blogs b
-            LEFT JOIN blog_categories bc ON b.category_id = bc.id
+            LEFT JOIN blog_categories bc ON b.category_id_id = bc.id
             WHERE 1=1
         `;
 
@@ -1147,9 +1147,9 @@ app.get('/api/admin/blogs', async (req, res) => {
             params.push(status);
         }
 
-        if (category && category !== 'All') {
+        if (category_id && category_id !== 'All') {
             query += ' AND bc.name = ?';
-            params.push(category);
+            params.push(category_id);
         }
 
         if (search) {
@@ -1164,7 +1164,7 @@ app.get('/api/admin/blogs', async (req, res) => {
         const [rows] = await blogDb.promise().execute(query, params);
 
         // Get total count
-        let countQuery = 'SELECT COUNT(*) as total FROM blogs b LEFT JOIN blog_categories bc ON b.category_id = bc.id WHERE 1=1';
+        let countQuery = 'SELECT COUNT(*) as total FROM blogs b LEFT JOIN blog_categories bc ON b.category_id_id = bc.id WHERE 1=1';
         const countParams: any[] = [];
 
         if (status) {
@@ -1172,9 +1172,9 @@ app.get('/api/admin/blogs', async (req, res) => {
             countParams.push(status);
         }
 
-        if (category && category !== 'All') {
+        if (category_id && category_id !== 'All') {
             countQuery += ' AND bc.name = ?';
-            countParams.push(category);
+            countParams.push(category_id);
         }
 
         if (search) {
@@ -1228,7 +1228,7 @@ app.post('/api/admin/blogs', async (req, res) => {
             excerpt,
             content,
             thumbnail_url,
-            category,
+            category_id,
             tags,
             author_name,
             author_email,
@@ -1267,12 +1267,12 @@ app.post('/api/admin/blogs', async (req, res) => {
 
         const [result] = await blogDb.promise().execute(
             `INSERT INTO blogs 
-            (title, slug, excerpt, content, thumbnail_url, category_id, tags, 
+            (title, slug, excerpt, content, thumbnail_url, category_id_id, tags, 
              author_name, author_email, status, featured, read_time, 
              meta_title, meta_description, published_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
-                title, slug, excerpt, content, thumbnail_url, category,
+                title, slug, excerpt, content, thumbnail_url, category_id,
                 JSON.stringify(tags || []), author_name, author_email,
                 status, featured, readTime, meta_title, meta_description,
                 publishedAt
@@ -1308,7 +1308,7 @@ app.put('/api/admin/blogs/:id', async (req, res) => {
             excerpt,
             content,
             thumbnail_url,
-            category,
+            category_id,
             tags,
             author_name,
             author_email,
@@ -1368,7 +1368,7 @@ app.put('/api/admin/blogs/:id', async (req, res) => {
         if (excerpt !== undefined) { updates.push('excerpt = ?'); values.push(excerpt); }
         if (content !== undefined) { updates.push('content = ?'); values.push(content); }
         if (thumbnail_url !== undefined) { updates.push('thumbnail_url = ?'); values.push(thumbnail_url); }
-        if (category !== undefined) { updates.push('category_id = ?'); values.push(category); }
+        if (category_id !== undefined) { updates.push('category_id_id = ?'); values.push(category_id); }
         if (tags !== undefined) { updates.push('tags = ?'); values.push(JSON.stringify(tags)); }
         if (author_name !== undefined) { updates.push('author_name = ?'); values.push(author_name); }
         if (author_email !== undefined) { updates.push('author_email = ?'); values.push(author_email); }

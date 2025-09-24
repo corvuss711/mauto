@@ -1020,7 +1020,7 @@ app.get('/api/blogs', async (req, res) => {
                 b.published_at, b.featured, b.status,
                 DATE_FORMAT(b.published_at, '%b %d, %Y') as formatted_date
             FROM blogs b
-            LEFT JOIN blog_categories bc ON b.category_id_id = bc.id
+            LEFT JOIN blog_categories bc ON b.category_id = bc.id
             WHERE b.status = ?
         `;
 
@@ -1136,7 +1136,7 @@ app.get('/api/admin/blogs', async (req, res) => {
                 DATE_FORMAT(b.created_at, '%b %d, %Y at %h:%i %p') as created_date,
                 DATE_FORMAT(b.updated_at, '%b %d, %Y at %h:%i %p') as updated_date
             FROM blogs b
-            LEFT JOIN blog_categories bc ON b.category_id_id = bc.id
+            LEFT JOIN blog_categories bc ON b.category_id = bc.id
             WHERE 1=1
         `;
 
@@ -1164,7 +1164,7 @@ app.get('/api/admin/blogs', async (req, res) => {
         const [rows] = await blogDb.promise().execute(query, params);
 
         // Get total count
-        let countQuery = 'SELECT COUNT(*) as total FROM blogs b LEFT JOIN blog_categories bc ON b.category_id_id = bc.id WHERE 1=1';
+        let countQuery = 'SELECT COUNT(*) as total FROM blogs b LEFT JOIN blog_categories bc ON b.category_id = bc.id WHERE 1=1';
         const countParams: any[] = [];
 
         if (status) {
@@ -1267,7 +1267,7 @@ app.post('/api/admin/blogs', async (req, res) => {
 
         const [result] = await blogDb.promise().execute(
             `INSERT INTO blogs 
-            (title, slug, excerpt, content, thumbnail_url, category_id_id, tags, 
+            (title, slug, excerpt, content, thumbnail_url, category_id, tags, 
              author_name, author_email, status, featured, read_time, 
              meta_title, meta_description, published_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -1368,7 +1368,7 @@ app.put('/api/admin/blogs/:id', async (req, res) => {
         if (excerpt !== undefined) { updates.push('excerpt = ?'); values.push(excerpt); }
         if (content !== undefined) { updates.push('content = ?'); values.push(content); }
         if (thumbnail_url !== undefined) { updates.push('thumbnail_url = ?'); values.push(thumbnail_url); }
-        if (category_id !== undefined) { updates.push('category_id_id = ?'); values.push(category_id); }
+        if (category_id !== undefined) { updates.push('category_id = ?'); values.push(category_id); }
         if (tags !== undefined) { updates.push('tags = ?'); values.push(JSON.stringify(tags)); }
         if (author_name !== undefined) { updates.push('author_name = ?'); values.push(author_name); }
         if (author_email !== undefined) { updates.push('author_email = ?'); values.push(author_email); }

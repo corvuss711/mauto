@@ -75,18 +75,18 @@ export const authRouter = Router();
 export const formProgressRouter = Router();
 
 // Save or update form progress for the logged-in user
-formProgressRouter.post('/save-step', isAuthenticated, async (req: Request, res: Response) => {
-  const userId = req.userId;
-  const { step_number, form_data } = req.body;
-  if (typeof step_number !== 'number' || !form_data) {
-    return res.status(400).json({ error: 'Missing or invalid data' });
+formProgressRouter.post('/save-step', /*isAuthenticated,*/ async (req: Request, res: Response) => {
+  // const userId = req.userId; // Commented out authentication
+  const { user_id, step_number, form_data } = req.body; // Get user_id from body instead
+  if (!user_id || typeof step_number !== 'number' || !form_data) {
+    return res.status(400).json({ error: 'Missing or invalid data (user_id, step_number, form_data)' });
   }
   try {
     await db.promise().query(
       `INSERT INTO user_form_progress (user_id, step_number, form_data)
        VALUES (?, ?, ?)
        ON DUPLICATE KEY UPDATE step_number = VALUES(step_number), form_data = VALUES(form_data)`,
-      [userId, step_number, JSON.stringify(form_data)]
+      [user_id, step_number, JSON.stringify(form_data)]
     );
     res.json({ success: true });
   } catch (err) {
@@ -95,13 +95,17 @@ formProgressRouter.post('/save-step', isAuthenticated, async (req: Request, res:
 });
 
 // Load saved form progress for the logged-in user
-formProgressRouter.get('/load-form', isAuthenticated, async (req: Request, res: Response) => {
-  const userId = req.userId;
+formProgressRouter.post('/load-form', /*isAuthenticated,*/ async (req: Request, res: Response) => {
+  // const userId = req.userId; // Commented out authentication
+  const { user_id } = req.body; // Get user_id from body instead
+  if (!user_id) {
+    return res.status(400).json({ error: 'Missing user_id' });
+  }
   try {
     // Fetch user_form_progress
     const [progressRows] = await db.promise().query(
       'SELECT step_number, form_data FROM user_form_progress WHERE user_id = ?',
-      [userId]
+      [user_id]
     );
     let step_number = 0;
     let form_data = {};
@@ -112,7 +116,7 @@ formProgressRouter.get('/load-form', isAuthenticated, async (req: Request, res: 
     }
 
     // Fetch company details for pre-fill
-    const [companyRows] = await db.promise().query('SELECT * FROM company_mast WHERE user_id = ? LIMIT 1', [userId]);
+    const [companyRows] = await db.promise().query('SELECT * FROM company_mast WHERE user_id = ? LIMIT 1', [user_id]);
     let company = null;
     if (Array.isArray(companyRows) && companyRows.length > 0) {
       company = companyRows[0];
@@ -429,7 +433,7 @@ export const uploadLogo = [
         filenamePrefix = 'product';
       }
 
-      console.log(`Uploading ${fieldName || 'unknown field'} to folder: ${cloudinaryFolder}`);
+      // console.log(`Uploading ${fieldName || 'unknown field'} to folder: ${cloudinaryFolder}`);
 
       // Upload to Cloudinary
       const result = await uploadToCloudinary(

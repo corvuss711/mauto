@@ -685,27 +685,27 @@ app.get('/api/business-sectors', async (_req, res) => {
 });
 
 // Form progress routes
-app.post('/api/save-step', isAuth, async (req, res) => {
+app.post('/api/save-step', /*isAuth,*/ async (req, res) => {
     let { step_number, form_data, user_id } = req.body || {};
 
     // Get user_id from authenticated session (preferred) or request body (fallback)
-    if (!user_id && (req as any).user?.id) user_id = (req as any).user.id;
-    if (!user_id) user_id = (req as any).user?.id; // Since we have isAuth, this should always exist
+    // if (!user_id && (req as any).user?.id) user_id = (req as any).user.id;
+    // if (!user_id) user_id = (req as any).user?.id; // Since we have isAuth, this should always exist
 
     // Enhanced validation
     if (typeof step_number !== 'number' || form_data == null || !user_id) {
-        console.warn('[save-step] Missing required fields:', { step_number, has_form_data: !!form_data, user_id });
+        // console.warn('[save-step] Missing required fields:', { step_number, has_form_data: !!form_data, user_id });
         return res.status(400).json({ error: 'Missing required fields (user_id, step_number, form_data)' });
     }
 
     // Validate step number is reasonable (0-9)
     if (step_number < 0 || step_number > 9) {
-        console.warn('[save-step] Invalid step number:', step_number, 'for user:', user_id);
+        // console.warn('[save-step] Invalid step number:', step_number, 'for user:', user_id);
         return res.status(400).json({ error: 'Invalid step number' });
     }
 
     try {
-        console.log('[save-step] Saving step:', step_number, 'for user:', user_id, 'with data keys:', Object.keys(form_data));
+        // console.log('[save-step] Saving step:', step_number, 'for user:', user_id, 'with data keys:', Object.keys(form_data));
 
         const formDataString = JSON.stringify(form_data);
         await db.promise().query(
@@ -714,7 +714,7 @@ app.post('/api/save-step', isAuth, async (req, res) => {
             [user_id, step_number, formDataString]
         );
 
-        console.log('[save-step] Successfully saved step:', step_number, 'for user:', user_id);
+        // console.log('[save-step] Successfully saved step:', step_number, 'for user:', user_id);
         res.json({ success: true, step_number, user_id });
     } catch (e) {
         console.error('[save-step] DB error for user:', user_id, 'step:', step_number, 'error:', e);
@@ -724,17 +724,17 @@ app.post('/api/save-step', isAuth, async (req, res) => {
 
 // Previous GET + query param version commented out
 // app.get('/api/load-form', async (req,res)=>{ ... })
-app.post('/api/load-form', isAuth, async (req, res) => {
+app.post('/api/load-form', /*isAuth,*/ async (req, res) => {
     let userId = req.body?.user_id;
 
     // Get user_id from authenticated session (preferred) or request body (fallback)
-    if (!userId && (req as any).user?.id) userId = (req as any).user.id;
-    if (!userId) userId = (req as any).user?.id; // Since we have isAuth, this should always exist
+    // if (!userId && (req as any).user?.id) userId = (req as any).user.id;
+    // if (!userId) userId = (req as any).user?.id; // Since we have isAuth, this should always exist
 
     if (!userId) return res.status(400).json({ error: 'Missing user_id' });
 
     try {
-        console.log('[load-form] Loading form for user:', userId);
+        // console.log('[load-form] Loading form for user:', userId);
 
         // First, check if user has any form progress saved
         const [progressRows] = await db.promise().query('SELECT step_number, form_data FROM user_form_progress WHERE user_id = ? LIMIT 1', [userId]);
@@ -750,26 +750,26 @@ app.post('/api/load-form', isAuth, async (req, res) => {
             try {
                 form_data = typeof row.form_data === 'string' ? JSON.parse(row.form_data) : row.form_data;
             } catch {
-                console.warn('[load-form] Failed to parse form_data for user:', userId);
+                // console.warn('[load-form] Failed to parse form_data for user:', userId);
                 form_data = {};
             }
         }
 
-        console.log('[load-form] User progress:', { userId, hasProgress, step_number, form_data_keys: Object.keys(form_data) });
+        // console.log('[load-form] User progress:', { userId, hasProgress, step_number, form_data_keys: Object.keys(form_data) });
 
         // Check if company exists (only for informational purposes, doesn't affect step)
         let company: any = null;
         const [companyRows] = await db.promise().query('SELECT * FROM company_mast WHERE user_id = ? LIMIT 1', [userId]);
         if (Array.isArray(companyRows) && (companyRows as any[]).length > 0) {
             company = (companyRows as any[])[0];
-            console.log('[load-form] Found company for user:', userId, 'company_id:', company.id);
+            // console.log('[load-form] Found company for user:', userId, 'company_id:', company.id);
         } else {
-            console.log('[load-form] No company found for user:', userId);
+            // console.log('[load-form] No company found for user:', userId);
         }
 
         // For new users (no progress), always start at step 0
         if (!hasProgress) {
-            console.log('[load-form] New user, starting at step 0');
+            // console.log('[load-form] New user, starting at step 0');
             step_number = 0;
             form_data = {};
             company = null; // Don't send company data for new users
@@ -1561,9 +1561,9 @@ app.delete('/api/admin/blogs/:id', async (req, res) => {
 // Upload (dynamic folders + both field names) - Using Cloudinary for permanent storage
 app.post('/api/upload-logo', memoryUpload.any(), async (req, res) => {
     try {
-        console.log('[upload-logo] Starting upload process...');
-        console.log('[upload-logo] Query params:', req.query);
-        console.log('[upload-logo] Files received:', (req as any).files?.map((f: any) => ({ fieldname: f.fieldname, originalname: f.originalname })) || 'No files');
+        // console.log('[upload-logo] Starting upload process...');
+        // console.log('[upload-logo] Query params:', req.query);
+        // console.log('[upload-logo] Files received:', (req as any).files?.map((f: any) => ({ fieldname: f.fieldname, originalname: f.originalname })) || 'No files');
 
         const files: any[] = (req as any).files || [];
         const fileObj = files[0]; // Take the first file regardless of field name
@@ -1573,12 +1573,12 @@ app.post('/api/upload-logo', memoryUpload.any(), async (req, res) => {
             return res.status(400).json({ error: 'No file uploaded' });
         }
 
-        console.log('[upload-logo] File details:', {
-            fieldname: fileObj.fieldname,
-            originalname: fileObj.originalname,
-            mimetype: fileObj.mimetype,
-            size: fileObj.size
-        });
+        // console.log('[upload-logo] File details:', {
+        //     fieldname: fileObj.fieldname,
+        //     originalname: fileObj.originalname,
+        //     mimetype: fileObj.mimetype,
+        //     size: fileObj.size
+        // });
 
         // Validate file type
         if (!fileObj.mimetype.startsWith('image/')) {
@@ -1639,7 +1639,7 @@ app.post('/api/upload-logo', memoryUpload.any(), async (req, res) => {
             }
         }
 
-        console.log(`[upload-logo] Uploading to folder: ${cloudinaryFolder}, prefix: ${filenamePrefix}, fieldname: ${fileObj.fieldname}, query_field: ${fieldParam}, query_folder: ${folderParam}`);
+        // console.log(`[upload-logo] Uploading to folder: ${cloudinaryFolder}, prefix: ${filenamePrefix}, fieldname: ${fileObj.fieldname}, query_field: ${fieldParam}, query_folder: ${folderParam}`);
 
         // Test Cloudinary initialization first
         const cloudinaryInstance = await initCloudinary();
@@ -1648,7 +1648,7 @@ app.post('/api/upload-logo', memoryUpload.any(), async (req, res) => {
             return res.status(500).json({ error: 'Cloud storage not configured. Please check environment variables.' });
         }
 
-        console.log('[upload-logo] Cloudinary initialized successfully');
+        // console.log('[upload-logo] Cloudinary initialized successfully');
 
         // Upload to Cloudinary
         const result = await uploadToCloudinary(
@@ -1657,7 +1657,7 @@ app.post('/api/upload-logo', memoryUpload.any(), async (req, res) => {
             filenamePrefix
         );
 
-        console.log(`[upload-logo] Upload successful:`, result.secure_url);
+        // console.log(`[upload-logo] Upload successful:`, result.secure_url);
 
         res.json({
             path: result.secure_url,

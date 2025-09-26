@@ -465,20 +465,20 @@ export default function AutoSite() {
 
     // Only proceed if we have a current user ID
     if (!userID) {
-      console.log('[AutoSite] No userID found, skipping user change detection');
+      // console.log('[AutoSite] No userID found, skipping user change detection');
       return;
     }
 
     // If no lastUserID is stored, this might be first visit or after logout
     if (!lastUserID) {
-      console.log('[AutoSite] No previous user ID stored, setting current user:', userID);
+      // console.log('[AutoSite] No previous user ID stored, setting current user:', userID);
       localStorage.setItem('autoSiteLastUserID', userID);
       return; // Don't reset progress, just track the user
     }
 
     // Only reset if it's actually a DIFFERENT user
     if (userID !== lastUserID) {
-      console.log('[AutoSite] DIFFERENT user detected:', { lastUserID, newUserID: userID });
+      // console.log('[AutoSite] DIFFERENT user detected:', { lastUserID, newUserID: userID });
 
       // Store the new user ID
       localStorage.setItem('autoSiteLastUserID', userID);
@@ -493,9 +493,9 @@ export default function AutoSite() {
       setCurrentStep(0);
       setCompanyId(0);
 
-      console.log('[AutoSite] Reset state for different user:', userID);
+      // console.log('[AutoSite] Reset state for different user:', userID);
     } else {
-      console.log('[AutoSite] Same user returning:', userID, '- keeping their progress');
+      // console.log('[AutoSite] Same user returning:', userID, '- keeping their progress');
     }
   }, [localStorage.getItem('userID')]);
 
@@ -682,7 +682,7 @@ export default function AutoSite() {
 
     // Wait for userID to be available after Google auth
     const attemptLoadForm = async () => {
-      console.log('[AutoSite] Starting form load attempt...');
+      // console.log('[AutoSite] Starting form load attempt...');
 
       let userID = localStorage.getItem('userID');
       let attempts = 0;
@@ -690,7 +690,7 @@ export default function AutoSite() {
 
       // Wait for userID to be available (especially important after OAuth)
       while (!userID && attempts < maxAttempts) {
-        console.log(`[AutoSite] Waiting for userID, attempt ${attempts + 1}/${maxAttempts}`);
+        // console.log(`[AutoSite] Waiting for userID, attempt ${attempts + 1}/${maxAttempts}`);
         await new Promise(resolve => setTimeout(resolve, 300)); // Increased from 200ms to 300ms
         userID = localStorage.getItem('userID');
         attempts++;
@@ -705,7 +705,7 @@ export default function AutoSite() {
         return;
       }
 
-      console.log('[AutoSite] Found userID:', userID, 'loading form data...');
+      // console.log('[AutoSite] Found userID:', userID, 'loading form data...');
 
       try {
         const response = await fetch(`/api/load-form`, {
@@ -720,17 +720,17 @@ export default function AutoSite() {
         }
 
         const data = await response.json();
-        console.log('[AutoSite] Form data loaded for user', userID, ':', {
-          step_number: data.step_number,
-          has_form_data: !!data.form_data && Object.keys(data.form_data).length > 0,
-          has_company: !!data.company,
-          debug: data.debug
-        });
+        // console.log('[AutoSite] Form data loaded for user', userID, ':', {
+        //   step_number: data.step_number,
+        //   has_form_data: !!data.form_data && Object.keys(data.form_data).length > 0,
+        //   has_company: !!data.company,
+        //   debug: data.debug
+        // });
 
         // Always use the step_number from the database, no fallbacks to localStorage
         const dbStepNumber = data.step_number || 0;
         setCurrentStep(dbStepNumber);
-        console.log('[AutoSite] Set current step to:', dbStepNumber);
+        // console.log('[AutoSite] Set current step to:', dbStepNumber);
 
         // Robustly parse form_data if string
         let parsedFormData = defaultFormData;
@@ -761,12 +761,12 @@ export default function AutoSite() {
         if (data.company && data.company.id) {
           setCompanyId(data.company.id);
           localStorage.setItem("autoSiteCompanyId", String(data.company.id));
-          console.log('[AutoSite] Set companyId from database:', data.company.id);
+          // console.log('[AutoSite] Set companyId from database:', data.company.id);
         } else {
           // Clear company ID if no company exists
           setCompanyId(0);
           localStorage.removeItem("autoSiteCompanyId");
-          console.log('[AutoSite] No company found, cleared companyId');
+          // console.log('[AutoSite] No company found, cleared companyId');
         }
       } catch (error) {
         console.error('[AutoSite] Failed to load form for user', userID, ':', error);
@@ -816,7 +816,7 @@ export default function AutoSite() {
           variant: 'destructive'
         });
       } else {
-        console.log('[saveStep] success for step', stepNumber);
+        // console.log('[saveStep] success for step', stepNumber);
       }
     } catch (e) {
       console.warn('[saveStep] network error', e);
@@ -1007,7 +1007,7 @@ export default function AutoSite() {
         const response = await fetch(apiUrl);
         if (response.ok) {
           const status = await response.json();
-          console.log(`Polling #${pollCount}:`, status);
+          // console.log(`Polling #${pollCount}:`, status);
           setBuildStatus(status.message);
           if (status.status === "ready") {
             setPreviewUrl(status.previewUrl);

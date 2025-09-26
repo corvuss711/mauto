@@ -231,14 +231,27 @@ export default function AutoSite() {
   ]);
   const [productPreviews, setProductPreviews] = useState([""]);
 
+  // Initialize productImagesUploading array when products length changes
+  useEffect(() => {
+    setProductImagesUploading(new Array(products.length).fill(false));
+  }, [products.length]);
+
   // Handle image upload for each product
   const handleProductImageUploadMulti = async (e: React.ChangeEvent<HTMLInputElement>, idx: number) => {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
+
+    // Set loading state for this specific product
+    setProductImagesUploading(prev => {
+      const updated = [...prev];
+      updated[idx] = true;
+      return updated;
+    });
+
     const formDataUpload = new FormData();
     formDataUpload.append('image', file);
     try {
-      const res = await fetch(`${apiBase}/api/upload-logo?folder=product-images`, {
+      const res = await fetch(`${apiBase}/api/upload-logo?folder=product-images&field=product_image`, {
         method: 'POST',
         body: formDataUpload,
       });
@@ -251,7 +264,20 @@ export default function AutoSite() {
         newPreviews[idx] = data.path;
         setProductPreviews(newPreviews);
       }
-    } catch { }
+    } catch {
+      toast({
+        title: 'Upload Failed',
+        description: 'Could not upload image. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      // Clear loading state for this specific product
+      setProductImagesUploading(prev => {
+        const updated = [...prev];
+        updated[idx] = false;
+        return updated;
+      });
+    }
   };
 
   // Add More button handler
@@ -346,11 +372,14 @@ export default function AutoSite() {
   const handleProductImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
+
+    setProductImageUploading(true);
+
     const formDataUpload = new FormData();
     formDataUpload.append('image', file);
     try {
       // Upload to product-images subfolder
-      const res = await fetch(`${apiBase}/api/upload-logo?folder=product-images`, {
+      const res = await fetch(`${apiBase}/api/upload-logo?folder=product-images&field=product_image`, {
         method: 'POST',
         body: formDataUpload,
       });
@@ -371,6 +400,8 @@ export default function AutoSite() {
         description: 'Could not upload image. Please try again.',
         variant: 'destructive',
       });
+    } finally {
+      setProductImageUploading(false);
     }
   };
   // const [currentStep, setCurrentStep] = useState(0);
@@ -510,12 +541,28 @@ export default function AutoSite() {
   // FIX: Move these hooks to top level to avoid blank screen/hook error
   const [bannerPreview, setBannerPreview] = useState<string>("");
   const [photoPreviews, setPhotoPreviews] = useState<string[]>(["", "", "", ""]);
+
+  // Loading states for image uploads
+  const [bannerUploading, setBannerUploading] = useState<boolean>(false);
+  const [photoUploading, setPhotoUploading] = useState<boolean[]>([false, false, false, false]);
+  const [productImageUploading, setProductImageUploading] = useState<boolean>(false);
+  const [productImagesUploading, setProductImagesUploading] = useState<boolean[]>([]);
+  const [logoUploading, setLogoUploading] = useState<boolean>(false);
+
   const [heroTitleError, setHeroTitleError] = useState<string>("");
   const [bannerError, setBannerError] = useState<string>("");
   const [companyId, setCompanyId] = useState(() => {
     const saved = localStorage.getItem("autoSiteCompanyId");
     return saved && !isNaN(Number(saved)) ? Number(saved) : 0;
   });
+
+  // Scroll to top when step changes
+  useEffect(() => {
+    window.scrollTo({
+      top: 0,
+      behavior: 'smooth'
+    });
+  }, [currentStep]);
 
   // const stepFromLogin = location.state?.stepNumber || 0;
 
@@ -528,11 +575,23 @@ export default function AutoSite() {
   ) => {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
+
+    // Set loading state based on field type
+    if (field === 'banner_path') {
+      setBannerUploading(true);
+    } else if (photoIndex !== undefined) {
+      setPhotoUploading(prev => {
+        const updated = [...prev];
+        updated[photoIndex] = true;
+        return updated;
+      });
+    }
+
     const formDataUpload = new FormData();
     formDataUpload.append('image', file);
     try {
-      // Always upload to page-content-uploads subdirectory
-      const res = await fetch(`${apiBase}/api/upload-logo?folder=page-content-uploads`, {
+      // Always upload to page-content-uploads subdirectory with field specification
+      const res = await fetch(`${apiBase}/api/upload-logo?folder=page-content-uploads&field=${field}`, {
         method: 'POST',
         body: formDataUpload,
       });
@@ -564,6 +623,17 @@ export default function AutoSite() {
         description: 'Could not upload image. Please try again.',
         variant: 'destructive',
       });
+    } finally {
+      // Clear loading state
+      if (field === 'banner_path') {
+        setBannerUploading(false);
+      } else if (photoIndex !== undefined) {
+        setPhotoUploading(prev => {
+          const updated = [...prev];
+          updated[photoIndex] = false;
+          return updated;
+        });
+      }
     }
   };
 
@@ -1184,6 +1254,9 @@ export default function AutoSite() {
         const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
           const file = e.target.files && e.target.files[0];
           if (!file) return;
+
+          setLogoUploading(true);
+
           const formDataUpload = new FormData();
           formDataUpload.append('logo', file);
           try {
@@ -1207,6 +1280,8 @@ export default function AutoSite() {
               description: 'Could not upload logo. Please try again.',
               variant: 'destructive',
             });
+          } finally {
+            setLogoUploading(false);
           }
         };
         return (
@@ -1317,8 +1392,19 @@ export default function AutoSite() {
                   onChange={handleLogoUpload}
                   className="mt-2"
                   required
+                  disabled={logoUploading}
                 />
-                {formData.logoPath && (
+
+                {/* Loading indicator */}
+                {logoUploading && (
+                  <div className="mt-2 flex items-center gap-2 text-blue-600">
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-600 border-t-transparent"></div>
+                    <span className="text-sm">Uploading logo...</span>
+                  </div>
+                )}
+
+                {/* Success message */}
+                {formData.logoPath && !logoUploading && (
                   <div className="mt-2 text-xs text-green-600">Logo uploaded: {formData.logoPath}</div>
                 )}
               </div>
@@ -1436,9 +1522,20 @@ export default function AutoSite() {
                       onChange={e => handleImageUpload(e, "banner_path")}
                       className="mt-2"
                       required
+                      disabled={bannerUploading}
                     />
                     {bannerError && <div className="text-red-500 text-xs mt-1">{bannerError}</div>}
-                    {bannerPreview && bannerPreview !== "" && (
+
+                    {/* Loading indicator */}
+                    {bannerUploading && (
+                      <div className="mt-2 flex items-center gap-2 text-blue-600">
+                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-600 border-t-transparent"></div>
+                        <span className="text-sm">Uploading image...</span>
+                      </div>
+                    )}
+
+                    {/* Image preview */}
+                    {bannerPreview && bannerPreview !== "" && !bannerUploading && (
                       <img src={bannerPreview} alt="Banner Preview" className="mt-2 rounded shadow w-full max-w-xs mx-auto" />
                     )}
                   </div>
@@ -1803,8 +1900,19 @@ export default function AutoSite() {
                           onChange={e => handleProductImageUploadMulti(e, idx)}
                           className="mt-2"
                           required
+                          disabled={productImagesUploading[idx]}
                         />
-                        {productPreviews[idx] && productPreviews[idx] !== "" && (
+
+                        {/* Loading indicator */}
+                        {productImagesUploading[idx] && (
+                          <div className="mt-2 flex items-center gap-2 text-blue-600">
+                            <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-600 border-t-transparent"></div>
+                            <span className="text-sm">Uploading image...</span>
+                          </div>
+                        )}
+
+                        {/* Image preview */}
+                        {productPreviews[idx] && productPreviews[idx] !== "" && !productImagesUploading[idx] && (
                           <img src={productPreviews[idx]} alt="Preview" className="mt-2 rounded shadow w-full max-w-xs mx-auto" />
                         )}
                       </div>
@@ -1871,7 +1979,7 @@ export default function AutoSite() {
                 >
                   {isLoading ? (
                     <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      <div className="animate-spin rounded-full w-4 h-4 mr-2 border-2 border-white border-t-transparent"></div>
                       {isEditing ? "Updating..." : "Generating..."}
                     </>
                   ) : (

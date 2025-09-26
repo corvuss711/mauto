@@ -13,6 +13,67 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import mysql from 'mysql2';
+
+// Cloudinary configuration for permanent image storage
+let cloudinary: any = null;
+
+async function initCloudinary() {
+    if (cloudinary) return cloudinary;
+
+    try {
+        // Use dynamic import for ES modules
+        const cloudinaryModule = await import('cloudinary');
+        cloudinary = cloudinaryModule.v2;
+
+        cloudinary.config({
+            cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+            api_key: process.env.CLOUDINARY_API_KEY,
+            api_secret: process.env.CLOUDINARY_API_SECRET,
+        });
+        console.log('✅ Cloudinary configured successfully');
+        return cloudinary;
+    } catch (error) {
+        console.warn('⚠️ Cloudinary not configured:', error.message);
+        return null;
+    }
+}
+
+/**
+ * Upload image buffer to Cloudinary
+ */
+const uploadToCloudinary = async (buffer: Buffer, folder: string, filename?: string): Promise<any> => {
+    const cloudinaryInstance = await initCloudinary();
+    if (!cloudinaryInstance) {
+        throw new Error('Cloudinary not configured');
+    }
+
+    return new Promise((resolve, reject) => {
+        const uploadOptions: any = {
+            folder: folder,
+            resource_type: 'image',
+            width: 1200,
+            height: 900,
+            crop: 'limit',
+            quality: 'auto'
+        };
+
+        if (filename) {
+            uploadOptions.public_id = `${filename}_${Date.now()}_${Math.round(Math.random() * 1e9)}`;
+        }
+
+        cloudinaryInstance.uploader.upload_stream(
+            uploadOptions,
+            (error: any, result: any) => {
+                if (error) {
+                    console.error('Cloudinary upload error:', error);
+                    reject(error);
+                } else {
+                    resolve(result);
+                }
+            }
+        ).end(buffer);
+    });
+};
 import { RowDataPacket, ResultSetHeader } from 'mysql2'; // Import the new route handler
 
 function parseMysqlUrl(url?: string) {
@@ -36,19 +97,19 @@ const pool = mysql.createPool({
 const db = pool; // keep variable name for minimal downstream changes
 
 // Create a separate connection pool specifically for blog database
-const blogDbConfig = { 
-  host: process.env.DB_HOST || 'localhost', 
-  user: process.env.DB_USER || 'root', 
-  password: process.env.DB_PASS || '', 
-  port: process.env.DB_PORT ? Number(process.env.DB_PORT) : 3306, 
-  database: process.env.DB_NAME || 'manacle_blogs' 
+const blogDbConfig = {
+    host: process.env.DB_HOST || 'localhost',
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASS || '',
+    port: process.env.DB_PORT ? Number(process.env.DB_PORT) : 3306,
+    database: process.env.DB_NAME || 'manacle_blogs'
 };
 const blogPool = mysql.createPool({
-  ...blogDbConfig,
-  waitForConnections: true,
-  connectionLimit: 5,
-  queueLimit: 0,
-  connectTimeout: 8000
+    ...blogDbConfig,
+    waitForConnections: true,
+    connectionLimit: 5,
+    queueLimit: 0,
+    connectTimeout: 8000
 });
 
 // Helper function for blog database queries
@@ -362,6 +423,14 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
+// Memory storage for Cloudinary uploads
+const memoryUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: {
+        fileSize: 10 * 1024 * 1024 // 10MB limit
+    }
+});
+
 // Helper: always return an https absolute URL for stored assets
 function toHttpsAbsolute(p: string | undefined | null, req: express.Request): string {
     if (!p) return '';
@@ -377,6 +446,36 @@ function toHttpsAbsolute(p: string | undefined | null, req: express.Request): st
 // ---------------- Consolidated FULL Logic Routes ----------------
 // Ping
 app.get('/api/ping', (_req, res) => res.json({ ok: true }));
+
+// Test Cloudinary connection
+app.get('/api/test-cloudinary', async (_req, res) => {
+    try {
+        const cloudinaryInstance = await initCloudinary();
+        if (!cloudinaryInstance) {
+            return res.status(500).json({
+                error: 'Cloudinary not configured',
+                config: {
+                    hasCloudName: !!process.env.CLOUDINARY_CLOUD_NAME,
+                    hasApiKey: !!process.env.CLOUDINARY_API_KEY,
+                    hasApiSecret: !!process.env.CLOUDINARY_API_SECRET
+                }
+            });
+        }
+
+        // Test API connection with ping
+        const result = await cloudinaryInstance.api.ping();
+        res.json({
+            success: true,
+            message: 'Cloudinary connected successfully',
+            result
+        });
+    } catch (error) {
+        res.status(500).json({
+            error: 'Cloudinary connection failed',
+            message: error instanceof Error ? error.message : 'Unknown error'
+        });
+    }
+});
 
 // Signup (detailed, matches original server implementation)
 app.post('/api/signup', async (req, res, next) => {
@@ -586,9 +685,12 @@ app.get('/api/business-sectors', async (_req, res) => {
 });
 
 // Form progress routes
-app.post('/api/save-step', async (req, res) => {
+app.post('/api/save-step', isAuth, async (req, res) => {
     let { step_number, form_data, user_id } = req.body || {};
+
+    // Get user_id from authenticated session (preferred) or request body (fallback)
     if (!user_id && (req as any).user?.id) user_id = (req as any).user.id;
+    if (!user_id) user_id = (req as any).user?.id; // Since we have isAuth, this should always exist
 
     // Enhanced validation
     if (typeof step_number !== 'number' || form_data == null || !user_id) {
@@ -622,8 +724,13 @@ app.post('/api/save-step', async (req, res) => {
 
 // Previous GET + query param version commented out
 // app.get('/api/load-form', async (req,res)=>{ ... })
-app.post('/api/load-form', async (req, res) => {
-    const userId = req.body?.user_id;
+app.post('/api/load-form', isAuth, async (req, res) => {
+    let userId = req.body?.user_id;
+
+    // Get user_id from authenticated session (preferred) or request body (fallback)
+    if (!userId && (req as any).user?.id) userId = (req as any).user.id;
+    if (!userId) userId = (req as any).user?.id; // Since we have isAuth, this should always exist
+
     if (!userId) return res.status(400).json({ error: 'Missing user_id' });
 
     try {
@@ -685,8 +792,13 @@ app.post('/api/load-form', async (req, res) => {
 });
 
 // Debug endpoint to check user's form state
-app.post('/api/debug-form-state', async (req, res) => {
-    const userId = req.body?.user_id;
+app.post('/api/debug-form-state', isAuth, async (req, res) => {
+    let userId = req.body?.user_id;
+
+    // Get user_id from authenticated session (preferred) or request body (fallback)
+    if (!userId && (req as any).user?.id) userId = (req as any).user.id;
+    if (!userId) userId = (req as any).user?.id; // Since we have isAuth, this should always exist
+
     if (!userId) return res.status(400).json({ error: 'Missing user_id' });
 
     try {
@@ -1446,97 +1558,174 @@ app.delete('/api/admin/blogs/:id', async (req, res) => {
     }
 });
 
-// Upload (dynamic folders + both field names)
-app.post('/api/upload-logo', (req, res, next) => {
-    // Support ?folder=page-content-uploads or product-images
-    let folder = '';
-    if (req.query.folder === 'page-content-uploads') folder = 'page-content-uploads';
-    else if (req.query.folder === 'product-images') folder = 'product-images';
-    const destDir = folder ? path.join('/tmp/uploads', folder) : '/tmp/uploads';
-    if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
-    const storageDyn = multer.diskStorage({
-        destination: (_r, _f, cb) => cb(null, destDir),
-        filename: (_r, file, cb) => {
-            const unique = Date.now() + '-' + Math.round(Math.random() * 1e9) + path.extname(file.originalname);
-            cb(null, (folder ? (folder + '-') : '') + unique);
+// Upload (dynamic folders + both field names) - Using Cloudinary for permanent storage
+app.post('/api/upload-logo', memoryUpload.any(), async (req, res) => {
+    try {
+        console.log('[upload-logo] Starting upload process...');
+        console.log('[upload-logo] Query params:', req.query);
+        console.log('[upload-logo] Files received:', (req as any).files?.map((f: any) => ({ fieldname: f.fieldname, originalname: f.originalname })) || 'No files');
+
+        const files: any[] = (req as any).files || [];
+        const fileObj = files[0]; // Take the first file regardless of field name
+
+        if (!fileObj) {
+            console.error('[upload-logo] No file uploaded');
+            return res.status(400).json({ error: 'No file uploaded' });
         }
-    });
-    const up = multer({ storage: storageDyn }).fields([{ name: 'image', maxCount: 1 }, { name: 'logo', maxCount: 1 }]);
-    up(req as any, res as any, (err: any) => {
-        if (err) return res.status(400).json({ error: err.code === 'LIMIT_UNEXPECTED_FILE' ? 'Unexpected file field' : 'Upload error' });
-        const files: any = (req as any).files || {};
-        const fileObj = (files.image?.[0]) || (files.logo?.[0]);
-        if (!fileObj) return res.status(400).json({ error: 'No file uploaded' });
-        const rel = folder ? `/uploads/${folder}/${fileObj.filename}` : `/uploads/${fileObj.filename}`;
-        const url = toHttpsAbsolute(rel, req);
-        res.json({ path: rel, url });
-    });
+
+        console.log('[upload-logo] File details:', {
+            fieldname: fileObj.fieldname,
+            originalname: fileObj.originalname,
+            mimetype: fileObj.mimetype,
+            size: fileObj.size
+        });
+
+        // Validate file type
+        if (!fileObj.mimetype.startsWith('image/')) {
+            console.error('[upload-logo] Invalid file type:', fileObj.mimetype);
+            return res.status(400).json({ error: 'Only image files are allowed' });
+        }
+
+        // Determine Cloudinary folder and filename prefix based on query parameter and field
+        let cloudinaryFolder = 'company-logos'; // default
+        let filenamePrefix = 'logo'; // default
+
+        const folderParam = req.query.folder as string;
+        const fieldParam = req.query.field as string || fileObj.fieldname;
+
+        // AutoSite Step 4 specific mappings
+        if (folderParam === 'page-content-uploads') {
+            // Home page content uploads from AutoSite step 4
+            if (fieldParam === 'banner_path' || fieldParam === 'banner' || fieldParam?.includes('banner')) {
+                cloudinaryFolder = 'home-banners';
+                filenamePrefix = 'banner';
+            } else if (fieldParam === 'photo_1' || fieldParam === 'photo_2' || fieldParam === 'photo_3' || fieldParam === 'photo_4') {
+                cloudinaryFolder = 'home-photos';
+                filenamePrefix = fieldParam; // Use exact field name (photo_1, photo_2, etc.)
+            } else {
+                // Generic page content
+                cloudinaryFolder = 'page-content';
+                filenamePrefix = 'content';
+            }
+        } else if (folderParam === 'product-images') {
+            // Product images from AutoSite step 4
+            cloudinaryFolder = 'product-images';
+            filenamePrefix = 'product';
+        } else if (folderParam === 'company-logos' || fieldParam === 'logo') {
+            // Company logo uploads
+            cloudinaryFolder = 'company-logos';
+            filenamePrefix = 'logo';
+        } else if (fieldParam === 'thumbnail') {
+            // Blog thumbnails
+            cloudinaryFolder = 'blog-thumbnails';
+            filenamePrefix = 'blog_thumb';
+        } else {
+            // Fallback logic based on field name patterns
+            if (fieldParam?.includes('banner')) {
+                cloudinaryFolder = 'home-banners';
+                filenamePrefix = 'banner';
+            } else if (fieldParam?.includes('photo')) {
+                cloudinaryFolder = 'home-photos';
+                filenamePrefix = fieldParam;
+            } else if (fieldParam?.includes('product') || fieldParam?.includes('service')) {
+                cloudinaryFolder = 'product-images';
+                filenamePrefix = 'product';
+            } else if (fieldParam?.includes('logo')) {
+                cloudinaryFolder = 'company-logos';
+                filenamePrefix = 'logo';
+            } else {
+                cloudinaryFolder = 'uploads';
+                filenamePrefix = fieldParam || 'file';
+            }
+        }
+
+        console.log(`[upload-logo] Uploading to folder: ${cloudinaryFolder}, prefix: ${filenamePrefix}, fieldname: ${fileObj.fieldname}, query_field: ${fieldParam}, query_folder: ${folderParam}`);
+
+        // Test Cloudinary initialization first
+        const cloudinaryInstance = await initCloudinary();
+        if (!cloudinaryInstance) {
+            console.error('[upload-logo] Cloudinary not initialized');
+            return res.status(500).json({ error: 'Cloud storage not configured. Please check environment variables.' });
+        }
+
+        console.log('[upload-logo] Cloudinary initialized successfully');
+
+        // Upload to Cloudinary
+        const result = await uploadToCloudinary(
+            fileObj.buffer,
+            cloudinaryFolder,
+            filenamePrefix
+        );
+
+        console.log(`[upload-logo] Upload successful:`, result.secure_url);
+
+        res.json({
+            path: result.secure_url,
+            url: result.secure_url,
+            public_id: result.public_id,
+            folder: cloudinaryFolder,
+            fieldname: fileObj.fieldname
+        });
+
+    } catch (error) {
+        console.error('Logo upload error:', error);
+        console.error('Error stack:', error.stack);
+        res.status(500).json({
+            error: 'Upload failed',
+            message: error instanceof Error ? error.message : 'Unknown error',
+            details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
+    }
 });
 
-// Thumbnail upload for blogs
-app.post('/api/upload/thumbnail', (req, res) => {
-    const destDir = '/tmp/blogs_thumbs';
-    if (!fs.existsSync(destDir)) {
-        fs.mkdirSync(destDir, { recursive: true });
-    }
-
-    const storage = multer.diskStorage({
-        destination: (req, file, cb) => {
-            cb(null, destDir);
-        },
-        filename: (req, file, cb) => {
-            const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-            const ext = path.extname(file.originalname);
-            cb(null, 'blog-thumb-' + uniqueSuffix + ext);
-        }
-    });
-
-    const fileFilter = (req: any, file: any, cb: any) => {
-        if (file.mimetype.startsWith('image/')) {
-            cb(null, true);
-        } else {
-            cb(new Error('Only image files are allowed!'), false);
-        }
-    };
-
-    const upload = multer({
-        storage,
-        fileFilter,
-        limits: {
-            fileSize: 5 * 1024 * 1024 // 5MB limit
-        }
-    }).single('thumbnail');
-
-    upload(req as any, res as any, (err: any) => {
-        if (err) {
-            if (err.code === 'LIMIT_FILE_SIZE') {
-                return res.status(400).json({
-                    success: false,
-                    message: 'File size too large. Maximum 5MB allowed.'
-                });
-            }
-            return res.status(400).json({
-                success: false,
-                message: err.message || 'File upload failed.'
-            });
-        }
-
-        if (!(req as any).file) {
+// Thumbnail upload for blogs - Using Cloudinary for permanent storage
+app.post('/api/upload/thumbnail', memoryUpload.single('thumbnail'), async (req, res) => {
+    try {
+        if (!req.file) {
             return res.status(400).json({
                 success: false,
                 message: 'No file uploaded.'
             });
         }
 
-        const file = (req as any).file;
-        const relativePath = `/blogs_thumbs/${file.filename}`;
+        // Validate file type
+        if (!req.file.mimetype.startsWith('image/')) {
+            return res.status(400).json({
+                success: false,
+                message: 'Only image files are allowed.'
+            });
+        }
+
+        // Validate file size (5MB limit)
+        if (req.file.size > 5 * 1024 * 1024) {
+            return res.status(400).json({
+                success: false,
+                message: 'File size too large. Maximum 5MB allowed.'
+            });
+        }
+
+        // Upload to Cloudinary
+        const result = await uploadToCloudinary(
+            req.file.buffer,
+            'blog-thumbnails',
+            'blog_thumb'
+        );
 
         res.json({
             success: true,
-            url: relativePath,
+            url: result.secure_url,
+            public_id: result.public_id,
             message: 'Thumbnail uploaded successfully'
         });
-    });
+
+    } catch (error) {
+        console.error('Thumbnail upload error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to upload thumbnail',
+            error: error instanceof Error ? error.message : 'Unknown error'
+        });
+    }
 });
 
 // Company host

@@ -95,6 +95,7 @@ export default {
         glow: "glow 2s ease-in-out infinite alternate",
         "rotate-3d": "rotate-3d 20s linear infinite",
         "pulse-slow": "pulse-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+        spin: "spin 1s linear infinite",
       },
       keyframes: {
         "accordion-down": {
@@ -136,6 +137,10 @@ export default {
         "pulse-slow": {
           "0%, 100%": { opacity: "1" },
           "50%": { opacity: "0.5" },
+        },
+        spin: {
+          "0%": { transform: "rotate(0deg)" },
+          "100%": { transform: "rotate(360deg)" },
         },
       },
       backgroundImage: {

@@ -185,6 +185,67 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 
+// Cloudinary configuration for permanent image storage
+let cloudinary: any = null;
+
+async function initCloudinary() {
+  if (cloudinary) return cloudinary;
+
+  try {
+    // Use dynamic import for ES modules
+    const cloudinaryModule = await import('cloudinary');
+    cloudinary = cloudinaryModule.v2;
+
+    cloudinary.config({
+      cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+      api_key: process.env.CLOUDINARY_API_KEY,
+      api_secret: process.env.CLOUDINARY_API_SECRET,
+    });
+    console.log('✅ Cloudinary configured successfully in auto-site.ts');
+    return cloudinary;
+  } catch (error) {
+    console.warn('⚠️ Cloudinary not configured in auto-site.ts:', error.message);
+    return null;
+  }
+}
+
+/**
+ * Upload image buffer to Cloudinary
+ */
+const uploadToCloudinary = async (buffer: Buffer, folder: string, filename?: string): Promise<any> => {
+  const cloudinaryInstance = await initCloudinary();
+  if (!cloudinaryInstance) {
+    throw new Error('Cloudinary not configured');
+  }
+
+  return new Promise((resolve, reject) => {
+    const uploadOptions: any = {
+      folder: folder,
+      resource_type: 'image',
+      width: 1200,
+      height: 900,
+      crop: 'limit',
+      quality: 'auto'
+    };
+
+    if (filename) {
+      uploadOptions.public_id = `${filename}_${Date.now()}_${Math.round(Math.random() * 1e9)}`;
+    }
+
+    cloudinaryInstance.uploader.upload_stream(
+      uploadOptions,
+      (error: any, result: any) => {
+        if (error) {
+          console.error('Cloudinary upload error:', error);
+          reject(error);
+        } else {
+          resolve(result);
+        }
+      }
+    ).end(buffer);
+  });
+};
+
 // @ts-ignore
 import mysql from "mysql2";
 import { ResultSetHeader } from 'mysql2';
@@ -303,139 +364,150 @@ const siteBuilds = new Map<string, SiteStatus>();
 //   return `${process.env.WP_URL.replace(/\/$/, '')}/${domain.replace(/^\//, '')}`;
 // }
 
-// Multer setup for logo uploads
-const uploadDir = path.join(process.cwd(), "uploads");
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir);
-}
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, uploadDir);
+// Multer setup for logo uploads - Using memory storage for Cloudinary
+const memoryUpload = multer({
+  storage: multer.memoryStorage(),
+  fileFilter: (req: any, file: any, cb: any) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed!'), false);
+    }
   },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const ext = path.extname(file.originalname);
-    cb(null, file.fieldname + '-' + uniqueSuffix + ext);
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB limit
   }
 });
-const fileFilter = (req: any, file: any, cb: any) => {
-  if (file.mimetype.startsWith('image/')) {
-    cb(null, true);
-  } else {
-    cb(new Error('Only image files are allowed!'), false);
-  }
-};
-const upload = multer({ storage, fileFilter });
 
-// Logo upload endpoint
+// Logo upload endpoint - Using Cloudinary for permanent storage
 export const uploadLogo = [
-  (req: Request, res: Response, next) => {
-    // Support ?folder=page-content-uploads or product-images for subdirectory
-    let folder = '';
-    if (req.query.folder === 'page-content-uploads') {
-      folder = 'page-content-uploads';
-    } else if (req.query.folder === 'product-images') {
-      folder = 'product-images';
-    }
-    // Set multer destination dynamically
-    const destDir = folder ? path.join(process.cwd(), 'uploads', folder) : path.join(process.cwd(), 'uploads');
-    if (!fs.existsSync(destDir)) {
-      fs.mkdirSync(destDir, { recursive: true });
-    }
-    const storage = multer.diskStorage({
-      destination: function (req, file, cb) {
-        cb(null, destDir);
-      },
-      filename: function (req, file, cb) {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        const ext = path.extname(file.originalname);
-        cb(null, file.fieldname + '-' + uniqueSuffix + ext);
+  memoryUpload.any(),
+  async (req: Request, res: Response) => {
+    try {
+      const files = (req as any).files;
+      if (!files || files.length === 0) {
+        return res.status(400).json({ error: 'No file uploaded' });
       }
-    });
-    const upload = multer({ storage, fileFilter }).single(folder ? 'image' : 'logo');
-    upload(req, res, function (err) {
-      if (err || !(req as any).file) {
-        return res.status(400).json({ error: 'No file uploaded or invalid file type.' });
+
+      const file = files[0]; // Get the first uploaded file
+
+      // Validate file type
+      if (!file.mimetype.startsWith('image/')) {
+        return res.status(400).json({ error: 'Only image files are allowed' });
       }
-      const file = (req as any).file;
-      const relativePath = folder ? `/uploads/${folder}/${file.filename}` : `/uploads/${file.filename}`;
-      res.json({ path: relativePath });
-    });
+
+      // Get field name for better organization
+      const fieldName = req.query.field as string;
+
+      // Determine Cloudinary folder and filename based on field and folder parameters
+      let cloudinaryFolder = 'company-logos'; // default
+      let filenamePrefix = 'logo';
+
+      // Enhanced field mapping for AutoSite step 4 image uploads
+      if (req.query.folder === 'page-content-uploads') {
+        if (fieldName === 'banner_path') {
+          cloudinaryFolder = 'home-banners';
+          filenamePrefix = 'banner';
+        } else if (fieldName?.startsWith('photo_')) {
+          cloudinaryFolder = 'home-photos';
+          filenamePrefix = fieldName;
+        } else {
+          cloudinaryFolder = 'page-content-uploads';
+          filenamePrefix = 'content';
+        }
+      } else if (req.query.folder === 'product-images') {
+        cloudinaryFolder = 'product-images';
+        filenamePrefix = 'product';
+      } else if (fieldName === 'banner_path') {
+        cloudinaryFolder = 'home-banners';
+        filenamePrefix = 'banner';
+      } else if (fieldName?.startsWith('photo_')) {
+        cloudinaryFolder = 'home-photos';
+        filenamePrefix = fieldName;
+      } else if (fieldName === 'product_image') {
+        cloudinaryFolder = 'product-images';
+        filenamePrefix = 'product';
+      }
+
+      console.log(`Uploading ${fieldName || 'unknown field'} to folder: ${cloudinaryFolder}`);
+
+      // Upload to Cloudinary
+      const result = await uploadToCloudinary(
+        file.buffer,
+        cloudinaryFolder,
+        filenamePrefix
+      );
+
+      res.json({
+        path: result.secure_url,
+        url: result.secure_url,
+        public_id: result.public_id,
+        folder: cloudinaryFolder
+      });
+
+    } catch (error) {
+      console.error('Logo upload error:', error);
+      res.status(500).json({
+        error: 'Upload failed',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
   }
 ];
 
-// Thumbnail upload endpoint for blogs
+// Thumbnail upload endpoint for blogs - Using Cloudinary for permanent storage
 export const uploadThumbnail = [
-  (req: Request, res: Response, next) => {
-
-
-    // Create blog_thumbs directory if it doesn't exist
-    const destDir = path.join(process.cwd(), 'public', 'blogs_thumbs');
-
-
-    if (!fs.existsSync(destDir)) {
-
-      fs.mkdirSync(destDir, { recursive: true });
-    }
-
-    const storage = multer.diskStorage({
-      destination: function (req, file, cb) {
-        cb(null, destDir);
-      },
-      filename: function (req, file, cb) {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        const ext = path.extname(file.originalname);
-        cb(null, 'blog-thumb-' + uniqueSuffix + ext);
-      }
-    });
-
-    const upload = multer({
-      storage,
-      fileFilter,
-      limits: {
-        fileSize: 5 * 1024 * 1024 // 5MB limit
-      }
-    }).single('thumbnail');
-
-    upload(req, res, function (err) {
-
-
-      if (err) {
-        console.error('Upload error:', err);
-        if (err.code === 'LIMIT_FILE_SIZE') {
-          return res.status(400).json({
-            success: false,
-            message: 'File size too large. Maximum 5MB allowed.'
-          });
-        }
-        return res.status(400).json({
-          success: false,
-          message: err.message || 'File upload failed.'
-        });
-      }
-
-      if (!(req as any).file) {
-
+  memoryUpload.any(),
+  async (req: Request, res: Response) => {
+    try {
+      const files = (req as any).files;
+      if (!files || files.length === 0) {
         return res.status(400).json({
           success: false,
           message: 'No file uploaded.'
         });
       }
 
-      const file = (req as any).file;
-      const relativePath = `/blogs_thumbs/${file.filename}`;
+      const file = files[0]; // Get the first uploaded file
 
-      // Create absolute URL based on request
-      const protocol = req.secure ? 'https' : 'http';
-      const host = req.get('host') || 'localhost:3000';
-      const absoluteUrl = `${protocol}://${host}${relativePath}`;
+      // Validate file type
+      if (!file.mimetype.startsWith('image/')) {
+        return res.status(400).json({
+          success: false,
+          message: 'Only image files are allowed.'
+        });
+      }
+
+      // Validate file size (5MB limit)
+      if (file.size > 5 * 1024 * 1024) {
+        return res.status(400).json({
+          success: false,
+          message: 'File size too large. Maximum 5MB allowed.'
+        });
+      }
+
+      // Upload to Cloudinary
+      const result = await uploadToCloudinary(
+        file.buffer,
+        'blog-thumbnails',
+        'blog_thumb'
+      );
 
       res.json({
         success: true,
-        url: absoluteUrl,
+        url: result.secure_url,
+        public_id: result.public_id,
         message: 'Thumbnail uploaded successfully'
       });
-    });
+
+    } catch (error) {
+      console.error('Thumbnail upload error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to upload thumbnail',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
   }
 ];
 

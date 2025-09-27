@@ -503,15 +503,41 @@ export default function AutoSite() {
 
       if (!lastUserID) {
         // First time visit - store the user and continue
-        // console.log('[AutoSite] First time user, setting current user:', userID);
+        console.log('[AutoSite] First time user, setting current user:', userID);
         localStorage.setItem('autoSiteLastUserID', userID);
         localStorage.removeItem('autoSiteLoggedOut');
         return;
       }
 
       if (userID !== lastUserID) {
-        // Different user detected - reset everything
-        // console.log('[AutoSite] DIFFERENT user detected:', { lastUserID, newUserID: userID });
+        // CRITICAL FIX: Before clearing data, double-check if this is really a different user
+        // This prevents clearing data when the same user logs in via different methods (OAuth vs regular)
+        console.log('[AutoSite] Potential different user detected:', { lastUserID, newUserID: userID });
+        
+        // Check if the user was just logged out and is returning (Google OAuth scenario)
+        if (wasLoggedOut && userID === lastUserID) {
+          // Same user returning after logout via OAuth - don't clear their data
+          console.log('[AutoSite] Same user returning after OAuth logout - preserving data');
+          localStorage.removeItem('autoSiteLoggedOut');
+          return;
+        }
+        
+        // Additional safety check: If user was logged out, give them a chance to login as same user
+        // This prevents data loss during OAuth flows where userID might be temporarily unavailable
+        if (wasLoggedOut) {
+          console.log('[AutoSite] User was logged out, checking if this is the same user via different login method...');
+          
+          // For now, trust that it's the same user if they were just logged out
+          // The form loading logic will handle loading their correct data from database
+          localStorage.setItem('autoSiteLastUserID', userID);
+          localStorage.removeItem('autoSiteLoggedOut');
+          console.log('[AutoSite] Updated user tracking for returning user:', userID);
+          return;
+        }
+
+        // Only clear data if we're absolutely sure this is a different user
+        // (no logout flag set, and different userID)
+        console.log('[AutoSite] CONFIRMED different user detected - clearing data:', { lastUserID, newUserID: userID });
 
         // Store the new user ID
         localStorage.setItem('autoSiteLastUserID', userID);
@@ -527,10 +553,10 @@ export default function AutoSite() {
         setCurrentStep(0);
         setCompanyId(0);
 
-        // console.log('[AutoSite] Reset state for different user:', userID);
+        console.log('[AutoSite] Reset state for different user:', userID);
       } else if (wasLoggedOut) {
         // Same user returning after logout - clear the logout flag but keep their progress
-        // console.log('[AutoSite] Same user returning after logout:', userID, '- restoring progress');
+        console.log('[AutoSite] Same user returning after logout:', userID, '- restoring progress');
         localStorage.removeItem('autoSiteLoggedOut');
       } else {
         // Same user, no logout - continue normally
@@ -979,6 +1005,17 @@ export default function AutoSite() {
       console.warn('[saveStep] missing userID; aborting');
       return;
     }
+    
+    // CRITICAL SAFETY CHECK: Prevent accidental clearing of existing user progress
+    // This can happen during OAuth login flows when user change detection resets state
+    if (stepNumber === 0 && (!data || Object.keys(data).length === 0 || JSON.stringify(data) === JSON.stringify(defaultFormData))) {
+      const wasLoggedOut = localStorage.getItem('autoSiteLoggedOut') === 'true';
+      if (wasLoggedOut) {
+        console.warn('[saveStep] Prevented saving step 0 with empty data during OAuth login - user likely has existing progress');
+        return;
+      }
+    }
+    
     // Always include products and campaigns arrays in form_data
     const formDataToSave = {
       ...data,

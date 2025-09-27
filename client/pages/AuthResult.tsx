@@ -80,13 +80,18 @@ export default function AuthResult() {
 
                 // Clear any existing session data to prevent conflicts
                 localStorage.removeItem('autoSiteLoggedOut');
-                localStorage.removeItem('currentLoadedUserId'); // Clear tracking so AutoSite will reload
-
+                // Only clear tracking if this is actually a different user
+                const lastUserID = localStorage.getItem('autoSiteLastUserID');
+                if (lastUserID && lastUserID !== userId) {
+                    console.log('[AuthResult] Different user detected, clearing tracking');
+                    localStorage.removeItem('currentLoadedUserId');
+                } else {
+                    console.log('[AuthResult] Same user or no previous user, preserving tracking');
+                }
+                
                 // Set userID in localStorage (same as regular login/signup)
                 localStorage.setItem('userID', userId);
-                console.log('[AuthResult] SUCCESS - userID set in localStorage:', userId);
-
-                // Ensure clean session state for Google OAuth users
+                console.log('[AuthResult] SUCCESS - userID set in localStorage:', userId);                // Ensure clean session state for Google OAuth users
                 localStorage.setItem('manacle_session', 'true');
 
                 if (isNew) {

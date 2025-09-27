@@ -469,26 +469,31 @@ export default function AutoSite() {
     impact: ""
   };
   /**
-   * PERSISTENCE FIX FOR GOOGLE OAUTH USERS:
+   * ENHANCED PERSISTENCE FIX FOR GOOGLE OAUTH USERS IN PRODUCTION:
    * 
    * Problem: When users logged out and back in with Google OAuth, their form progress 
-   * was being cleared because the system treated them as "different users".
+   * was being cleared in production (Vercel) even though it worked in local development.
    * 
-   * Root Cause: The logout handler was clearing 'autoSiteLastUserID', so when the same 
-   * user logged back in, user change detection couldn't recognize them.
+   * Root Causes:
+   * 1. Production OAuth timing is different due to serverless functions
+   * 2. Session persistence might be affected by edge caching
+   * 3. UserID might not be immediately available after OAuth redirect
+   * 4. Database connections might be slower in production
    * 
-   * Solution: 
+   * Enhanced Solution: 
    * 1. Preserve 'autoSiteLastUserID' across logout/login cycles
-   * 2. Use a 'autoSiteLoggedOut' flag to track logout state
-   * 3. Only reset progress for truly different users (different userID)
-   * 4. Handle OAuth timing issues with custom events
+   * 2. Use multiple user identity indicators (userID, email, oauth provider data)
+   * 3. Add production-specific timing adjustments
+   * 4. Implement retry logic for failed database loads
+   * 5. Add explicit user verification before resetting progress
+   * 6. Handle OAuth timing issues with increased wait times
    * 
    * Result: Same user keeps their form progress across logout/login cycles,
-   * preventing multiple site creation abuse while maintaining good UX.
+   * preventing multiple site creation abuse while maintaining good UX in production.
    */
   // Helper to detect user changes and reset form state ONLY for truly different users
   useEffect(() => {
-    const checkUserChange = () => {
+    const checkUserChange = async () => {
       const userID = localStorage.getItem('userID');
 
       // Only proceed if we have a current user ID
@@ -497,24 +502,40 @@ export default function AutoSite() {
         return;
       }
 
+      // Get additional user identity indicators for more robust detection
+      const userEmail = localStorage.getItem('userEmail') || localStorage.getItem('user_email');
+      const googleId = localStorage.getItem('googleId') || localStorage.getItem('google_id');
+      
       // Check if this is a different user from the last stored userID
       const lastUserID = localStorage.getItem('autoSiteLastUserID');
+      const lastUserEmail = localStorage.getItem('autoSiteLastUserEmail'); 
       const wasLoggedOut = localStorage.getItem('autoSiteLoggedOut') === 'true';
 
       if (!lastUserID) {
-        // First time visit - store the user and continue
+        // First time visit - store the user identifiers and continue
         // console.log('[AutoSite] First time user, setting current user:', userID);
         localStorage.setItem('autoSiteLastUserID', userID);
+        if (userEmail) localStorage.setItem('autoSiteLastUserEmail', userEmail);
         localStorage.removeItem('autoSiteLoggedOut');
         return;
       }
 
-      if (userID !== lastUserID) {
-        // Different user detected - reset everything
-        // console.log('[AutoSite] DIFFERENT user detected:', { lastUserID, newUserID: userID });
+      // Enhanced user change detection using multiple identifiers
+      const isDifferentUser = (
+        userID !== lastUserID && 
+        (userEmail && lastUserEmail ? userEmail !== lastUserEmail : true)
+      );
 
-        // Store the new user ID
+      if (isDifferentUser) {
+        // Different user detected - reset everything
+        // console.log('[AutoSite] DIFFERENT user detected:', { 
+        //   lastUserID, newUserID: userID, 
+        //   lastEmail: lastUserEmail, newEmail: userEmail 
+        // });
+
+        // Store the new user identifiers
         localStorage.setItem('autoSiteLastUserID', userID);
+        if (userEmail) localStorage.setItem('autoSiteLastUserEmail', userEmail);
         localStorage.removeItem('autoSiteLoggedOut');
 
         // Clear all data and reset state
@@ -532,9 +553,20 @@ export default function AutoSite() {
         // Same user returning after logout - clear the logout flag but keep their progress
         // console.log('[AutoSite] Same user returning after logout:', userID, '- restoring progress');
         localStorage.removeItem('autoSiteLoggedOut');
+        
+        // Update stored identifiers to current values (in case they changed slightly)
+        localStorage.setItem('autoSiteLastUserID', userID);
+        if (userEmail) localStorage.setItem('autoSiteLastUserEmail', userEmail);
+        
+        // Force form data reload to ensure we get latest from database
+        // This is crucial for production where session might have expired
+        triggerFormReload();
       } else {
-        // Same user, no logout - continue normally
+        // Same user, no logout - continue normally but verify identifiers are current
         // console.log('[AutoSite] Same user continuing session:', userID);
+        if (userEmail && userEmail !== lastUserEmail) {
+          localStorage.setItem('autoSiteLastUserEmail', userEmail);
+        }
       }
     };
 
@@ -552,6 +584,131 @@ export default function AutoSite() {
       window.removeEventListener('user-id-ready', handleUserIdReady);
     };
   }, [localStorage.getItem('userID')]);
+
+  // Add function to force form data reload (used when same user returns after logout)
+  const triggerFormReload = () => {
+    // Set a flag that the main form loading useEffect can detect
+    setIsFormLoading(true);
+    
+    // Trigger form reload after a short delay to ensure OAuth is fully settled
+    setTimeout(() => {
+      const currentUserID = localStorage.getItem('userID');
+      if (currentUserID) {
+        // Manually trigger the form loading logic
+        loadFormDataForUser(currentUserID);
+      }
+    }, 500); // Increased delay for production timing
+  };
+
+  // Extract form loading logic into a separate function for reusability
+  const loadFormDataForUser = async (userID: string, retryCount = 0) => {
+    const maxRetries = 3;
+    
+    try {
+      // Add session verification for production reliability
+      const sessionValid = await verifyUserSession(userID);
+      if (!sessionValid && retryCount === 0) {
+        // Session might be stale, trigger re-authentication check
+        console.log('[AutoSite] Session verification failed, checking authentication...');
+        // Wait a bit longer and retry
+        setTimeout(() => {
+          loadFormDataForUser(userID, retryCount + 1);
+        }, 2000);
+        return;
+      }
+
+      const response = await fetch(`/api/load-form`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: "include",
+        body: JSON.stringify({ user_id: userID })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      // Always use the step_number from the database, no fallbacks to localStorage
+      const dbStepNumber = data.step_number || 0;
+      setCurrentStep(dbStepNumber);
+
+      // Robustly parse form_data if string
+      let parsedFormData = defaultFormData;
+      if (typeof data.form_data === "string") {
+        try {
+          const parsed = JSON.parse(data.form_data);
+          parsedFormData = Object.keys(parsed).length ? parsed : defaultFormData;
+        } catch {
+          console.warn('[AutoSite] Failed to parse form_data string');
+          parsedFormData = defaultFormData;
+        }
+      } else if (data.form_data && Object.keys(data.form_data).length) {
+        parsedFormData = data.form_data;
+      }
+      setFormData(parsedFormData);
+
+      // Restore products and campaigns arrays if present
+      if (parsedFormData.products && Array.isArray(parsedFormData.products)) {
+        setProducts(parsedFormData.products);
+      }
+      if (parsedFormData.campaigns && Array.isArray(parsedFormData.campaigns)) {
+        setCampaigns(parsedFormData.campaigns);
+      }
+
+      // Set companyId from backend if available
+      if (data.company && data.company.id) {
+        setCompanyId(data.company.id);
+        localStorage.setItem("autoSiteCompanyId", String(data.company.id));
+      } else {
+        setCompanyId(0);
+        localStorage.removeItem("autoSiteCompanyId");
+      }
+
+      setIsFormLoading(false);
+    } catch (error) {
+      console.error('[AutoSite] Failed to load form for user', userID, 'retry', retryCount, ':', error);
+      
+      // Retry with exponential backoff for production reliability
+      if (retryCount < maxRetries) {
+        const delay = Math.pow(2, retryCount) * 1000; // 1s, 2s, 4s
+        setTimeout(() => {
+          loadFormDataForUser(userID, retryCount + 1);
+        }, delay);
+      } else {
+        // Final fallback - initialize with defaults
+        setCurrentStep(0);
+        setFormData(defaultFormData);
+        setCompanyId(0);
+        localStorage.removeItem("autoSiteCompanyId");
+        setIsFormLoading(false);
+      }
+    }
+  };
+
+  // Session verification for production reliability
+  const verifyUserSession = async (userID: string): Promise<boolean> => {
+    try {
+      const response = await fetch('/api/verify-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ user_id: userID })
+      });
+      
+      // If the endpoint doesn't exist, assume session is valid (graceful fallback)
+      if (response.status === 404) {
+        return true;
+      }
+      
+      return response.ok;
+    } catch (error) {
+      // Network error or endpoint not implemented - assume valid to avoid blocking
+      console.warn('[AutoSite] Session verification failed, assuming valid:', error);
+      return true;
+    }
+  };
 
   const getInitialFormData = () => {
     const saved = localStorage.getItem("autoSiteFormData");
@@ -745,25 +902,26 @@ export default function AutoSite() {
       setCompanyId(Number(savedCompanyId));
     }
 
-    // Wait for userID to be available after Google auth
+    // Enhanced form loading with production-optimized timing
     const attemptLoadForm = async () => {
-      // console.log('[AutoSite] Starting form load attempt...');
+      // console.log('[AutoSite] Starting enhanced form load attempt...');
       setIsFormLoading(true);
 
       let userID = localStorage.getItem('userID');
       let attempts = 0;
-      const maxAttempts = 15; // Increased from 10 to 15
+      const maxAttempts = 25; // Increased for production (was 15)
 
-      // Wait for userID to be available (especially important after OAuth)
+      // Extended wait for userID - production OAuth can be slower
       while (!userID && attempts < maxAttempts) {
         // console.log(`[AutoSite] Waiting for userID, attempt ${attempts + 1}/${maxAttempts}`);
-        await new Promise(resolve => setTimeout(resolve, 300)); // Increased from 200ms to 300ms
+        const delay = attempts < 10 ? 200 : 500; // Longer delays after first 10 attempts
+        await new Promise(resolve => setTimeout(resolve, delay));
         userID = localStorage.getItem('userID');
         attempts++;
       }
 
       if (!userID) {
-        console.warn('[AutoSite] No userID found after waiting, initializing defaults');
+        console.warn('[AutoSite] No userID found after extended waiting, initializing defaults');
         setCurrentStep(0);
         setFormData(defaultFormData);
         setCompanyId(0);
@@ -772,82 +930,10 @@ export default function AutoSite() {
         return;
       }
 
-      // console.log('[AutoSite] Found userID:', userID, 'loading form data...');
+      // console.log('[AutoSite] Found userID:', userID, 'loading form data with retry logic...');
 
-      try {
-        const response = await fetch(`/api/load-form`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: "include",
-          body: JSON.stringify({ user_id: userID })
-        });
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-
-        const data = await response.json();
-        // console.log('[AutoSite] Form data loaded for user', userID, ':', {
-        //   step_number: data.step_number,
-        //   has_form_data: !!data.form_data && Object.keys(data.form_data).length > 0,
-        //   has_company: !!data.company,
-        //   debug: data.debug
-        // });
-
-        // Always use the step_number from the database, no fallbacks to localStorage
-        const dbStepNumber = data.step_number || 0;
-        setCurrentStep(dbStepNumber);
-        // console.log('[AutoSite] Set current step to:', dbStepNumber);
-
-        // Robustly parse form_data if string
-        let parsedFormData = defaultFormData;
-        if (typeof data.form_data === "string") {
-          try {
-            const parsed = JSON.parse(data.form_data);
-            parsedFormData = Object.keys(parsed).length ? parsed : defaultFormData;
-          } catch {
-            console.warn('[AutoSite] Failed to parse form_data string');
-            parsedFormData = defaultFormData;
-          }
-        } else if (data.form_data && Object.keys(data.form_data).length) {
-          parsedFormData = data.form_data;
-        } else {
-          parsedFormData = defaultFormData;
-        }
-        setFormData(parsedFormData);
-
-        // Restore products and campaigns arrays if present in loaded form_data
-        if (parsedFormData.products && Array.isArray(parsedFormData.products)) {
-          setProducts(parsedFormData.products);
-        }
-        if (parsedFormData.campaigns && Array.isArray(parsedFormData.campaigns)) {
-          setCampaigns(parsedFormData.campaigns);
-        }
-
-        // Set companyId from backend if available
-        if (data.company && data.company.id) {
-          setCompanyId(data.company.id);
-          localStorage.setItem("autoSiteCompanyId", String(data.company.id));
-          // console.log('[AutoSite] Set companyId from database:', data.company.id);
-        } else {
-          // Clear company ID if no company exists
-          setCompanyId(0);
-          localStorage.removeItem("autoSiteCompanyId");
-          // console.log('[AutoSite] No company found, cleared companyId');
-        }
-
-        // Form loading complete
-        setIsFormLoading(false);
-      } catch (error) {
-        console.error('[AutoSite] Failed to load form for user', userID, ':', error);
-        setCurrentStep(0);
-        setFormData(defaultFormData);
-        setCompanyId(0);
-        localStorage.removeItem("autoSiteCompanyId");
-
-        // Form loading complete (even on error)
-        setIsFormLoading(false);
-      }
+      // Use the new reusable form loading function with retry capability
+      await loadFormDataForUser(userID);
     };
 
     attemptLoadForm();

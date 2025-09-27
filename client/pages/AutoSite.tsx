@@ -11,6 +11,7 @@ import { ThemeProvider } from "../components/ui/theme-provider";
 import { Header } from "../components/ui/header";
 import { PaymentGateway } from "../components/ui/payment-gateway";
 import { LoadingSpinner } from "../components/ui/loading-spinner";
+import { LogoutLoader } from "../components/ui/logout-loader";
 import { useLocation } from "react-router-dom";
 import {
   Globe,
@@ -184,7 +185,16 @@ export default function AutoSite() {
   React.useEffect(() => {
     // Listen for user logout/login events
     const handleUserLogout = () => {
-      console.log('[AutoSite] User logout detected - marking logout but preserving data');
+      console.log('[AutoSite] User logout detected - showing full screen loader');
+      
+      // Show full-screen logout loader
+      setIsLoggingOut(true);
+      
+      // Set a timeout to hide the loader if logout takes too long (fallback)
+      setTimeout(() => {
+        console.log('[AutoSite] Logout timeout reached, hiding loader');
+        setIsLoggingOut(false);
+      }, 5000); // 5 second timeout
       
       // On logout, DO NOT clear form data immediately
       // Instead, just mark that user has logged out for continuity check
@@ -198,6 +208,9 @@ export default function AutoSite() {
 
     const handleUserLogin = () => {
       console.log('[AutoSite] User login detected');
+      
+      // Hide logout loader when login occurs
+      setIsLoggingOut(false);
       
       // On login, clear the logout flag 
       localStorage.removeItem('autoSiteLoggedOut');
@@ -603,6 +616,9 @@ export default function AutoSite() {
 
   // Add loading state to prevent flash during step load
   const [isFormLoading, setIsFormLoading] = useState(true);
+  
+  // Add logout loading state
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const [currentStep, setCurrentStep] = useState(getInitialStep());
   // Move these out of renderStep/case 4
@@ -2283,21 +2299,26 @@ export default function AutoSite() {
       <div className="min-h-screen bg-background text-foreground transition-colors duration-500">
         <Header />
 
-        {/* Show loading screen while form data is being loaded */}
-        {isFormLoading || currentStep === -1 ? (
-          <div className="min-h-screen flex items-center justify-center">
-            <div className="text-center">
-              <div className="relative">
-                <div className="w-16 h-16 mx-auto mb-4">
-                  <LoadingSpinner size="lg" />
-                </div>
-                <div className="text-lg font-semibold mb-2">Loading your progress...</div>
-                <div className="text-sm text-muted-foreground">Please wait while we restore your form data</div>
-              </div>
-            </div>
-          </div>
+        {/* Show logout loader when user is logging out */}
+        {isLoggingOut ? (
+          <LogoutLoader isVisible={isLoggingOut} />
         ) : (
-          <main className="pt-20 sm:pt-24 md:pt-16">
+          <>
+            {/* Show loading screen while form data is being loaded */}
+            {isFormLoading || currentStep === -1 ? (
+              <div className="min-h-screen flex items-center justify-center">
+                <div className="text-center">
+                  <div className="relative">
+                    <div className="w-16 h-16 mx-auto mb-4">
+                      <LoadingSpinner size="lg" />
+                    </div>
+                    <div className="text-lg font-semibold mb-2">Loading your progress...</div>
+                    <div className="text-sm text-muted-foreground">Please wait while we restore your form data</div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <main className="pt-20 sm:pt-24 md:pt-16">
             {/* Hero Section */}
             <section className="py-12 sm:py-16 md:py-20 relative overflow-hidden">
               <div className="absolute inset-0 overflow-hidden">
@@ -2376,6 +2397,8 @@ export default function AutoSite() {
               </div>
             </section>
           </main>
+            )}
+          </>
         )}
       </div>
     </ThemeProvider>

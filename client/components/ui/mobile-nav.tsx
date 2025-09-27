@@ -77,6 +77,7 @@ export const MobileNav: React.FC<MobileNavProps> = ({
 
     // Local state for mobile dropdown (decoupled from desktop header's dropdown state)
     const [openDropdown, setOpenDropdown] = useState<string | null>(clickedDropdown);
+    const [isLoggingOut, setIsLoggingOut] = useState(false);
 
     // Sync external reset when menu closes
     useEffect(() => {
@@ -189,23 +190,40 @@ export const MobileNav: React.FC<MobileNavProps> = ({
                     <div className="mt-5 pt-5 border-t border-glass-border flex flex-col space-y-2">
                         {isAuthenticated ? (
                             <Button
-                                className="w-full bg-gradient-to-r from-red-500 to-orange-500 text-white"
-                                onClick={() => {
-                                    // Dispatch logout event BEFORE removing session data
-                                    window.dispatchEvent(new CustomEvent('user-logout'));
+                                disabled={isLoggingOut}
+                                className="w-full bg-gradient-to-r from-red-500 to-orange-500 text-white disabled:opacity-50"
+                                onClick={async () => {
+                                    if (isLoggingOut) return;
+                                    
+                                    setIsLoggingOut(true);
+                                    
+                                    try {
+                                        // Dispatch logout event BEFORE removing session data
+                                        window.dispatchEvent(new CustomEvent('user-logout'));
 
-                                    // Remove all session-related data
-                                    localStorage.removeItem('manacle_session');
-                                    localStorage.removeItem('userID'); // This is crucial for proper logout
-                                    localStorage.removeItem('currentLoadedUserId'); // Clear user tracking
+                                        // Remove all session-related data immediately
+                                        localStorage.removeItem('manacle_session');
+                                        localStorage.removeItem('userID');
+                                        localStorage.removeItem('currentLoadedUserId');
+                                        localStorage.removeItem('autoSiteLastUserID');
+                                        localStorage.removeItem('autoSiteLoggedOut');
 
-                                    apiFetch('/api/logout').then(() => {
+                                        // Call logout API
+                                        await apiFetch('/api/logout');
+                                        
+                                        // Small delay to show the logging out state
+                                        await new Promise(resolve => setTimeout(resolve, 300));
+
                                         // Hard redirect to ensure clean state
                                         window.location.href = '/login';
-                                    });
+                                    } catch (error) {
+                                        console.error('[Mobile Logout] Error during logout:', error);
+                                        // Even if API call fails, still redirect to login
+                                        window.location.href = '/login';
+                                    }
                                 }}
                             >
-                                Logout
+                                {isLoggingOut ? 'Logging out...' : 'Logout'}
                             </Button>
                         ) : (
                             <>

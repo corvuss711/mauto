@@ -519,16 +519,36 @@ app.post('/api/login', (req, res, next) => {
                 return next(e);
             }
             console.log('[/api/login] Session created successfully for user:', user.id);
-            const userData = { id: String(user.id), email: user.email_id || user.email };
-            res.json({ success: true, user: userData });
+            console.log('[/api/login] Session ID:', (req as any).sessionID);
+            
+            // Force session save for serverless environments
+            (req as any).session.save((saveErr) => {
+                if (saveErr) {
+                    console.error('[/api/login] Session save error:', saveErr);
+                }
+                
+                const userData = { id: String(user.id), email: user.email_id || user.email };
+                console.log('[/api/login] Responding with user data:', userData);
+                res.json({ success: true, user: userData });
+            });
         });
     })(req, res, next);
 });
 
 // Logout
 app.get('/api/logout', (req, res) => {
-    req.logout?.(() => {
+    console.log('[/api/logout] Logout request - session ID:', (req as any).sessionID);
+    console.log('[/api/logout] User before logout:', (req as any).user?.id);
+    
+    req.logout?.((err) => {
+        if (err) {
+            console.error('[/api/logout] Logout error:', err);
+            return res.status(500).json({ error: 'Logout failed' });
+        }
+        
+        console.log('[/api/logout] Logout successful, clearing cookie');
         res.clearCookie('connect.sid');
+        res.clearCookie('mauto.sid'); // Clear our custom session name too
         res.json({ success: true, message: 'Logged out' });
     });
 });
@@ -645,7 +665,7 @@ app.get('/api/me', (req, res) => {
     const user = (req as any).user;
     const cookies = req.headers.cookie;
 
-
+    console.log('[/api/me] Auth check - SessionID:', sessionId, 'IsAuth:', isAuth, 'HasUser:', !!user, 'UserID:', user?.id);
 
     if (req.isAuthenticated && req.isAuthenticated()) {
         const u: any = (req as any).user;
@@ -673,8 +693,27 @@ app.get('/api/me', (req, res) => {
             isAuthResult: isAuth,
             hasUser: !!user,
             hasSession: !!(req as any).session,
-            cookies: !!cookies
+            cookies: !!cookies,
+            cookieCount: cookies ? cookies.split(';').length : 0
         }
+    });
+});
+
+// Simple session health check endpoint
+app.get('/api/session-check', (req, res) => {
+    const session = (req as any).session;
+    const user = (req as any).user;
+    const isAuth = req.isAuthenticated?.();
+    
+    res.json({
+        healthy: true,
+        hasSession: !!session,
+        sessionId: (req as any).sessionID,
+        hasUser: !!user,
+        userId: user?.id,
+        isAuthenticated: isAuth,
+        timestamp: new Date().toISOString(),
+        environment: process.env.NODE_ENV || 'development'
     });
 });
 

@@ -853,6 +853,118 @@ export default function AutoSite() {
     attemptLoadForm();
   }, []);
 
+  // Watch for userID changes (e.g., after logout/login) and reload form data
+  useEffect(() => {
+    const handleUserIdChange = () => {
+      const newUserId = localStorage.getItem('userID');
+      const currentUserId = localStorage.getItem('currentLoadedUserId'); // Track which user's data is currently loaded
+
+      // Only reload if userID actually changed
+      if (newUserId !== currentUserId) {
+        console.log('[AutoSite] UserID changed from', currentUserId, 'to', newUserId, '- reloading form...');
+
+        // Update the tracked userID
+        if (newUserId) {
+          localStorage.setItem('currentLoadedUserId', newUserId);
+        } else {
+          localStorage.removeItem('currentLoadedUserId');
+        }
+
+        // Reload form data for the new user
+        const reloadForm = async () => {
+          setIsFormLoading(true);
+
+          if (!newUserId) {
+            console.log('[AutoSite] No userID after change, loading defaults');
+            setCurrentStep(0);
+            setFormData(defaultFormData);
+            setCompanyId(0);
+            localStorage.removeItem("autoSiteCompanyId");
+            setIsFormLoading(false);
+            return;
+          }
+
+          try {
+            const response = await fetch(`/api/load-form`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: "include",
+              body: JSON.stringify({ user_id: newUserId })
+            });
+
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}`);
+            }
+
+            const data = await response.json();
+
+            // Always use the step_number from the database, no fallbacks to localStorage
+            const dbStepNumber = data.step_number || 0;
+            setCurrentStep(dbStepNumber);
+
+            // Robustly parse form_data if string
+            let parsedFormData = defaultFormData;
+            if (typeof data.form_data === "string") {
+              try {
+                const parsed = JSON.parse(data.form_data);
+                parsedFormData = Object.keys(parsed).length ? parsed : defaultFormData;
+              } catch {
+                console.warn('[AutoSite] Failed to parse form_data string on user change');
+                parsedFormData = defaultFormData;
+              }
+            } else if (data.form_data && Object.keys(data.form_data).length) {
+              parsedFormData = data.form_data;
+            } else {
+              parsedFormData = defaultFormData;
+            }
+            setFormData(parsedFormData);
+
+            // Restore products and campaigns arrays if present in loaded form_data
+            if (parsedFormData.products && Array.isArray(parsedFormData.products)) {
+              setProducts(parsedFormData.products);
+            }
+            if (parsedFormData.campaigns && Array.isArray(parsedFormData.campaigns)) {
+              setCampaigns(parsedFormData.campaigns);
+            }
+
+            // Set companyId from backend if available
+            if (data.company && data.company.id) {
+              setCompanyId(data.company.id);
+              localStorage.setItem("autoSiteCompanyId", String(data.company.id));
+            } else {
+              // Clear company ID if no company exists
+              setCompanyId(0);
+              localStorage.removeItem("autoSiteCompanyId");
+            }
+
+            setIsFormLoading(false);
+            console.log('[AutoSite] Successfully reloaded form data for new user:', newUserId);
+          } catch (error) {
+            console.error('[AutoSite] Failed to reload form for new user', newUserId, ':', error);
+            setCurrentStep(0);
+            setFormData(defaultFormData);
+            setCompanyId(0);
+            localStorage.removeItem("autoSiteCompanyId");
+            setIsFormLoading(false);
+          }
+        };
+
+        reloadForm();
+      }
+    };
+
+    // Check initially and set up polling
+    const initialUserId = localStorage.getItem('userID');
+    if (initialUserId) {
+      localStorage.setItem('currentLoadedUserId', initialUserId);
+    }
+
+    // Poll for userID changes every 100ms (lightweight check)
+    const interval = setInterval(handleUserIdChange, 100);
+
+    return () => clearInterval(interval);
+  }, []); // Empty dependency array - this effect manages its own state
+
   const updateFormData = (field: keyof FormData, value: any) => {
     setFormData(prev => {
       const updated = { ...prev, [field]: value };

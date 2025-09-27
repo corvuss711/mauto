@@ -483,7 +483,7 @@ Gallery", description: "View all our projects", href: "/gallery" },
 
             {/* Right Side Elements - Get Quote & Theme Toggle */}
             <div className="hidden lg:flex items-center space-x-3">
-               <ThemeToggle />
+              <ThemeToggle />
               {/*<Button
                 size="sm"
                 className="bg-gradient-to-r from-primary to-accent hover:from-accent hover:to-primary transition-all duration-300 text-xs md:text-xs lg:text-sm xl:text-sm px-3 md:px-3 lg:px-4 xl:px-4 py-1.5 md:py-1.5 lg:py-2 xl:py-2"
@@ -502,8 +502,11 @@ Gallery", description: "View all our projects", href: "/gallery" },
                       // Dispatch logout event BEFORE removing session data
                       window.dispatchEvent(new CustomEvent('user-logout'));
 
-                      // Remove session flag and call logout API
+                      // Remove all session-related data
                       localStorage.removeItem('manacle_session');
+                      localStorage.removeItem('userID'); // This is crucial for proper logout
+                      localStorage.removeItem('currentLoadedUserId'); // Clear user tracking
+
                       apiFetch('/api/logout').then(() => {
                         window.location.href = '/login';
                       });

@@ -7,7 +7,13 @@ interface ProtectedRouteProps {
 }
 
 const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
-  const isLoggedIn = localStorage.getItem('manacle_session') === 'true';
+  const sessionValue = localStorage.getItem('manacle_session');
+  const userID = localStorage.getItem('userID');
+
+  // Check both session markers and userID presence
+  const hasValidSession = sessionValue === 'true' || sessionValue === 'active';
+  const isLoggedIn = hasValidSession && userID;
+
   return isLoggedIn ? <>{children}</> : <Navigate to="/access-denied" replace />;
 };
 

@@ -13,7 +13,7 @@ export default function AuthResult() {
 
         const processOAuthResult = async () => {
             try {
-                // Mark session as present
+                // Mark session as present (consistent with regular login)
                 localStorage.setItem('manacle_session', 'true');
 
                 // Check URL parameters for fallback user info (in case session doesn't work)
@@ -78,9 +78,16 @@ export default function AuthResult() {
                     throw new Error('No user ID available from session or URL parameters');
                 }
 
+                // Clear any existing session data to prevent conflicts
+                localStorage.removeItem('autoSiteLoggedOut');
+                localStorage.removeItem('currentLoadedUserId'); // Clear tracking so AutoSite will reload
+
                 // Set userID in localStorage (same as regular login/signup)
                 localStorage.setItem('userID', userId);
                 console.log('[AuthResult] SUCCESS - userID set in localStorage:', userId);
+
+                // Ensure clean session state for Google OAuth users
+                localStorage.setItem('manacle_session', 'true');
 
                 if (isNew) {
                     // New user - redirect to home page

@@ -3,6 +3,16 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Check, ChevronDown, ArrowLeft, Star, Users, Plus, Minus } from 'lucide-react';
 import { Button } from '../components/ui/button';
 
+// Helper function to safely parse numbers and avoid NaN
+const safeParseFloat = (value: string | number | null | undefined): number => {
+    if (typeof value === 'number') return isNaN(value) ? 0 : value;
+    if (typeof value === 'string') {
+        const parsed = parseFloat(value);
+        return isNaN(parsed) ? 0 : parsed;
+    }
+    return 0;
+};
+
 // Types for the new pricing structure
 interface PlanDetail {
     id: number;
@@ -159,8 +169,7 @@ export const DynamicPricing: React.FC<DynamicPricingProps> = ({
 
     const getPricePerUser = (planDetail: PlanDetail) => {
         // Priority: base_price_per_external_user_per_month > base_price_per_user_external > base_price_per_user
-        return planDetail.base_price_per_external_user_per_month ||
-            parseFloat(planDetail.base_price_per_user_external || planDetail.base_price_per_user || "0");
+        return safeParseFloat(planDetail.base_price_per_external_user_per_month || planDetail.base_price_per_user_external || planDetail.base_price_per_user);
     };
 
     const formatPrice = (price: number) => {
@@ -343,7 +352,7 @@ export const DynamicPricing: React.FC<DynamicPricingProps> = ({
                             {tenureOptions.map((tenure) => {
                                 const isSelected = selectedTenure === tenure.value;
                                 const currentDetail = selectedPlan?.plan_details.find(d => d.duration === tenure.value);
-                                const currentPricePerUser = currentDetail ? getPricePerUser(currentDetail) : 0;
+                                const currentPricePerUser = safeParseFloat(currentDetail ? getPricePerUser(currentDetail) : 0);
                                 const savings = calculateSavings(tenure.value);
 
                                 return (

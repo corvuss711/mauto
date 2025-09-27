@@ -6,25 +6,6 @@ import { TrustedByCompanies } from "./trusted-by-companies";
 import { CompanyEllipse } from "./company-ellipse";
 import { DynamicPricing } from "../../pages/DynamicPricing";
 
-// Helper function to safely parse numbers and avoid NaN
-const safeParseFloat = (value: string | number | null | undefined): number => {
-    if (typeof value === 'number') return isNaN(value) ? 0 : value;
-    if (typeof value === 'string') {
-        const parsed = parseFloat(value);
-        return isNaN(parsed) ? 0 : parsed;
-    }
-    return 0;
-};
-
-const safeParseInt = (value: string | number | null | undefined, fallback: number = 0): number => {
-    if (typeof value === 'number') return isNaN(value) ? fallback : Math.floor(value);
-    if (typeof value === 'string') {
-        const parsed = parseInt(value, 10);
-        return isNaN(parsed) ? fallback : parsed;
-    }
-    return fallback;
-};
-
 interface FormData {
     // user_name: string;
     // password: string;
@@ -1167,7 +1148,7 @@ export function DemoRequestForm() {
             if (!yearlyDetail) {
                 // Fallback to first available plan detail if yearly not found
                 const fallbackDetail = plan.plan_details[0];
-                const monthlyPrice = safeParseFloat(fallbackDetail.base_price_per_external_user_per_month || fallbackDetail.base_price_per_user_external || fallbackDetail.base_price_per_user);
+                const monthlyPrice = fallbackDetail.base_price_per_external_user_per_month || parseFloat(fallbackDetail.base_price_per_user_external || fallbackDetail.base_price_per_user || "0");
                 return {
                     name: plan.plan_name,
                     price: `₹${monthlyPrice.toFixed(2)}`,
@@ -1181,7 +1162,7 @@ export function DemoRequestForm() {
             }
 
             // Use base_price_per_external_user_per_month from yearly plan for display
-            const monthlyPrice = safeParseFloat(yearlyDetail.base_price_per_external_user_per_month || yearlyDetail.base_price_per_user_external || yearlyDetail.base_price_per_user);
+            const monthlyPrice = yearlyDetail.base_price_per_external_user_per_month || parseFloat(yearlyDetail.base_price_per_user_external || yearlyDetail.base_price_per_user || "0");
 
             return {
                 name: plan.plan_name,
@@ -3700,7 +3681,9 @@ export function DemoRequestForm() {
                                                                                     {(() => {
                                                                                         // Calculate total price from selected services
                                                                                         const totalPrice = selectedServices.reduce((total, service) => {
-                                                                                            const price = safeParseFloat(service.external_price_per_user);
+                                                                                            const price = typeof service.external_price_per_user === 'string'
+                                                                                                ? parseFloat(service.external_price_per_user)
+                                                                                                : service.external_price_per_user || 0;
                                                                                             return total + price;
                                                                                         }, 0);
 

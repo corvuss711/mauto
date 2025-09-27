@@ -10,8 +10,6 @@ import { Badge } from "../components/ui/badge";
 import { ThemeProvider } from "../components/ui/theme-provider";
 import { Header } from "../components/ui/header";
 import { PaymentGateway } from "../components/ui/payment-gateway";
-import { LoadingSpinner } from "../components/ui/loading-spinner";
-import { LogoutLoader } from "../components/ui/logout-loader";
 import { useLocation } from "react-router-dom";
 import {
   Globe,
@@ -185,41 +183,29 @@ export default function AutoSite() {
   React.useEffect(() => {
     // Listen for user logout/login events
     const handleUserLogout = () => {
-      console.log('[AutoSite] User logout detected - showing full screen loader');
+      // On logout, clear form data and mark that user has logged out
+      // This allows us to detect if a different user logs in next
+      localStorage.removeItem('autoSiteFormData');
+      localStorage.removeItem('autoSiteCurrentStep');
+      localStorage.removeItem('autoSiteCompanyId');
       
-      // Show full-screen logout loader
-      setIsLoggingOut(true);
-      
-      // Set a timeout to hide the loader if logout takes too long (fallback)
-      setTimeout(() => {
-        console.log('[AutoSite] Logout timeout reached, hiding loader');
-        setIsLoggingOut(false);
-      }, 5000); // 5 second timeout
-      
-      // On logout, DO NOT clear form data immediately
-      // Instead, just mark that user has logged out for continuity check
+      // Mark that a logout occurred, but keep the user ID for continuity check
       localStorage.setItem('autoSiteLoggedOut', 'true');
 
-      // Keep the form data in case the same user logs back in
-      // The user change detection will handle clearing data only if a different user logs in
-
-      console.log('[AutoSite] Logout handled - data preserved for same user return');
+      // Reset to defaults
+      setFormData(defaultFormData);
+      setCurrentStep(0);
+      setCompanyId(0);
     };
 
     const handleUserLogin = () => {
-      console.log('[AutoSite] User login detected');
-      
-      // Hide logout loader when login occurs
-      setIsLoggingOut(false);
-      
       // On login, clear the logout flag 
       localStorage.removeItem('autoSiteLoggedOut');
-
+      
       // Trigger user change detection after a short delay to ensure userID is set
       setTimeout(() => {
         const currentUserID = localStorage.getItem('userID');
         if (currentUserID) {
-          console.log('[AutoSite] Triggering user-id-ready event for user:', currentUserID);
           // Trigger the useEffect by updating a state that will cause re-evaluation
           // This ensures user change detection runs even if userID wasn't immediately available
           const event = new CustomEvent('user-id-ready', { detail: { userID: currentUserID } });
@@ -230,7 +216,7 @@ export default function AutoSite() {
 
     window.addEventListener("user-logout", handleUserLogout);
     window.addEventListener("user-login", handleUserLogin);
-
+    
     return () => {
       window.removeEventListener("user-logout", handleUserLogout);
       window.removeEventListener("user-login", handleUserLogin);
@@ -505,20 +491,19 @@ export default function AutoSite() {
     const checkUserChange = () => {
       const userID = localStorage.getItem('userID');
 
-      // If no userID, we're dealing with anonymous user - preserve localStorage
+      // Only proceed if we have a current user ID
       if (!userID) {
-        console.log('[AutoSite] Anonymous user detected, preserving localStorage data');
+        // console.log('[AutoSite] No userID found, skipping user change detection');
         return;
       }
 
       // Check if this is a different user from the last stored userID
       const lastUserID = localStorage.getItem('autoSiteLastUserID');
       const wasLoggedOut = localStorage.getItem('autoSiteLoggedOut') === 'true';
-
+      
       if (!lastUserID) {
-        // First time user - store the user but don't clear existing data
-        // This preserves any form progress from anonymous session
-        console.log('[AutoSite] First time user login:', userID, '- preserving any existing data');
+        // First time visit - store the user and continue
+        // console.log('[AutoSite] First time user, setting current user:', userID);
         localStorage.setItem('autoSiteLastUserID', userID);
         localStorage.removeItem('autoSiteLoggedOut');
         return;
@@ -526,13 +511,13 @@ export default function AutoSite() {
 
       if (userID !== lastUserID) {
         // Different user detected - reset everything
-        console.log('[AutoSite] DIFFERENT user detected:', { lastUserID, newUserID: userID }, '- clearing data');
+        // console.log('[AutoSite] DIFFERENT user detected:', { lastUserID, newUserID: userID });
 
         // Store the new user ID
         localStorage.setItem('autoSiteLastUserID', userID);
         localStorage.removeItem('autoSiteLoggedOut');
 
-        // Clear all data and reset state for different user
+        // Clear all data and reset state
         localStorage.removeItem('autoSiteFormData');
         localStorage.removeItem('autoSiteCurrentStep');
         localStorage.removeItem('autoSiteCompanyId');
@@ -542,15 +527,14 @@ export default function AutoSite() {
         setCurrentStep(0);
         setCompanyId(0);
 
-        console.log('[AutoSite] Reset state for different user:', userID);
+        // console.log('[AutoSite] Reset state for different user:', userID);
       } else if (wasLoggedOut) {
-        // Same user returning after logout - preserve their progress
-        console.log('[AutoSite] Same user returning after logout:', userID, '- preserving all data');
+        // Same user returning after logout - clear the logout flag but keep their progress
+        // console.log('[AutoSite] Same user returning after logout:', userID, '- restoring progress');
         localStorage.removeItem('autoSiteLoggedOut');
-        // Do NOT clear any form data - let database load handle the state
       } else {
         // Same user, no logout - continue normally
-        console.log('[AutoSite] Same user continuing session:', userID, '- no changes needed');
+        // console.log('[AutoSite] Same user continuing session:', userID);
       }
     };
 
@@ -559,44 +543,33 @@ export default function AutoSite() {
 
     // Also run the check when user-id-ready event is triggered
     const handleUserIdReady = () => {
-      console.log('[AutoSite] user-id-ready event triggered, re-checking user');
-      setTimeout(checkUserChange, 50); // Small delay to ensure userID is set
+      checkUserChange();
     };
 
     window.addEventListener('user-id-ready', handleUserIdReady);
-
+    
     return () => {
       window.removeEventListener('user-id-ready', handleUserIdReady);
     };
   }, [localStorage.getItem('userID')]);
 
-  const getInitialStep = () => {
-    // For logged-in users, start with step -1 to indicate database loading
-    const userID = localStorage.getItem('userID');
-    if (userID) {
-      return -1; // Special value indicating we're waiting for database load
-    }
-
-    // For anonymous users, load from localStorage
-    const saved = localStorage.getItem("autoSiteCurrentStep");
-    if (saved && !isNaN(Number(saved))) {
-      return Number(saved);
-    }
-    return 0;
-  };
-  
   const getInitialFormData = () => {
-    // Always try to load from localStorage first as fallback
     const saved = localStorage.getItem("autoSiteFormData");
     if (saved) {
       try {
-        const parsed = JSON.parse(saved);
-        return Object.keys(parsed).length > 0 ? parsed : defaultFormData;
+        return JSON.parse(saved);
       } catch {
         return defaultFormData;
       }
     }
     return defaultFormData;
+  };
+  const getInitialStep = () => {
+    const saved = localStorage.getItem("autoSiteCurrentStep");
+    if (saved && !isNaN(Number(saved))) {
+      return Number(saved);
+    }
+    return 0;
   };
   const [formData, setFormData] = useState<FormData>(getInitialFormData());
 
@@ -613,13 +586,6 @@ export default function AutoSite() {
     const saved = localStorage.getItem("autoSiteIsSuccess");
     return saved === "true";
   });
-
-  // Add loading state to prevent flash during step load
-  const [isFormLoading, setIsFormLoading] = useState(true);
-  
-  // Add logout loading state
-  const [isLoggingOut, setIsLoggingOut] = useState(false);
-
   const [currentStep, setCurrentStep] = useState(getInitialStep());
   // Move these out of renderStep/case 4
   const [emailError, setEmailError] = useState<string>("");
@@ -770,61 +736,30 @@ export default function AutoSite() {
 
     // Wait for userID to be available after Google auth
     const attemptLoadForm = async () => {
-      console.log('[AutoSite] Starting form load attempt...');
-      setIsFormLoading(true);
+      // console.log('[AutoSite] Starting form load attempt...');
 
       let userID = localStorage.getItem('userID');
       let attempts = 0;
-      const maxAttempts = 15;
+      const maxAttempts = 15; // Increased from 10 to 15
 
       // Wait for userID to be available (especially important after OAuth)
       while (!userID && attempts < maxAttempts) {
-        console.log(`[AutoSite] Waiting for userID, attempt ${attempts + 1}/${maxAttempts}`);
-        await new Promise(resolve => setTimeout(resolve, 300));
+        // console.log(`[AutoSite] Waiting for userID, attempt ${attempts + 1}/${maxAttempts}`);
+        await new Promise(resolve => setTimeout(resolve, 300)); // Increased from 200ms to 300ms
         userID = localStorage.getItem('userID');
         attempts++;
       }
 
       if (!userID) {
-        console.log('[AutoSite] No userID found - anonymous user, using localStorage data');
-        
-        // For anonymous users, use localStorage data if available
-        const savedStep = localStorage.getItem("autoSiteCurrentStep");
-        const savedFormData = localStorage.getItem("autoSiteFormData");
-        const savedCompanyId = localStorage.getItem("autoSiteCompanyId");
-        
-        if (savedStep && !isNaN(Number(savedStep))) {
-          setCurrentStep(Number(savedStep));
-        } else {
-          setCurrentStep(0);
-        }
-        
-        if (savedFormData) {
-          try {
-            const parsed = JSON.parse(savedFormData);
-            if (Object.keys(parsed).length > 0) {
-              setFormData(parsed);
-            }
-          } catch (error) {
-            console.warn('[AutoSite] Failed to parse saved form data:', error);
-            setFormData(defaultFormData);
-          }
-        } else {
-          setFormData(defaultFormData);
-        }
-        
-        if (savedCompanyId && !isNaN(Number(savedCompanyId))) {
-          setCompanyId(Number(savedCompanyId));
-        } else {
-          setCompanyId(0);
-        }
-        
-        setIsFormLoading(false);
-        console.log('[AutoSite] Anonymous user data loaded from localStorage');
+        console.warn('[AutoSite] No userID found after waiting, initializing defaults');
+        setCurrentStep(0);
+        setFormData(defaultFormData);
+        setCompanyId(0);
+        localStorage.removeItem("autoSiteCompanyId");
         return;
       }
 
-      console.log('[AutoSite] Found userID:', userID, 'loading form data from database...');
+      // console.log('[AutoSite] Found userID:', userID, 'loading form data...');
 
       try {
         const response = await fetch(`/api/load-form`, {
@@ -839,58 +774,34 @@ export default function AutoSite() {
         }
 
         const data = await response.json();
-        console.log('[AutoSite] Database response for user', userID, ':', {
-          step_number: data.step_number,
-          has_form_data: !!data.form_data && Object.keys(data.form_data).length > 0,
-          has_company: !!data.company,
-        });
+        // console.log('[AutoSite] Form data loaded for user', userID, ':', {
+        //   step_number: data.step_number,
+        //   has_form_data: !!data.form_data && Object.keys(data.form_data).length > 0,
+        //   has_company: !!data.company,
+        //   debug: data.debug
+        // });
 
-        // Always use the step_number from the database, fallback to localStorage, then 0
-        let dbStepNumber = data.step_number;
-        if (dbStepNumber === null || dbStepNumber === undefined) {
-          const savedStep = localStorage.getItem("autoSiteCurrentStep");
-          dbStepNumber = (savedStep && !isNaN(Number(savedStep))) ? Number(savedStep) : 0;
-          console.log('[AutoSite] No database step found, using localStorage or default:', dbStepNumber);
-        }
-        
+        // Always use the step_number from the database, no fallbacks to localStorage
+        const dbStepNumber = data.step_number || 0;
         setCurrentStep(dbStepNumber);
-        console.log('[AutoSite] Set current step to:', dbStepNumber);
+        // console.log('[AutoSite] Set current step to:', dbStepNumber);
 
-        // Handle form_data - prefer database, fallback to localStorage
+        // Robustly parse form_data if string
         let parsedFormData = defaultFormData;
-        
-        if (data.form_data) {
-          if (typeof data.form_data === "string") {
-            try {
-              const parsed = JSON.parse(data.form_data);
-              parsedFormData = Object.keys(parsed).length ? parsed : defaultFormData;
-            } catch {
-              console.warn('[AutoSite] Failed to parse database form_data string');
-              parsedFormData = defaultFormData;
-            }
-          } else if (Object.keys(data.form_data).length) {
-            parsedFormData = data.form_data;
+        if (typeof data.form_data === "string") {
+          try {
+            const parsed = JSON.parse(data.form_data);
+            parsedFormData = Object.keys(parsed).length ? parsed : defaultFormData;
+          } catch {
+            console.warn('[AutoSite] Failed to parse form_data string');
+            parsedFormData = defaultFormData;
           }
+        } else if (data.form_data && Object.keys(data.form_data).length) {
+          parsedFormData = data.form_data;
+        } else {
+          parsedFormData = defaultFormData;
         }
-        
-        // If database has no useful form data, try localStorage
-        if (parsedFormData === defaultFormData) {
-          const savedFormData = localStorage.getItem("autoSiteFormData");
-          if (savedFormData) {
-            try {
-              const localParsed = JSON.parse(savedFormData);
-              if (Object.keys(localParsed).length > 0) {
-                parsedFormData = localParsed;
-                console.log('[AutoSite] Using localStorage form data as database was empty');
-              }
-            } catch (error) {
-              console.warn('[AutoSite] Failed to parse localStorage form data:', error);
-            }
-          }
-        }
-        
         setFormData(parsedFormData);
-        console.log('[AutoSite] Form data set, source:', data.form_data ? 'database' : 'localStorage or default');
 
         // Restore products and campaigns arrays if present in loaded form_data
         if (parsedFormData.products && Array.isArray(parsedFormData.products)) {
@@ -900,66 +811,28 @@ export default function AutoSite() {
           setCampaigns(parsedFormData.campaigns);
         }
 
-        // Handle company data
+        // Set companyId from backend if available
         if (data.company && data.company.id) {
           setCompanyId(data.company.id);
           localStorage.setItem("autoSiteCompanyId", String(data.company.id));
-          console.log('[AutoSite] Set companyId from database:', data.company.id);
+          // console.log('[AutoSite] Set companyId from database:', data.company.id);
         } else {
-          // Check localStorage for company ID
-          const savedCompanyId = localStorage.getItem("autoSiteCompanyId");
-          if (savedCompanyId && !isNaN(Number(savedCompanyId))) {
-            setCompanyId(Number(savedCompanyId));
-            console.log('[AutoSite] Set companyId from localStorage:', savedCompanyId);
-          } else {
-            setCompanyId(0);
-            localStorage.removeItem("autoSiteCompanyId");
-            console.log('[AutoSite] No company found, cleared companyId');
-          }
+          // Clear company ID if no company exists
+          setCompanyId(0);
+          localStorage.removeItem("autoSiteCompanyId");
+          // console.log('[AutoSite] No company found, cleared companyId');
         }
-
-        setIsFormLoading(false);
-        console.log('[AutoSite] Database form loading complete');
-        
       } catch (error) {
         console.error('[AutoSite] Failed to load form for user', userID, ':', error);
-        
-        // Fallback to localStorage on database error
-        console.log('[AutoSite] Falling back to localStorage due to database error');
-        const savedStep = localStorage.getItem("autoSiteCurrentStep");
-        const savedFormData = localStorage.getItem("autoSiteFormData");
-        const savedCompanyId = localStorage.getItem("autoSiteCompanyId");
-        
-        setCurrentStep((savedStep && !isNaN(Number(savedStep))) ? Number(savedStep) : 0);
-        
-        if (savedFormData) {
-          try {
-            const parsed = JSON.parse(savedFormData);
-            setFormData(Object.keys(parsed).length > 0 ? parsed : defaultFormData);
-          } catch {
-            setFormData(defaultFormData);
-          }
-        } else {
-          setFormData(defaultFormData);
-        }
-        
-        setCompanyId((savedCompanyId && !isNaN(Number(savedCompanyId))) ? Number(savedCompanyId) : 0);
-        
-        setIsFormLoading(false);
-        console.log('[AutoSite] Fallback loading complete');
+        setCurrentStep(0);
+        setFormData(defaultFormData);
+        setCompanyId(0);
+        localStorage.removeItem("autoSiteCompanyId");
       }
     };
 
     attemptLoadForm();
   }, []);
-
-  // Save current step to localStorage whenever it changes
-  useEffect(() => {
-    if (currentStep >= 0) { // Don't save the loading state (-1)
-      localStorage.setItem("autoSiteCurrentStep", String(currentStep));
-      console.log('[AutoSite] Current step saved to localStorage:', currentStep);
-    }
-  }, [currentStep]);
 
   const updateFormData = (field: keyof FormData, value: any) => {
     setFormData(prev => {
@@ -970,29 +843,17 @@ export default function AutoSite() {
   };
 
   const saveStep = async (stepNumber, data) => {
-    // Always save to localStorage first for immediate persistence
-    localStorage.setItem("autoSiteCurrentStep", String(stepNumber));
-    localStorage.setItem("autoSiteFormData", JSON.stringify({
-      ...data,
-      products: products,
-      campaigns: campaigns
-    }));
-    
-    console.log('[saveStep] Saved to localStorage - step:', stepNumber);
-    
     const userID = localStorage.getItem('userID');
     if (!userID) {
-      console.log('[saveStep] No userID found - localStorage only mode');
+      console.warn('[saveStep] missing userID; aborting');
       return;
     }
-    
-    // For logged-in users, also save to database
+    // Always include products and campaigns arrays in form_data
     const formDataToSave = {
       ...data,
       products: products,
       campaigns: campaigns
     };
-    
     try {
       const res = await fetch('/api/save-step', {
         method: 'POST',
@@ -1002,24 +863,21 @@ export default function AutoSite() {
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
-        console.warn('[saveStep] Database save failed', res.status, j, '- but localStorage saved');
-        // Only show error toast for serious failures
-        if (res.status >= 500) {
-          toast({
-            title: 'Save Warning',
-            description: 'Progress saved locally but not to server. Will sync when connection improves.',
-            variant: 'default'
-          });
-        }
+        console.warn('[saveStep] server rejected', res.status, j);
+        toast({
+          title: 'Save Failed',
+          description: j.error || 'Could not save progress. Please try again.',
+          variant: 'destructive'
+        });
       } else {
-        console.log('[saveStep] Successfully saved to both localStorage and database');
+        // console.log('[saveStep] success for step', stepNumber);
       }
     } catch (e) {
-      console.warn('[saveStep] Database save error:', e, '- but localStorage saved');
+      console.warn('[saveStep] network error', e);
       toast({
-        title: 'Save Warning',
-        description: 'Progress saved locally. Will sync when connection improves.',
-        variant: 'default'
+        title: 'Network Error',
+        description: 'Could not save progress. Check connection.',
+        variant: 'destructive'
       });
     }
   };
@@ -1027,12 +885,9 @@ export default function AutoSite() {
   const nextStep = async () => {
     if (currentStep < 9) {
       const newStep = currentStep + 1;
-      
-      // Save current step and form data
       await saveStep(newStep, formData);
       setCurrentStep(newStep);
-      
-      console.log('[nextStep] Advanced to step:', newStep);
+      localStorage.setItem("autoSiteCurrentStep", String(newStep));
     }
   };
 
@@ -2299,107 +2154,85 @@ export default function AutoSite() {
       <div className="min-h-screen bg-background text-foreground transition-colors duration-500">
         <Header />
 
-        {/* Show logout loader when user is logging out */}
-        {isLoggingOut ? (
-          <LogoutLoader isVisible={isLoggingOut} />
-        ) : (
-          <>
-            {/* Show loading screen while form data is being loaded */}
-            {isFormLoading || currentStep === -1 ? (
-              <div className="min-h-screen flex items-center justify-center">
-                <div className="text-center">
-                  <div className="relative">
-                    <div className="w-16 h-16 mx-auto mb-4">
-                      <LoadingSpinner size="lg" />
-                    </div>
-                    <div className="text-lg font-semibold mb-2">Loading your progress...</div>
-                    <div className="text-sm text-muted-foreground">Please wait while we restore your form data</div>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <main className="pt-20 sm:pt-24 md:pt-16">
-            {/* Hero Section */}
-            <section className="py-12 sm:py-16 md:py-20 relative overflow-hidden">
-              <div className="absolute inset-0 overflow-hidden">
-                <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/20 rounded-full blur-3xl floating-animation"></div>
-                <div
-                  className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-accent/20 rounded-full blur-3xl floating-animation"
-                  style={{ animationDelay: "2s" }}
-                ></div>
+        <main className="pt-20 sm:pt-24 md:pt-16">
+          {/* Hero Section */}
+          <section className="py-12 sm:py-16 md:py-20 relative overflow-hidden">
+            <div className="absolute inset-0 overflow-hidden">
+              <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/20 rounded-full blur-3xl floating-animation"></div>
+              <div
+                className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-accent/20 rounded-full blur-3xl floating-animation"
+                style={{ animationDelay: "2s" }}
+              ></div>
+            </div>
+
+            <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+              <div className="text-center mb-12">
+                <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold mb-6">
+                  <span className="gradient-text">Automated</span>
+                  <span className="block mt-2">Website Builder</span>
+                </h1>
+                <p className="text-xl sm:text-2xl text-foreground/80 max-w-3xl mx-auto leading-relaxed">
+                  Create a professional website in minutes with our guided builder.
+                  No coding requiredjust answer a few questions and watch your site come to life.
+                </p>
               </div>
 
-              <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-                <div className="text-center mb-12">
-                  <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold mb-6">
-                    <span className="gradient-text">Automated</span>
-                    <span className="block mt-2">Website Builder</span>
-                  </h1>
-                  <p className="text-xl sm:text-2xl text-foreground/80 max-w-3xl mx-auto leading-relaxed">
-                    Create a professional website in minutes with our guided builder.
-                    No coding requiredjust answer a few questions and watch your site come to life.
-                  </p>
-                </div>
-
-                {/* Progress Steps - Responsive, no scroll */}
-                <div className="w-full mb-14">
-                  {/* On small screens, stack vertically; on md+ screens, show in a row and center */}
-                  <div className="flex flex-col gap-4 items-center px-2 sm:flex-row sm:justify-center sm:gap-2">
-                    {steps.map((step, index) => (
-                      <React.Fragment key={index}>
-                        <div className="flex flex-row sm:flex-col items-center sm:items-center min-w-[70px] max-w-[120px] flex-1 sm:flex-none">
-                          <div
-                            className={`w-9 h-9 flex items-center justify-center rounded-full border-2
+              {/* Progress Steps - Responsive, no scroll */}
+              <div className="w-full mb-14">
+                {/* On small screens, stack vertically; on md+ screens, show in a row and center */}
+                <div className="flex flex-col gap-4 items-center px-2 sm:flex-row sm:justify-center sm:gap-2">
+                  {steps.map((step, index) => (
+                    <React.Fragment key={index}>
+                      <div className="flex flex-row sm:flex-col items-center sm:items-center min-w-[70px] max-w-[120px] flex-1 sm:flex-none">
+                        <div
+                          className={`w-9 h-9 flex items-center justify-center rounded-full border-2
                             ${index <= currentStep ? "bg-primary border-primary text-white" : "border-foreground/30 text-foreground/50"}
                           `}
-                          >
-                            {index < currentStep ? (
-                              <CheckCircle className="w-4 h-4" />
-                            ) : (
-                              <step.icon className="w-4 h-4" />
-                            )}
-                          </div>
-                          <div className="ml-3 sm:ml-0 sm:mt-1 text-left sm:text-center">
-                            <p className="text-xs font-bold leading-tight">{step.title}</p>
-                            <p className="text-[10px] text-foreground/60 leading-tight">{step.description}</p>
-                          </div>
+                        >
+                          {index < currentStep ? (
+                            <CheckCircle className="w-4 h-4" />
+                          ) : (
+                            <step.icon className="w-4 h-4" />
+                          )}
                         </div>
-                        {index < steps.length - 1 && (
-                          <>
-                            {/* Down arrow for xs, right arrow for sm+ */}
-                            <div className="flex sm:hidden items-center justify-center flex-none">
-                              <svg width="18" height="18" className="text-foreground/20" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M9 3v12m-3-3 3 3 3-3" />
-                              </svg>
-                            </div>
-                            <div className="hidden sm:flex items-center justify-center flex-none">
-                              <svg width="18" height="18" className="text-foreground/20" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M3 9h12m-3-3 3 3-3 3" />
-                              </svg>
-                            </div>
-                          </>
-                        )}
-                      </React.Fragment>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Main Content */}
-                <div className="max-w-4xl mx-auto">
-                  <Card className="glass-effect">
-                    <CardContent className="p-8">
-                      <AnimatePresence mode="wait">
-                        {renderStep()}
-                      </AnimatePresence>
-                    </CardContent>
-                  </Card>
+                        <div className="ml-3 sm:ml-0 sm:mt-1 text-left sm:text-center">
+                          <p className="text-xs font-bold leading-tight">{step.title}</p>
+                          <p className="text-[10px] text-foreground/60 leading-tight">{step.description}</p>
+                        </div>
+                      </div>
+                      {index < steps.length - 1 && (
+                        <>
+                          {/* Down arrow for xs, right arrow for sm+ */}
+                          <div className="flex sm:hidden items-center justify-center flex-none">
+                            <svg width="18" height="18" className="text-foreground/20" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M9 3v12m-3-3 3 3 3-3" />
+                            </svg>
+                          </div>
+                          <div className="hidden sm:flex items-center justify-center flex-none">
+                            <svg width="18" height="18" className="text-foreground/20" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M3 9h12m-3-3 3 3-3 3" />
+                            </svg>
+                          </div>
+                        </>
+                      )}
+                    </React.Fragment>
+                  ))}
                 </div>
               </div>
-            </section>
-          </main>
-            )}
-          </>
-        )}
+
+              {/* Main Content */}
+              <div className="max-w-4xl mx-auto">
+                <Card className="glass-effect">
+                  <CardContent className="p-8">
+                    <AnimatePresence mode="wait">
+                      {renderStep()}
+                    </AnimatePresence>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          </section>
+        </main>
       </div>
     </ThemeProvider>
   );

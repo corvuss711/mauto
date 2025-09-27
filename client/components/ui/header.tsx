@@ -5,7 +5,6 @@ import { useNavigate, Link, useLocation } from "react-router-dom";
 import { MobileNav } from "./mobile-nav";
 import { Button } from "./button";
 import { ThemeToggle } from "./theme-toggle";
-import { LogoutLoader } from "./logout-loader";
 import { apiFetch } from '../../lib/apiFetch';
 import { prefetchRoute } from '../../lib/prefetchRoutes';
 import { useTheme } from "./theme-provider";
@@ -27,7 +26,6 @@ export function Header() {
   const [forceMobileNav, setForceMobileNav] = useState(false);
   const dropdownRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   // Auto-close mobile menu when route actually changes
   useEffect(() => {
@@ -499,44 +497,19 @@ Gallery", description: "View all our projects", href: "/gallery" },
                 {isAuthenticated ? (
                   <Button
                     size="sm"
-                    disabled={isLoggingOut}
-                    className="bg-gradient-to-r from-red-500 to-orange-500 text-white text-xs md:text-xs lg:text-sm xl:text-sm px-3 md:px-3 lg:px-4 xl:px-4 py-1.5 md:py-1.5 lg:py-2 xl:py-2 disabled:opacity-50"
-                    onClick={async () => {
-                      if (!isLoggingOut) {
-                        setIsLoggingOut(true);
-                        console.log('[Logout] Starting logout process...');
-                        try {
-                          // Dispatch logout event BEFORE removing session data
-                          window.dispatchEvent(new CustomEvent('user-logout'));
+                    className="bg-gradient-to-r from-red-500 to-orange-500 text-white text-xs md:text-xs lg:text-sm xl:text-sm px-3 md:px-3 lg:px-4 xl:px-4 py-1.5 md:py-1.5 lg:py-2 xl:py-2"
+                    onClick={() => {
+                      // Dispatch logout event BEFORE removing session data
+                      window.dispatchEvent(new CustomEvent('user-logout'));
 
-                          // Remove session flag and call logout API
-                          localStorage.removeItem('manacle_session');
-                          localStorage.removeItem('userID');
-                          localStorage.removeItem('currentLoadedUserId');
-                          localStorage.removeItem('autoSiteLastUserID');
-                          localStorage.removeItem('autoSiteLoggedOut');
-                          
-                          await apiFetch('/api/logout');
-                          console.log('[Logout] API call completed, showing loading state...');
-                          
-                          // Longer delay to show the full-screen loader properly
-                          await new Promise(resolve => setTimeout(resolve, 1500));
-                          
-                          // Set authentication to false just before redirect
-                          setIsAuthenticated(false);
-                          console.log('[Logout] Redirecting to login...');
-                          
-                          // Use navigate instead of window.location to prevent going to first step
-                          window.location.replace('/login');
-                        } catch (error) {
-                          console.error('[Logout] Error during logout:', error);
-                          setIsAuthenticated(false);
-                          window.location.replace('/login');
-                        }
-                      }
+                      // Remove session flag and call logout API
+                      localStorage.removeItem('manacle_session');
+                      apiFetch('/api/logout').then(() => {
+                        window.location.href = '/login';
+                      });
                     }}
                   >
-                    {isLoggingOut ? 'Logging out...' : 'Logout'}
+                    Logout
                   </Button>
                 ) : (
                   <>
@@ -578,12 +551,7 @@ Gallery", description: "View all our projects", href: "/gallery" },
             setClickedDropdown={setClickedDropdown}
             setIsMenuOpen={setIsMenuOpen}
             isAuthenticated={isAuthenticated}
-            isLoggingOut={isLoggingOut}
-            setIsLoggingOut={setIsLoggingOut}
           />
-
-          {/* Full-screen logout loader */}
-          <LogoutLoader isVisible={isLoggingOut} />
         </div>
       </header>
     </>

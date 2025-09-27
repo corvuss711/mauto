@@ -31,8 +31,6 @@ interface MobileNavProps {
     setClickedDropdown: (v: string | null) => void;
     setIsMenuOpen: (v: boolean) => void;
     isAuthenticated: boolean;
-    isLoggingOut?: boolean;
-    setIsLoggingOut?: (v: boolean) => void;
 }
 
 export const MobileNav: React.FC<MobileNavProps> = ({
@@ -43,8 +41,6 @@ export const MobileNav: React.FC<MobileNavProps> = ({
     setClickedDropdown,
     setIsMenuOpen,
     isAuthenticated,
-    isLoggingOut = false,
-    setIsLoggingOut,
 }) => {
     const location = useLocation();
     const initialPathRef = useRef(location.pathname + location.search + location.hash);
@@ -190,42 +186,22 @@ export const MobileNav: React.FC<MobileNavProps> = ({
                     </div>
 
                     {/* Auth Buttons */}
-                    <div className="mt-5 pt-5 border-t border-glass-border flex flex-col space-y-2">
+                    {/* <div className="mt-5 pt-5 border-t border-glass-border flex flex-col space-y-2">
                         {isAuthenticated ? (
                             <Button
-                                className="w-full bg-gradient-to-r from-red-500 to-orange-500 text-white disabled:opacity-50"
-                                disabled={isLoggingOut}
-                                onClick={async () => {
-                                    if (!isLoggingOut && setIsLoggingOut) {
-                                        setIsLoggingOut(true);
-                                        console.log('[Mobile Logout] Starting logout process...');
-                                        try {
-                                            // Dispatch logout event BEFORE removing session data
-                                            window.dispatchEvent(new CustomEvent('user-logout'));
+                                className="w-full bg-gradient-to-r from-red-500 to-orange-500 text-white"
+                                onClick={() => {
+                                    // Dispatch logout event BEFORE removing session data
+                                    window.dispatchEvent(new CustomEvent('user-logout'));
 
-                                            localStorage.removeItem('manacle_session');
-                                            localStorage.removeItem('userID');
-                                            localStorage.removeItem('currentLoadedUserId');
-                                            localStorage.removeItem('autoSiteLastUserID');
-                                            localStorage.removeItem('autoSiteLoggedOut');
-                                            
-                                            await apiFetch('/api/logout');
-                                            console.log('[Mobile Logout] API call completed, showing loading state...');
-                                            
-                                            // Longer delay to show the full-screen loader properly
-                                            await new Promise(resolve => setTimeout(resolve, 1500));
-                                            
-                                            console.log('[Mobile Logout] Redirecting to login...');
-                                            // Use replace to prevent going to first step
-                                            window.location.replace('/login');
-                                        } catch (error) {
-                                            console.error('[Mobile Logout] Error during logout:', error);
-                                            window.location.replace('/login');
-                                        }
-                                    }
+                                    localStorage.removeItem('manacle_session');
+                                    apiFetch('/api/logout').then(() => {
+                                        // Hard redirect to ensure clean state
+                                        window.location.href = '/login';
+                                    });
                                 }}
                             >
-                                {isLoggingOut ? 'Logging out...' : 'Logout'}
+                                Logout
                             </Button>
                         ) : (
                             <>
@@ -237,7 +213,7 @@ export const MobileNav: React.FC<MobileNavProps> = ({
                                 </Link>
                             </>
                         )}
-                    </div>
+                    </div> */}
                 </div>
             </div>
             {/* Animations (utility) */}

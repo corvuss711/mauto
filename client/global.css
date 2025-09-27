@@ -36,57 +36,6 @@
   * {
     transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
   }
-
-  /* Override browser autocomplete styling */
-  input:-webkit-autofill,
-  input:-webkit-autofill:hover,
-  input:-webkit-autofill:focus,
-  input:-webkit-autofill:active,
-  textarea:-webkit-autofill,
-  textarea:-webkit-autofill:hover,
-  textarea:-webkit-autofill:focus,
-  textarea:-webkit-autofill:active,
-  select:-webkit-autofill,
-  select:-webkit-autofill:hover,
-  select:-webkit-autofill:focus,
-  select:-webkit-autofill:active {
-    -webkit-box-shadow: 0 0 0 30px hsl(var(--input)) inset !important;
-    -webkit-text-fill-color: hsl(var(--foreground)) !important;
-    background-color: hsl(var(--input)) !important;
-    transition: background-color 5000s ease-in-out 0s !important;
-  }
-
-  /* Force proper background for all form inputs */
-  input[type="text"],
-  input[type="email"],
-  input[type="password"],
-  input[type="tel"],
-  input[type="url"],
-  input[type="search"],
-  input[type="number"],
-  textarea {
-    background-color: hsl(var(--input)) !important;
-  }
-
-  /* Maintain background on focus and active states */
-  input[type="text"]:focus,
-  input[type="email"]:focus,
-  input[type="password"]:focus,
-  input[type="tel"]:focus,
-  input[type="url"]:focus,
-  input[type="search"]:focus,
-  input[type="number"]:focus,
-  textarea:focus,
-  input[type="text"]:active,
-  input[type="email"]:active,
-  input[type="password"]:active,
-  input[type="tel"]:active,
-  input[type="url"]:active,
-  input[type="search"]:active,
-  input[type="number"]:active,
-  textarea:active {
-    background-color: hsl(var(--input)) !important;
-  }
 }
 
 /* Custom animations for carousel - tuned */
@@ -444,8 +393,8 @@
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 220 13% 75%;
-    --input: 0 0% 100%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
     --ring: 280 85% 65%;
 
     --radius: 1rem;
@@ -1493,21 +1442,21 @@ html:focus-within {
 /* Enhanced Loading Spinner Animations */
 @layer utilities {
 
-  /* Smooth spin animation with easing - faster */
+  /* Smooth spin animation with easing */
   .animate-spin-smooth {
-    animation: spin-smooth 0.8s cubic-bezier(0.4, 0.0, 0.2, 1) infinite;
+    animation: spin-smooth 1.5s cubic-bezier(0.4, 0.0, 0.2, 1) infinite;
   }
 
   .animate-spin-reverse {
-    animation: spin-reverse 0.6s cubic-bezier(0.4, 0.0, 0.2, 1) infinite;
+    animation: spin-reverse 1s cubic-bezier(0.4, 0.0, 0.2, 1) infinite;
   }
 
   .animate-glow-pulse {
-    animation: glow-pulse 1.2s ease-in-out infinite;
+    animation: glow-pulse 2.5s ease-in-out infinite;
   }
 
   .animate-ripple {
-    animation: ripple 0.8s ease-out infinite;
+    animation: ripple 1.5s ease-out infinite;
   }
 
   /* Keyframes for enhanced spinner */

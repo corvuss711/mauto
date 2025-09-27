@@ -5,6 +5,7 @@ import { useNavigate, Link, useLocation } from "react-router-dom";
 import { MobileNav } from "./mobile-nav";
 import { Button } from "./button";
 import { ThemeToggle } from "./theme-toggle";
+import { LogoutLoader } from "./logout-loader";
 import { apiFetch } from '../../lib/apiFetch';
 import { prefetchRoute } from '../../lib/prefetchRoutes';
 import { useTheme } from "./theme-provider";
@@ -518,17 +519,19 @@ Gallery", description: "View all our projects", href: "/gallery" },
                           await apiFetch('/api/logout');
                           console.log('[Logout] API call completed, showing loading state...');
                           
-                          // Add a longer delay to ensure users see the loading state
-                          await new Promise(resolve => setTimeout(resolve, 1000));
+                          // Longer delay to show the full-screen loader properly
+                          await new Promise(resolve => setTimeout(resolve, 1500));
                           
                           // Set authentication to false just before redirect
                           setIsAuthenticated(false);
                           console.log('[Logout] Redirecting to login...');
-                          window.location.href = '/login';
+                          
+                          // Use navigate instead of window.location to prevent going to first step
+                          window.location.replace('/login');
                         } catch (error) {
                           console.error('[Logout] Error during logout:', error);
                           setIsAuthenticated(false);
-                          window.location.href = '/login';
+                          window.location.replace('/login');
                         }
                       }
                     }}
@@ -578,6 +581,9 @@ Gallery", description: "View all our projects", href: "/gallery" },
             isLoggingOut={isLoggingOut}
             setIsLoggingOut={setIsLoggingOut}
           />
+
+          {/* Full-screen logout loader */}
+          <LogoutLoader isVisible={isLoggingOut} />
         </div>
       </header>
     </>

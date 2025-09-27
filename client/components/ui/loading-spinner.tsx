@@ -36,7 +36,7 @@ export const LoadingSpinner = ({ size = 'md', className = '' }: LoadingSpinnerPr
             initial={{ opacity: 0, scale: 0.8, rotate: -45 }}
             animate={{ opacity: 1, scale: 1, rotate: 0 }}
             transition={{
-                duration: 0.5,
+                duration: 0.3,
                 ease: [0.22, 1, 0.36, 1]
             }}
         >
@@ -68,7 +68,7 @@ export const LoadingSpinner = ({ size = 'md', className = '' }: LoadingSpinnerPr
                     scale: [1, 1.2, 1],
                 }}
                 transition={{
-                    duration: 1.5,
+                    duration: 0.8,
                     repeat: Infinity,
                     ease: "easeInOut"
                 }}
@@ -82,9 +82,9 @@ export const LoadingSpinner = ({ size = 'md', className = '' }: LoadingSpinnerPr
                     scale: [0, 1, 0],
                 }}
                 transition={{
-                    duration: 2,
+                    duration: 1.2,
                     repeat: Infinity,
-                    delay: 0.5,
+                    delay: 0.3,
                     ease: "easeInOut"
                 }}
             />
@@ -95,9 +95,9 @@ export const LoadingSpinner = ({ size = 'md', className = '' }: LoadingSpinnerPr
                     scale: [0, 1, 0],
                 }}
                 transition={{
-                    duration: 2,
+                    duration: 1.2,
                     repeat: Infinity,
-                    delay: 1,
+                    delay: 0.6,
                     ease: "easeInOut"
                 }}
             />

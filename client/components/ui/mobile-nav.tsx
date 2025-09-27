@@ -212,15 +212,15 @@ export const MobileNav: React.FC<MobileNavProps> = ({
                                             await apiFetch('/api/logout');
                                             console.log('[Mobile Logout] API call completed, showing loading state...');
                                             
-                                            // Add a longer delay to ensure users see the loading state
-                                            await new Promise(resolve => setTimeout(resolve, 1000));
+                                            // Longer delay to show the full-screen loader properly
+                                            await new Promise(resolve => setTimeout(resolve, 1500));
                                             
                                             console.log('[Mobile Logout] Redirecting to login...');
-                                            // Hard redirect to ensure clean state
-                                            window.location.href = '/login';
+                                            // Use replace to prevent going to first step
+                                            window.location.replace('/login');
                                         } catch (error) {
                                             console.error('[Mobile Logout] Error during logout:', error);
-                                            window.location.href = '/login';
+                                            window.location.replace('/login');
                                         }
                                     }
                                 }}

@@ -183,30 +183,40 @@ export default function AutoSite() {
   React.useEffect(() => {
     // Listen for user logout/login events
     const handleUserLogout = () => {
-
-      // On logout, we clear all localStorage (user will be gone)
+      // On logout, clear form data and mark that user has logged out
+      // This allows us to detect if a different user logs in next
       localStorage.removeItem('autoSiteFormData');
       localStorage.removeItem('autoSiteCurrentStep');
       localStorage.removeItem('autoSiteCompanyId');
-      localStorage.removeItem('autoSiteLastUserID'); // Clear the last user tracking
+
+      // Mark that a logout occurred, but keep the user ID for continuity check
+      localStorage.setItem('autoSiteLoggedOut', 'true');
 
       // Reset to defaults
       setFormData(defaultFormData);
       setCurrentStep(0);
       setCompanyId(0);
-
-
     };
 
     const handleUserLogin = () => {
+      // On login, clear the logout flag 
+      localStorage.removeItem('autoSiteLoggedOut');
 
-      // On login, we DON'T clear anything immediately
-      // The user change detection effect above will handle it properly
-      // This prevents clearing data when the same user logs back in
+      // Trigger user change detection after a short delay to ensure userID is set
+      setTimeout(() => {
+        const currentUserID = localStorage.getItem('userID');
+        if (currentUserID) {
+          // Trigger the useEffect by updating a state that will cause re-evaluation
+          // This ensures user change detection runs even if userID wasn't immediately available
+          const event = new CustomEvent('user-id-ready', { detail: { userID: currentUserID } });
+          window.dispatchEvent(event);
+        }
+      }, 100);
     };
 
     window.addEventListener("user-logout", handleUserLogout);
     window.addEventListener("user-login", handleUserLogin);
+
     return () => {
       window.removeEventListener("user-logout", handleUserLogout);
       window.removeEventListener("user-login", handleUserLogin);
@@ -458,45 +468,89 @@ export default function AutoSite() {
     goal: "",
     impact: ""
   };
-  // Helper to detect user changes and reset form state ONLY for different users
+  /**
+   * PERSISTENCE FIX FOR GOOGLE OAUTH USERS:
+   * 
+   * Problem: When users logged out and back in with Google OAuth, their form progress 
+   * was being cleared because the system treated them as "different users".
+   * 
+   * Root Cause: The logout handler was clearing 'autoSiteLastUserID', so when the same 
+   * user logged back in, user change detection couldn't recognize them.
+   * 
+   * Solution: 
+   * 1. Preserve 'autoSiteLastUserID' across logout/login cycles
+   * 2. Use a 'autoSiteLoggedOut' flag to track logout state
+   * 3. Only reset progress for truly different users (different userID)
+   * 4. Handle OAuth timing issues with custom events
+   * 
+   * Result: Same user keeps their form progress across logout/login cycles,
+   * preventing multiple site creation abuse while maintaining good UX.
+   */
+  // Helper to detect user changes and reset form state ONLY for truly different users
   useEffect(() => {
-    const userID = localStorage.getItem('userID');
-    const lastUserID = localStorage.getItem('autoSiteLastUserID');
+    const checkUserChange = () => {
+      const userID = localStorage.getItem('userID');
 
-    // Only proceed if we have a current user ID
-    if (!userID) {
-      // console.log('[AutoSite] No userID found, skipping user change detection');
-      return;
-    }
+      // Only proceed if we have a current user ID
+      if (!userID) {
+        // console.log('[AutoSite] No userID found, skipping user change detection');
+        return;
+      }
 
-    // If no lastUserID is stored, this might be first visit or after logout
-    if (!lastUserID) {
-      // console.log('[AutoSite] No previous user ID stored, setting current user:', userID);
-      localStorage.setItem('autoSiteLastUserID', userID);
-      return; // Don't reset progress, just track the user
-    }
+      // Check if this is a different user from the last stored userID
+      const lastUserID = localStorage.getItem('autoSiteLastUserID');
+      const wasLoggedOut = localStorage.getItem('autoSiteLoggedOut') === 'true';
 
-    // Only reset if it's actually a DIFFERENT user
-    if (userID !== lastUserID) {
-      // console.log('[AutoSite] DIFFERENT user detected:', { lastUserID, newUserID: userID });
+      if (!lastUserID) {
+        // First time visit - store the user and continue
+        // console.log('[AutoSite] First time user, setting current user:', userID);
+        localStorage.setItem('autoSiteLastUserID', userID);
+        localStorage.removeItem('autoSiteLoggedOut');
+        return;
+      }
 
-      // Store the new user ID
-      localStorage.setItem('autoSiteLastUserID', userID);
+      if (userID !== lastUserID) {
+        // Different user detected - reset everything
+        // console.log('[AutoSite] DIFFERENT user detected:', { lastUserID, newUserID: userID });
 
-      // Clear localStorage form data (since we use DB now, this is just cleanup)
-      localStorage.removeItem('autoSiteFormData');
-      localStorage.removeItem('autoSiteCurrentStep');
-      localStorage.removeItem('autoSiteCompanyId');
+        // Store the new user ID
+        localStorage.setItem('autoSiteLastUserID', userID);
+        localStorage.removeItem('autoSiteLoggedOut');
 
-      // Reset component state to defaults (will be overridden by DB load)
-      setFormData(defaultFormData);
-      setCurrentStep(0);
-      setCompanyId(0);
+        // Clear all data and reset state
+        localStorage.removeItem('autoSiteFormData');
+        localStorage.removeItem('autoSiteCurrentStep');
+        localStorage.removeItem('autoSiteCompanyId');
 
-      // console.log('[AutoSite] Reset state for different user:', userID);
-    } else {
-      // console.log('[AutoSite] Same user returning:', userID, '- keeping their progress');
-    }
+        // Reset component state to defaults (will be overridden by DB load)
+        setFormData(defaultFormData);
+        setCurrentStep(0);
+        setCompanyId(0);
+
+        // console.log('[AutoSite] Reset state for different user:', userID);
+      } else if (wasLoggedOut) {
+        // Same user returning after logout - clear the logout flag but keep their progress
+        // console.log('[AutoSite] Same user returning after logout:', userID, '- restoring progress');
+        localStorage.removeItem('autoSiteLoggedOut');
+      } else {
+        // Same user, no logout - continue normally
+        // console.log('[AutoSite] Same user continuing session:', userID);
+      }
+    };
+
+    // Run the check initially
+    checkUserChange();
+
+    // Also run the check when user-id-ready event is triggered
+    const handleUserIdReady = () => {
+      checkUserChange();
+    };
+
+    window.addEventListener('user-id-ready', handleUserIdReady);
+
+    return () => {
+      window.removeEventListener('user-id-ready', handleUserIdReady);
+    };
   }, [localStorage.getItem('userID')]);
 
   const getInitialFormData = () => {
@@ -511,6 +565,13 @@ export default function AutoSite() {
     return defaultFormData;
   };
   const getInitialStep = () => {
+    // Don't load from localStorage if we have a userID, 
+    // as we'll load the correct step from database
+    const userID = localStorage.getItem('userID');
+    if (userID) {
+      return -1; // Special value indicating we're waiting for database load
+    }
+
     const saved = localStorage.getItem("autoSiteCurrentStep");
     if (saved && !isNaN(Number(saved))) {
       return Number(saved);
@@ -532,6 +593,10 @@ export default function AutoSite() {
     const saved = localStorage.getItem("autoSiteIsSuccess");
     return saved === "true";
   });
+
+  // Add loading state to prevent flash during step load
+  const [isFormLoading, setIsFormLoading] = useState(true);
+
   const [currentStep, setCurrentStep] = useState(getInitialStep());
   // Move these out of renderStep/case 4
   const [emailError, setEmailError] = useState<string>("");
@@ -683,6 +748,7 @@ export default function AutoSite() {
     // Wait for userID to be available after Google auth
     const attemptLoadForm = async () => {
       // console.log('[AutoSite] Starting form load attempt...');
+      setIsFormLoading(true);
 
       let userID = localStorage.getItem('userID');
       let attempts = 0;
@@ -702,6 +768,7 @@ export default function AutoSite() {
         setFormData(defaultFormData);
         setCompanyId(0);
         localStorage.removeItem("autoSiteCompanyId");
+        setIsFormLoading(false);
         return;
       }
 
@@ -768,12 +835,18 @@ export default function AutoSite() {
           localStorage.removeItem("autoSiteCompanyId");
           // console.log('[AutoSite] No company found, cleared companyId');
         }
+
+        // Form loading complete
+        setIsFormLoading(false);
       } catch (error) {
         console.error('[AutoSite] Failed to load form for user', userID, ':', error);
         setCurrentStep(0);
         setFormData(defaultFormData);
         setCompanyId(0);
         localStorage.removeItem("autoSiteCompanyId");
+
+        // Form loading complete (even on error)
+        setIsFormLoading(false);
       }
     };
 
@@ -2100,85 +2173,100 @@ export default function AutoSite() {
       <div className="min-h-screen bg-background text-foreground transition-colors duration-500">
         <Header />
 
-        <main className="pt-20 sm:pt-24 md:pt-16">
-          {/* Hero Section */}
-          <section className="py-12 sm:py-16 md:py-20 relative overflow-hidden">
-            <div className="absolute inset-0 overflow-hidden">
-              <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/20 rounded-full blur-3xl floating-animation"></div>
-              <div
-                className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-accent/20 rounded-full blur-3xl floating-animation"
-                style={{ animationDelay: "2s" }}
-              ></div>
+        {/* Show loading screen while form data is being loaded */}
+        {isFormLoading || currentStep === -1 ? (
+          <div className="min-h-screen flex items-center justify-center">
+            <div className="text-center">
+              <div className="relative">
+                <div className="w-16 h-16 mx-auto mb-4">
+                  <div className="w-16 h-16 border-4 border-primary/30 border-t-primary rounded-full animate-spin"></div>
+                </div>
+                <div className="text-lg font-semibold mb-2">Loading your progress...</div>
+                <div className="text-sm text-muted-foreground">Please wait while we restore your form data</div>
+              </div>
             </div>
-
-            <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-              <div className="text-center mb-12">
-                <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold mb-6">
-                  <span className="gradient-text">Automated</span>
-                  <span className="block mt-2">Website Builder</span>
-                </h1>
-                <p className="text-xl sm:text-2xl text-foreground/80 max-w-3xl mx-auto leading-relaxed">
-                  Create a professional website in minutes with our guided builder.
-                  No coding requiredjust answer a few questions and watch your site come to life.
-                </p>
+          </div>
+        ) : (
+          <main className="pt-20 sm:pt-24 md:pt-16">
+            {/* Hero Section */}
+            <section className="py-12 sm:py-16 md:py-20 relative overflow-hidden">
+              <div className="absolute inset-0 overflow-hidden">
+                <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/20 rounded-full blur-3xl floating-animation"></div>
+                <div
+                  className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-accent/20 rounded-full blur-3xl floating-animation"
+                  style={{ animationDelay: "2s" }}
+                ></div>
               </div>
 
-              {/* Progress Steps - Responsive, no scroll */}
-              <div className="w-full mb-14">
-                {/* On small screens, stack vertically; on md+ screens, show in a row and center */}
-                <div className="flex flex-col gap-4 items-center px-2 sm:flex-row sm:justify-center sm:gap-2">
-                  {steps.map((step, index) => (
-                    <React.Fragment key={index}>
-                      <div className="flex flex-row sm:flex-col items-center sm:items-center min-w-[70px] max-w-[120px] flex-1 sm:flex-none">
-                        <div
-                          className={`w-9 h-9 flex items-center justify-center rounded-full border-2
+              <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+                <div className="text-center mb-12">
+                  <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold mb-6">
+                    <span className="gradient-text">Automated</span>
+                    <span className="block mt-2">Website Builder</span>
+                  </h1>
+                  <p className="text-xl sm:text-2xl text-foreground/80 max-w-3xl mx-auto leading-relaxed">
+                    Create a professional website in minutes with our guided builder.
+                    No coding requiredjust answer a few questions and watch your site come to life.
+                  </p>
+                </div>
+
+                {/* Progress Steps - Responsive, no scroll */}
+                <div className="w-full mb-14">
+                  {/* On small screens, stack vertically; on md+ screens, show in a row and center */}
+                  <div className="flex flex-col gap-4 items-center px-2 sm:flex-row sm:justify-center sm:gap-2">
+                    {steps.map((step, index) => (
+                      <React.Fragment key={index}>
+                        <div className="flex flex-row sm:flex-col items-center sm:items-center min-w-[70px] max-w-[120px] flex-1 sm:flex-none">
+                          <div
+                            className={`w-9 h-9 flex items-center justify-center rounded-full border-2
                             ${index <= currentStep ? "bg-primary border-primary text-white" : "border-foreground/30 text-foreground/50"}
                           `}
-                        >
-                          {index < currentStep ? (
-                            <CheckCircle className="w-4 h-4" />
-                          ) : (
-                            <step.icon className="w-4 h-4" />
-                          )}
-                        </div>
-                        <div className="ml-3 sm:ml-0 sm:mt-1 text-left sm:text-center">
-                          <p className="text-xs font-bold leading-tight">{step.title}</p>
-                          <p className="text-[10px] text-foreground/60 leading-tight">{step.description}</p>
-                        </div>
-                      </div>
-                      {index < steps.length - 1 && (
-                        <>
-                          {/* Down arrow for xs, right arrow for sm+ */}
-                          <div className="flex sm:hidden items-center justify-center flex-none">
-                            <svg width="18" height="18" className="text-foreground/20" fill="none" stroke="currentColor" strokeWidth="2">
-                              <path d="M9 3v12m-3-3 3 3 3-3" />
-                            </svg>
+                          >
+                            {index < currentStep ? (
+                              <CheckCircle className="w-4 h-4" />
+                            ) : (
+                              <step.icon className="w-4 h-4" />
+                            )}
                           </div>
-                          <div className="hidden sm:flex items-center justify-center flex-none">
-                            <svg width="18" height="18" className="text-foreground/20" fill="none" stroke="currentColor" strokeWidth="2">
-                              <path d="M3 9h12m-3-3 3 3-3 3" />
-                            </svg>
+                          <div className="ml-3 sm:ml-0 sm:mt-1 text-left sm:text-center">
+                            <p className="text-xs font-bold leading-tight">{step.title}</p>
+                            <p className="text-[10px] text-foreground/60 leading-tight">{step.description}</p>
                           </div>
-                        </>
-                      )}
-                    </React.Fragment>
-                  ))}
+                        </div>
+                        {index < steps.length - 1 && (
+                          <>
+                            {/* Down arrow for xs, right arrow for sm+ */}
+                            <div className="flex sm:hidden items-center justify-center flex-none">
+                              <svg width="18" height="18" className="text-foreground/20" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M9 3v12m-3-3 3 3 3-3" />
+                              </svg>
+                            </div>
+                            <div className="hidden sm:flex items-center justify-center flex-none">
+                              <svg width="18" height="18" className="text-foreground/20" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M3 9h12m-3-3 3 3-3 3" />
+                              </svg>
+                            </div>
+                          </>
+                        )}
+                      </React.Fragment>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Main Content */}
+                <div className="max-w-4xl mx-auto">
+                  <Card className="glass-effect">
+                    <CardContent className="p-8">
+                      <AnimatePresence mode="wait">
+                        {renderStep()}
+                      </AnimatePresence>
+                    </CardContent>
+                  </Card>
                 </div>
               </div>
-
-              {/* Main Content */}
-              <div className="max-w-4xl mx-auto">
-                <Card className="glass-effect">
-                  <CardContent className="p-8">
-                    <AnimatePresence mode="wait">
-                      {renderStep()}
-                    </AnimatePresence>
-                  </CardContent>
-                </Card>
-              </div>
-            </div>
-          </section>
-        </main>
+            </section>
+          </main>
+        )}
       </div>
     </ThemeProvider>
   );

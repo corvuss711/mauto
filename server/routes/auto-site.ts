@@ -132,25 +132,9 @@ formProgressRouter.post('/load-form', /*isAuthenticated,*/ async (req: Request, 
 formProgressRouter.post('/reset-form', isAuthenticated, async (req: Request, res: Response) => {
   const userId = req.userId;
   try {
-    // Add logging and confirmation requirement to prevent accidental data loss
-    const { confirm } = req.body;
-    if (confirm !== true) {
-      return res.status(400).json({ error: 'Reset confirmation required. Send { "confirm": true } to proceed.' });
-    }
-
-    // Log the reset operation
-    const [userRows] = await db.promise().query('SELECT email_id, provider FROM users WHERE id = ? LIMIT 1', [userId]);
-    const userInfo = Array.isArray(userRows) && userRows.length > 0 ? userRows[0] : null;
-    
-    console.log('[RESET-FORM] DELETING form progress for user:', userId, 'email:', userInfo ? (userInfo as any).email_id : 'unknown', 'provider:', userInfo ? (userInfo as any).provider : 'unknown');
-    
-    const [result] = await db.promise().query('DELETE FROM user_form_progress WHERE user_id = ?', [userId]);
-    
-    console.log('[RESET-FORM] Deleted', (result as any).affectedRows, 'rows for user:', userId);
-    
-    res.json({ success: true, deletedRows: (result as any).affectedRows });
+    await db.promise().query('DELETE FROM user_form_progress WHERE user_id = ?', [userId]);
+    res.json({ success: true });
   } catch (err) {
-    console.error('[RESET-FORM] DB error for user:', userId, err);
     res.status(500).json({ error: 'DB error' });
   }
 });

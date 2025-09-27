@@ -281,15 +281,23 @@ export function createServer() {
     let { step_number, form_data, user_id } = req.body || {};
     if (!user_id && (req as any).user?.id) user_id = (req as any).user.id;
     if (typeof step_number !== 'number' || form_data == null || !user_id) return res.status(400).json({ error: 'Missing required fields (user_id, step_number, form_data)' });
+    
     try {
+      // Add logging to track save operations
+      const [userRows] = await db.promise().query('SELECT email_id, provider FROM users WHERE id = ? LIMIT 1', [user_id]);
+      const userInfo = Array.isArray(userRows) && userRows.length > 0 ? userRows[0] : null;
+      
+      console.log('[SAVE-STEP] Saving progress for user:', user_id, 'email:', userInfo ? (userInfo as any).email_id : 'unknown', 'provider:', userInfo ? (userInfo as any).provider : 'unknown', 'step:', step_number, 'has_form_data:', Object.keys(form_data || {}).length > 0);
+      
       await db.promise().query(
         `INSERT INTO user_form_progress (user_id, step_number, form_data) VALUES (?,?,?)
          ON DUPLICATE KEY UPDATE step_number=VALUES(step_number), form_data=VALUES(form_data)`,
         [user_id, step_number, JSON.stringify(form_data)]
       );
+      console.log('[SAVE-STEP] Successfully saved progress for user:', user_id);
       res.json({ success: true });
     } catch (e) {
-      console.error('[save-step] DB error', e);
+      console.error('[SAVE-STEP] DB error for user:', user_id, e);
       res.status(500).json({ error: 'DB error' });
     }
   });
@@ -362,6 +370,7 @@ export function createServer() {
   });
 
   app.get("/api/logout", (req, res) => {
+    console.log('[LOGOUT] User logging out:', req.user ? (req.user as any).id : 'no-user', 'provider:', req.user ? (req.user as any).provider : 'unknown');
     req.logout(function (err) {
       res.clearCookie("connect.sid");
       if (err) {
@@ -371,22 +380,49 @@ export function createServer() {
     });
   });
 
+  // Debug endpoint to check user form progress (remove in production)
+  app.post('/api/debug-form-progress', async (req, res) => {
+    const userId = req.body?.user_id;
+    if (!userId) return res.status(400).json({ error: 'Missing user_id' });
+    try {
+      const [userRows] = await db.promise().query('SELECT id, email_id, google_id, provider FROM users WHERE id = ? LIMIT 1', [userId]);
+      const [progressRows] = await db.promise().query('SELECT * FROM user_form_progress WHERE user_id = ? ORDER BY updated_at DESC', [userId]);
+      res.json({ 
+        user: Array.isArray(userRows) ? userRows[0] : null,
+        progress: Array.isArray(progressRows) ? progressRows : [],
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      res.status(500).json({ error: 'DB error', details: error });
+    }
+  });
+
   // Load form progress by user_id (POST variant to align with client)
   app.post('/api/load-form', async (req, res) => {
     const userId = req.body?.user_id;
     if (!userId) return res.status(400).json({ error: 'Missing user_id' });
     try {
+      // Add logging to track data access
+      const [userRows] = await db.promise().query('SELECT email_id, provider FROM users WHERE id = ? LIMIT 1', [userId]);
+      const userInfo = Array.isArray(userRows) && userRows.length > 0 ? userRows[0] : null;
+      
+      console.log('[LOAD-FORM] Loading progress for user:', userId, 'email:', userInfo ? (userInfo as any).email_id : 'unknown', 'provider:', userInfo ? (userInfo as any).provider : 'unknown');
+      
       const [progressRows] = await db.promise().query('SELECT step_number, form_data FROM user_form_progress WHERE user_id = ? LIMIT 1', [userId]);
       let step_number = 0; let form_data: any = {};
       if (Array.isArray(progressRows) && (progressRows as any[]).length > 0) {
         const row: any = (progressRows as any[])[0];
         step_number = row.step_number;
         try { form_data = typeof row.form_data === 'string' ? JSON.parse(row.form_data) : row.form_data; } catch { form_data = {}; }
+        console.log('[LOAD-FORM] Found existing progress - step:', step_number, 'has_form_data:', Object.keys(form_data).length > 0);
+      } else {
+        console.log('[LOAD-FORM] No existing progress found for user:', userId);
       }
       const [companyRows] = await db.promise().query('SELECT * FROM company_mast WHERE user_id = ? LIMIT 1', [userId]);
       const company = Array.isArray(companyRows) && (companyRows as any[]).length ? (companyRows as any[])[0] : null;
       res.json({ step_number, form_data, company });
-    } catch {
+    } catch (error) {
+      console.error('[LOAD-FORM] Database error for user:', userId, error);
       res.status(500).json({ error: 'DB error' });
     }
   });

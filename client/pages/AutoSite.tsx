@@ -182,7 +182,29 @@ export default function AutoSite() {
   // Clear localStorage on logout or new user session
   React.useEffect(() => {
     // Listen for user logout/login events
-    const handleUserLogout = () => {
+    const handleUserLogout = async () => {
+      // IMPORTANT: Before clearing anything, save current form progress to database
+      // to ensure it persists for the same user when they log back in
+      const userID = localStorage.getItem('userID');
+      if (userID && (currentStep > 0 || Object.keys(formData).some(key => formData[key as keyof FormData] !== defaultFormData[key as keyof FormData]))) {
+        try {
+          // Save current progress to database before logout
+          await fetch('/api/save-step', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+              user_id: userID,
+              step_number: currentStep,
+              form_data: formData
+            })
+          });
+          console.log('[AutoSite] Saved form progress before logout for user:', userID);
+        } catch (error) {
+          console.error('[AutoSite] Failed to save progress before logout:', error);
+        }
+      }
+
       // On logout, clear form data and mark that user has logged out
       // This allows us to detect if a different user logs in next
       localStorage.removeItem('autoSiteFormData');
@@ -192,15 +214,23 @@ export default function AutoSite() {
       // Mark that a logout occurred, but keep the user ID for continuity check
       localStorage.setItem('autoSiteLoggedOut', 'true');
 
-      // Reset to defaults
+      // DON'T reset UI state immediately to prevent step 1 flash
+      // The redirect to login will happen anyway, so no need to show step 1
+      // Reset to defaults only (these won't be visible due to redirect)
       setFormData(defaultFormData);
-      setCurrentStep(0);
+      // setCurrentStep(0); // REMOVED: This was causing step 1 flash
       setCompanyId(0);
+
+      // Set loading state to hide any UI during logout process
+      setIsFormLoading(true);
     };
 
     const handleUserLogin = () => {
       // On login, clear the logout flag 
       localStorage.removeItem('autoSiteLoggedOut');
+
+      // Clear the loading state
+      setIsFormLoading(false);
 
       // Trigger user change detection after a short delay to ensure userID is set
       setTimeout(() => {

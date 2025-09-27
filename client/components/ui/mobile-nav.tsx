@@ -198,6 +198,7 @@ export const MobileNav: React.FC<MobileNavProps> = ({
                                 onClick={async () => {
                                     if (!isLoggingOut && setIsLoggingOut) {
                                         setIsLoggingOut(true);
+                                        console.log('[Mobile Logout] Starting logout process...');
                                         try {
                                             // Dispatch logout event BEFORE removing session data
                                             window.dispatchEvent(new CustomEvent('user-logout'));
@@ -207,13 +208,18 @@ export const MobileNav: React.FC<MobileNavProps> = ({
                                             localStorage.removeItem('currentLoadedUserId');
                                             localStorage.removeItem('autoSiteLastUserID');
                                             localStorage.removeItem('autoSiteLoggedOut');
+                                            
                                             await apiFetch('/api/logout');
-                                            // Add a small delay to show the loading state
-                                            await new Promise(resolve => setTimeout(resolve, 300));
+                                            console.log('[Mobile Logout] API call completed, showing loading state...');
+                                            
+                                            // Add a longer delay to ensure users see the loading state
+                                            await new Promise(resolve => setTimeout(resolve, 1000));
+                                            
+                                            console.log('[Mobile Logout] Redirecting to login...');
                                             // Hard redirect to ensure clean state
                                             window.location.href = '/login';
                                         } catch (error) {
-                                            console.error('[Logout] Error during logout:', error);
+                                            console.error('[Mobile Logout] Error during logout:', error);
                                             window.location.href = '/login';
                                         }
                                     }

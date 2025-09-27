@@ -503,6 +503,7 @@ Gallery", description: "View all our projects", href: "/gallery" },
                     onClick={async () => {
                       if (!isLoggingOut) {
                         setIsLoggingOut(true);
+                        console.log('[Logout] Starting logout process...');
                         try {
                           // Dispatch logout event BEFORE removing session data
                           window.dispatchEvent(new CustomEvent('user-logout'));
@@ -513,13 +514,20 @@ Gallery", description: "View all our projects", href: "/gallery" },
                           localStorage.removeItem('currentLoadedUserId');
                           localStorage.removeItem('autoSiteLastUserID');
                           localStorage.removeItem('autoSiteLoggedOut');
-                          setIsAuthenticated(false);
+                          
                           await apiFetch('/api/logout');
-                          // Add a small delay to show the loading state
-                          await new Promise(resolve => setTimeout(resolve, 300));
+                          console.log('[Logout] API call completed, showing loading state...');
+                          
+                          // Add a longer delay to ensure users see the loading state
+                          await new Promise(resolve => setTimeout(resolve, 1000));
+                          
+                          // Set authentication to false just before redirect
+                          setIsAuthenticated(false);
+                          console.log('[Logout] Redirecting to login...');
                           window.location.href = '/login';
                         } catch (error) {
                           console.error('[Logout] Error during logout:', error);
+                          setIsAuthenticated(false);
                           window.location.href = '/login';
                         }
                       }

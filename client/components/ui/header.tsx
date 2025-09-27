@@ -26,6 +26,7 @@ export function Header() {
   const [forceMobileNav, setForceMobileNav] = useState(false);
   const dropdownRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   // Auto-close mobile menu when route actually changes
   useEffect(() => {
@@ -497,19 +498,34 @@ Gallery", description: "View all our projects", href: "/gallery" },
                 {isAuthenticated ? (
                   <Button
                     size="sm"
-                    className="bg-gradient-to-r from-red-500 to-orange-500 text-white text-xs md:text-xs lg:text-sm xl:text-sm px-3 md:px-3 lg:px-4 xl:px-4 py-1.5 md:py-1.5 lg:py-2 xl:py-2"
-                    onClick={() => {
-                      // Dispatch logout event BEFORE removing session data
-                      window.dispatchEvent(new CustomEvent('user-logout'));
+                    disabled={isLoggingOut}
+                    className="bg-gradient-to-r from-red-500 to-orange-500 text-white text-xs md:text-xs lg:text-sm xl:text-sm px-3 md:px-3 lg:px-4 xl:px-4 py-1.5 md:py-1.5 lg:py-2 xl:py-2 disabled:opacity-50"
+                    onClick={async () => {
+                      if (!isLoggingOut) {
+                        setIsLoggingOut(true);
+                        try {
+                          // Dispatch logout event BEFORE removing session data
+                          window.dispatchEvent(new CustomEvent('user-logout'));
 
-                      // Remove session flag and call logout API
-                      localStorage.removeItem('manacle_session');
-                      apiFetch('/api/logout').then(() => {
-                        window.location.href = '/login';
-                      });
+                          // Remove session flag and call logout API
+                          localStorage.removeItem('manacle_session');
+                          localStorage.removeItem('userID');
+                          localStorage.removeItem('currentLoadedUserId');
+                          localStorage.removeItem('autoSiteLastUserID');
+                          localStorage.removeItem('autoSiteLoggedOut');
+                          setIsAuthenticated(false);
+                          await apiFetch('/api/logout');
+                          // Add a small delay to show the loading state
+                          await new Promise(resolve => setTimeout(resolve, 300));
+                          window.location.href = '/login';
+                        } catch (error) {
+                          console.error('[Logout] Error during logout:', error);
+                          window.location.href = '/login';
+                        }
+                      }
                     }}
                   >
-                    Logout
+                    {isLoggingOut ? 'Logging out...' : 'Logout'}
                   </Button>
                 ) : (
                   <>
@@ -551,6 +567,8 @@ Gallery", description: "View all our projects", href: "/gallery" },
             setClickedDropdown={setClickedDropdown}
             setIsMenuOpen={setIsMenuOpen}
             isAuthenticated={isAuthenticated}
+            isLoggingOut={isLoggingOut}
+            setIsLoggingOut={setIsLoggingOut}
           />
         </div>
       </header>

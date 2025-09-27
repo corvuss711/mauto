@@ -13,7 +13,7 @@ export default function AuthResult() {
 
         const processOAuthResult = async () => {
             try {
-                // Mark session as present (consistent with regular login)
+                // Mark session as present
                 localStorage.setItem('manacle_session', 'true');
 
                 // Check URL parameters for fallback user info (in case session doesn't work)
@@ -78,21 +78,9 @@ export default function AuthResult() {
                     throw new Error('No user ID available from session or URL parameters');
                 }
 
-                // Clear any existing session data to prevent conflicts
-                localStorage.removeItem('autoSiteLoggedOut');
-                // Only clear tracking if this is actually a different user
-                const lastUserID = localStorage.getItem('autoSiteLastUserID');
-                if (lastUserID && lastUserID !== userId) {
-                    console.log('[AuthResult] Different user detected, clearing tracking');
-                    localStorage.removeItem('currentLoadedUserId');
-                } else {
-                    console.log('[AuthResult] Same user or no previous user, preserving tracking');
-                }
-                
                 // Set userID in localStorage (same as regular login/signup)
                 localStorage.setItem('userID', userId);
-                console.log('[AuthResult] SUCCESS - userID set in localStorage:', userId);                // Ensure clean session state for Google OAuth users
-                localStorage.setItem('manacle_session', 'true');
+                console.log('[AuthResult] SUCCESS - userID set in localStorage:', userId);
 
                 if (isNew) {
                     // New user - redirect to home page

@@ -86,55 +86,13 @@ export default function Login() {
             });
             const data = await res.json();
             if (res.ok && data.success) {
-                // Set session marker immediately after successful login
-                localStorage.setItem('manacle_session', 'active');
-                
-                // Store user ID from login response first
-                if (data.user?.id) {
-                    localStorage.setItem('userID', data.user.id);
-                }
-                
-                // Wait a brief moment for session to be established, then verify
-                setTimeout(async () => {
-                    try {
-                        const me = await fetch('/api/me', { credentials: 'include' });
-                        const meData = await me.json();
-                        console.log('[Login] Session verification:', meData);
-                        
-                        if (meData?.authenticated && meData?.user?.id) {
-                            localStorage.setItem('userID', meData.user.id);
-                            localStorage.setItem('manacle_session', 'true');
-                            window.location.href = '/auto-site';
-                        } else {
-                            console.warn('[Login] Session not established properly, trying again after delay');
-                            // Try one more time after a longer delay
-                            setTimeout(async () => {
-                                try {
-                                    const meRetry = await fetch('/api/me', { credentials: 'include' });
-                                    const meRetryData = await meRetry.json();
-                                    console.log('[Login] Session retry verification:', meRetryData);
-                                    
-                                    if (meRetryData?.authenticated && meRetryData?.user?.id) {
-                                        localStorage.setItem('userID', meRetryData.user.id);
-                                        localStorage.setItem('manacle_session', 'true');
-                                        window.location.href = '/auto-site';
-                                    } else {
-                                        console.warn('[Login] Session still not established, using login response data');
-                                        // Use the original login response data as fallback
-                                        window.location.href = '/auto-site';
-                                    }
-                                } catch (retryError) {
-                                    console.warn('[Login] Session retry failed:', retryError);
-                                    window.location.href = '/auto-site';
-                                }
-                            }, 500);
-                        }
-                    } catch (sessionError) {
-                        console.warn('[Login] Session verification failed:', sessionError);
-                        // Fallback to direct redirect
-                        window.location.href = '/auto-site';
-                    }
-                }, 200);
+                // toast({ title: 'Login Successful', description: 'Welcome!', variant: 'success' });
+                localStorage.setItem('manacle_session', 'true');
+                try {
+                    const me = await fetch('/api/me', { credentials: 'include' }).then(r => r.json()).catch(() => null);
+                    if (me?.user?.id) localStorage.setItem('userID', me.user.id);
+                } catch { }
+                window.location.href = '/auto-site';
                 // try {
                 //     const progressRes = await fetch("/api/load-form", { credentials: "include" });
                 //     if (!progressRes.ok) throw new Error("Could not load form progress");

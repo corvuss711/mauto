@@ -17,13 +17,13 @@ export const getBusinessSectors = async (req, res) => {
 // --- Passport.js, bcrypt, express-session setup ---
 // Session middleware (should be used in main app.js/server.js, but for demo, add here)
 export const sessionMiddleware = session({
-  secret: process.env.SESSION_SECRET || 'your_secret_key',
+  secret: 'your_secret_key',
   resave: false,
   saveUninitialized: false,
   cookie: {
     maxAge: 24 * 60 * 60 * 1000,
-    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // Use 'none' for production HTTPS
-    secure: process.env.NODE_ENV === 'production', // Set to true in production HTTPS
+    sameSite: 'lax', // Use 'none' if frontend is on HTTPS and different domain
+    secure: false,    // Set to true if using HTTPS
     httpOnly: true   // Prevent client-side JS access
   }
 });

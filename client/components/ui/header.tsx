@@ -17,7 +17,6 @@ export function Header() {
   const lastPathRef = useRef(location.pathname + location.search + location.hash);
   // Simple session detection (cookie/localStorage)
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [clickedDropdown, setClickedDropdown] = useState<string | null>(null);
@@ -484,7 +483,7 @@ Gallery", description: "View all our projects", href: "/gallery" },
 
             {/* Right Side Elements - Get Quote & Theme Toggle */}
             <div className="hidden lg:flex items-center space-x-3">
-              <ThemeToggle />
+               <ThemeToggle />
               {/*<Button
                 size="sm"
                 className="bg-gradient-to-r from-primary to-accent hover:from-accent hover:to-primary transition-all duration-300 text-xs md:text-xs lg:text-sm xl:text-sm px-3 md:px-3 lg:px-4 xl:px-4 py-1.5 md:py-1.5 lg:py-2 xl:py-2"
@@ -498,43 +497,19 @@ Gallery", description: "View all our projects", href: "/gallery" },
                 {isAuthenticated ? (
                   <Button
                     size="sm"
-                    disabled={isLoggingOut}
-                    className="bg-gradient-to-r from-red-500 to-orange-500 text-white text-xs md:text-xs lg:text-sm xl:text-sm px-3 md:px-3 lg:px-4 xl:px-4 py-1.5 md:py-1.5 lg:py-2 xl:py-2 disabled:opacity-50"
-                    onClick={async () => {
-                      if (isLoggingOut) return;
-                      
-                      setIsLoggingOut(true);
-                      
-                      try {
-                        // Dispatch logout event BEFORE removing session data
-                        window.dispatchEvent(new CustomEvent('user-logout'));
+                    className="bg-gradient-to-r from-red-500 to-orange-500 text-white text-xs md:text-xs lg:text-sm xl:text-sm px-3 md:px-3 lg:px-4 xl:px-4 py-1.5 md:py-1.5 lg:py-2 xl:py-2"
+                    onClick={() => {
+                      // Dispatch logout event BEFORE removing session data
+                      window.dispatchEvent(new CustomEvent('user-logout'));
 
-                        // Remove all session-related data immediately for UI responsiveness
-                        localStorage.removeItem('manacle_session');
-                        localStorage.removeItem('userID');
-                        localStorage.removeItem('currentLoadedUserId');
-                        localStorage.removeItem('autoSiteLastUserID');
-                        localStorage.removeItem('autoSiteLoggedOut');
-                        
-                        // Update auth state immediately
-                        setIsAuthenticated(false);
-
-                        // Call logout API
-                        await apiFetch('/api/logout');
-                        
-                        // Small delay to show the logging out state
-                        await new Promise(resolve => setTimeout(resolve, 300));
-                        
-                        // Redirect to login
+                      // Remove session flag and call logout API
+                      localStorage.removeItem('manacle_session');
+                      apiFetch('/api/logout').then(() => {
                         window.location.href = '/login';
-                      } catch (error) {
-                        console.error('[Logout] Error during logout:', error);
-                        // Even if API call fails, still redirect to login
-                        window.location.href = '/login';
-                      }
+                      });
                     }}
                   >
-                    {isLoggingOut ? 'Logging out...' : 'Logout'}
+                    Logout
                   </Button>
                 ) : (
                   <>

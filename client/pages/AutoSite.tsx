@@ -503,41 +503,15 @@ export default function AutoSite() {
 
       if (!lastUserID) {
         // First time visit - store the user and continue
-        console.log('[AutoSite] First time user, setting current user:', userID);
+        // console.log('[AutoSite] First time user, setting current user:', userID);
         localStorage.setItem('autoSiteLastUserID', userID);
         localStorage.removeItem('autoSiteLoggedOut');
         return;
       }
 
       if (userID !== lastUserID) {
-        // CRITICAL FIX: Before clearing data, double-check if this is really a different user
-        // This prevents clearing data when the same user logs in via different methods (OAuth vs regular)
-        console.log('[AutoSite] Potential different user detected:', { lastUserID, newUserID: userID });
-        
-        // Check if the user was just logged out and is returning (Google OAuth scenario)
-        if (wasLoggedOut && userID === lastUserID) {
-          // Same user returning after logout via OAuth - don't clear their data
-          console.log('[AutoSite] Same user returning after OAuth logout - preserving data');
-          localStorage.removeItem('autoSiteLoggedOut');
-          return;
-        }
-        
-        // Additional safety check: If user was logged out, give them a chance to login as same user
-        // This prevents data loss during OAuth flows where userID might be temporarily unavailable
-        if (wasLoggedOut) {
-          console.log('[AutoSite] User was logged out, checking if this is the same user via different login method...');
-          
-          // For now, trust that it's the same user if they were just logged out
-          // The form loading logic will handle loading their correct data from database
-          localStorage.setItem('autoSiteLastUserID', userID);
-          localStorage.removeItem('autoSiteLoggedOut');
-          console.log('[AutoSite] Updated user tracking for returning user:', userID);
-          return;
-        }
-
-        // Only clear data if we're absolutely sure this is a different user
-        // (no logout flag set, and different userID)
-        console.log('[AutoSite] CONFIRMED different user detected - clearing data:', { lastUserID, newUserID: userID });
+        // Different user detected - reset everything
+        // console.log('[AutoSite] DIFFERENT user detected:', { lastUserID, newUserID: userID });
 
         // Store the new user ID
         localStorage.setItem('autoSiteLastUserID', userID);
@@ -553,10 +527,10 @@ export default function AutoSite() {
         setCurrentStep(0);
         setCompanyId(0);
 
-        console.log('[AutoSite] Reset state for different user:', userID);
+        // console.log('[AutoSite] Reset state for different user:', userID);
       } else if (wasLoggedOut) {
         // Same user returning after logout - clear the logout flag but keep their progress
-        console.log('[AutoSite] Same user returning after logout:', userID, '- restoring progress');
+        // console.log('[AutoSite] Same user returning after logout:', userID, '- restoring progress');
         localStorage.removeItem('autoSiteLoggedOut');
       } else {
         // Same user, no logout - continue normally
@@ -879,118 +853,6 @@ export default function AutoSite() {
     attemptLoadForm();
   }, []);
 
-  // Watch for userID changes (e.g., after logout/login) and reload form data
-  useEffect(() => {
-    const handleUserIdChange = () => {
-      const newUserId = localStorage.getItem('userID');
-      const currentUserId = localStorage.getItem('currentLoadedUserId'); // Track which user's data is currently loaded
-
-      // Only reload if userID actually changed
-      if (newUserId !== currentUserId) {
-        console.log('[AutoSite] UserID changed from', currentUserId, 'to', newUserId, '- reloading form...');
-
-        // Update the tracked userID
-        if (newUserId) {
-          localStorage.setItem('currentLoadedUserId', newUserId);
-        } else {
-          localStorage.removeItem('currentLoadedUserId');
-        }
-
-        // Reload form data for the new user
-        const reloadForm = async () => {
-          setIsFormLoading(true);
-
-          if (!newUserId) {
-            console.log('[AutoSite] No userID after change, loading defaults');
-            setCurrentStep(0);
-            setFormData(defaultFormData);
-            setCompanyId(0);
-            localStorage.removeItem("autoSiteCompanyId");
-            setIsFormLoading(false);
-            return;
-          }
-
-          try {
-            const response = await fetch(`/api/load-form`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              credentials: "include",
-              body: JSON.stringify({ user_id: newUserId })
-            });
-
-            if (!response.ok) {
-              throw new Error(`HTTP ${response.status}`);
-            }
-
-            const data = await response.json();
-
-            // Always use the step_number from the database, no fallbacks to localStorage
-            const dbStepNumber = data.step_number || 0;
-            setCurrentStep(dbStepNumber);
-
-            // Robustly parse form_data if string
-            let parsedFormData = defaultFormData;
-            if (typeof data.form_data === "string") {
-              try {
-                const parsed = JSON.parse(data.form_data);
-                parsedFormData = Object.keys(parsed).length ? parsed : defaultFormData;
-              } catch {
-                console.warn('[AutoSite] Failed to parse form_data string on user change');
-                parsedFormData = defaultFormData;
-              }
-            } else if (data.form_data && Object.keys(data.form_data).length) {
-              parsedFormData = data.form_data;
-            } else {
-              parsedFormData = defaultFormData;
-            }
-            setFormData(parsedFormData);
-
-            // Restore products and campaigns arrays if present in loaded form_data
-            if (parsedFormData.products && Array.isArray(parsedFormData.products)) {
-              setProducts(parsedFormData.products);
-            }
-            if (parsedFormData.campaigns && Array.isArray(parsedFormData.campaigns)) {
-              setCampaigns(parsedFormData.campaigns);
-            }
-
-            // Set companyId from backend if available
-            if (data.company && data.company.id) {
-              setCompanyId(data.company.id);
-              localStorage.setItem("autoSiteCompanyId", String(data.company.id));
-            } else {
-              // Clear company ID if no company exists
-              setCompanyId(0);
-              localStorage.removeItem("autoSiteCompanyId");
-            }
-
-            setIsFormLoading(false);
-            console.log('[AutoSite] Successfully reloaded form data for new user:', newUserId);
-          } catch (error) {
-            console.error('[AutoSite] Failed to reload form for new user', newUserId, ':', error);
-            setCurrentStep(0);
-            setFormData(defaultFormData);
-            setCompanyId(0);
-            localStorage.removeItem("autoSiteCompanyId");
-            setIsFormLoading(false);
-          }
-        };
-
-        reloadForm();
-      }
-    };
-
-    // Check initially and set up polling
-    const initialUserId = localStorage.getItem('userID');
-    if (initialUserId) {
-      localStorage.setItem('currentLoadedUserId', initialUserId);
-    }
-
-    // Poll for userID changes every 100ms (lightweight check)
-    const interval = setInterval(handleUserIdChange, 100);
-
-    return () => clearInterval(interval);
-  }, []); // Empty dependency array - this effect manages its own state
-
   const updateFormData = (field: keyof FormData, value: any) => {
     setFormData(prev => {
       const updated = { ...prev, [field]: value };
@@ -1005,17 +867,6 @@ export default function AutoSite() {
       console.warn('[saveStep] missing userID; aborting');
       return;
     }
-    
-    // CRITICAL SAFETY CHECK: Prevent accidental clearing of existing user progress
-    // This can happen during OAuth login flows when user change detection resets state
-    if (stepNumber === 0 && (!data || Object.keys(data).length === 0 || JSON.stringify(data) === JSON.stringify(defaultFormData))) {
-      const wasLoggedOut = localStorage.getItem('autoSiteLoggedOut') === 'true';
-      if (wasLoggedOut) {
-        console.warn('[saveStep] Prevented saving step 0 with empty data during OAuth login - user likely has existing progress');
-        return;
-      }
-    }
-    
     // Always include products and campaigns arrays in form_data
     const formDataToSave = {
       ...data,

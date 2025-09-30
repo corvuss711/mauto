@@ -40,7 +40,7 @@ interface DynamicPricingProps {
 // Tenure options for the new flow
 const tenureOptions = [
     { value: "monthly", label: "1 month", duration: 1, popular: false },
-    { value: "quaterly", label: "3 months", duration: 3, popular: false },
+    // { value: "quaterly", label: "3 months", duration: 3, popular: false },
     { value: "half_yearly", label: "6 months", duration: 6, popular: false },
     { value: "yearly", label: "12 months", duration: 12, popular: true }
 ];
@@ -321,8 +321,8 @@ export const DynamicPricing: React.FC<DynamicPricingProps> = ({
                                                     <div>
                                                         <h3 className="font-semibold text-sm">Why choose yearly?</h3>
                                                         <p className="text-xs mt-1">
-                                                            Save up to {yearlySavings.toFixed(0)}% compared to monthly billing.
-                                                            That's ₹{formatPrice(parseFloat(((monthlyPrice - yearlyPrice) * 12).toFixed(2)))} saved per user per year!
+                                                            Save up to {Number(yearlySavings).toFixed(0)}% compared to monthly billing.
+                                                            That's ₹{formatPrice(parseFloat(Number((monthlyPrice - yearlyPrice) * 12).toFixed(2)))} saved per user per year!
                                                         </p>
                                                     </div>
                                                 </div>
@@ -360,7 +360,7 @@ export const DynamicPricing: React.FC<DynamicPricingProps> = ({
                                         {/* Savings Badge */}
                                         {savings && savings.percentage > 0 && (
                                             <div className="absolute -top-2 right-4 bg-green-500 hover:bg-green-600 text-white text-xs font-bold px-2 py-1 rounded-full shadow-sm">
-                                                Save {savings.percentage.toFixed(0)}%
+                                                Save {Number(savings.percentage).toFixed(0)}%
                                             </div>
                                         )}
 
@@ -378,21 +378,21 @@ export const DynamicPricing: React.FC<DynamicPricingProps> = ({
                                                     </span>
                                                     {savings && savings.percentage > 0 && (
                                                         <div className="text-sm text-green-600 dark:text-green-400 mt-1">
-                                                            Save ₹{formatPrice(parseFloat(savings.amount.toFixed(2)))} vs monthly
+                                                            Save ₹{formatPrice(parseFloat(Number(savings.amount).toFixed(2)))} vs monthly
                                                         </div>
                                                     )}
                                                 </div>
                                             </div>
                                             <div className="text-right">
                                                 <div className="text-xl font-bold text-gray-900 dark:text-white">
-                                                    ₹{formatPrice(parseFloat(currentPricePerUser.toFixed(2)))}
+                                                    ₹{formatPrice(parseFloat(Number(currentPricePerUser).toFixed(2)))}
                                                     <span className="text-sm font-normal text-gray-500 dark:text-gray-400 ml-1">
                                                         per user/month
                                                     </span>
                                                 </div>
                                                 {savings && savings.percentage > 0 && (
                                                     <div className="text-sm text-gray-500 dark:text-gray-400 line-through">
-                                                        ₹{formatPrice(parseFloat(savings.monthlyEquivalent.toFixed(2)))}
+                                                        ₹{formatPrice(parseFloat(Number(savings.monthlyEquivalent).toFixed(2)))}
                                                         <span className="text-xs ml-1">per user/month</span>
                                                     </div>
                                                 )}
@@ -455,12 +455,26 @@ export const DynamicPricing: React.FC<DynamicPricingProps> = ({
                                     {selectedPlan.plan_name} Plan Features
                                 </h3>
                                 <ul className="space-y-3">
-                                    {selectedPlan.features_list.map((feature, index) => (
-                                        <li key={index} className="flex items-center gap-3">
-                                            <Check className="w-5 h-5 text-green-500 flex-shrink-0" />
-                                            <span className="text-gray-700 dark:text-gray-300">{feature}</span>
-                                        </li>
-                                    ))}
+                                    {/* Show custom plan services if it's a custom plan, otherwise show regular features */}
+                                    {isFromCustomPlan && customPlanData?.selected_services ? (
+                                        // For custom plans, show the selected service names
+                                        customPlanData.selected_services.map((service: any, index: number) => (
+                                            <li key={index} className="flex items-center gap-3">
+                                                <Check className="w-5 h-5 text-green-500 flex-shrink-0" />
+                                                <span className="text-gray-700 dark:text-gray-300">
+                                                    {service.generic_name || service.name || `Service ${service.id}`}
+                                                </span>
+                                            </li>
+                                        ))
+                                    ) : (
+                                        // For regular plans, show the feature list
+                                        selectedPlan.features_list.map((feature, index) => (
+                                            <li key={index} className="flex items-center gap-3">
+                                                <Check className="w-5 h-5 text-green-500 flex-shrink-0" />
+                                                <span className="text-gray-700 dark:text-gray-300">{feature}</span>
+                                            </li>
+                                        ))
+                                    )}
                                 </ul>
                             </div>
                         )}
@@ -490,10 +504,10 @@ export const DynamicPricing: React.FC<DynamicPricingProps> = ({
                                             </div>
                                             <div className="text-right">
                                                 <div className="text-sm text-gray-600 dark:text-gray-400">
-                                                    ₹{formatPrice(parseFloat(getPricePerUser(selectedPricingDetail).toFixed(2)))} × {numberOfUsers}
+                                                    ₹{formatPrice(parseFloat(Number(getPricePerUser(selectedPricingDetail)).toFixed(2)))} × {numberOfUsers}
                                                 </div>
                                                 <div className="text-lg font-bold text-gray-900 dark:text-white">
-                                                    ₹{formatPrice(parseFloat(calculateTotalPrice().toFixed(2)))}
+                                                    ₹{formatPrice(parseFloat(Number(calculateTotalPrice()).toFixed(2)))}
                                                     <span className="text-sm font-normal text-gray-500 dark:text-gray-400 ml-1">
                                                         per month
                                                     </span>
@@ -526,7 +540,7 @@ export const DynamicPricing: React.FC<DynamicPricingProps> = ({
                                                 color: '#059669'
                                             } : {}}
                                         >
-                                            ₹{isDemoMode ? '1.00' : formatPrice(parseFloat(calculateTotalAmount().toFixed(2)))}
+                                            ₹{isDemoMode ? '1.00' : formatPrice(parseFloat(Number(calculateTotalAmount()).toFixed(2)))}
                                         </motion.span>
                                     </div>
 
@@ -547,12 +561,12 @@ export const DynamicPricing: React.FC<DynamicPricingProps> = ({
                                                             🎉 Your Savings
                                                         </span>
                                                         <span className="text-sm font-bold text-green-600 dark:text-green-400">
-                                                            {savings.percentage.toFixed(0)}% OFF
+                                                            {Number(savings.percentage).toFixed(0)}% OFF
                                                         </span>
                                                     </div>
                                                     <div className="text-xs text-green-700 dark:text-green-300">
-                                                        <div>Save ₹{formatPrice(parseFloat(totalSavings.toFixed(2)))} over {tenureDuration} months</div>
-                                                        <div className="mt-1">vs paying monthly (₹{formatPrice(parseFloat((savings.monthlyEquivalent * numberOfUsers * tenureDuration).toFixed(2)))})</div>
+                                                        <div>Save ₹{formatPrice(parseFloat(Number(totalSavings).toFixed(2)))} over {tenureDuration} months</div>
+                                                        <div className="mt-1">vs paying monthly (₹{formatPrice(parseFloat(Number(savings.monthlyEquivalent * numberOfUsers * tenureDuration).toFixed(2)))})</div>
                                                     </div>
                                                 </motion.div>
                                             );
@@ -570,14 +584,14 @@ export const DynamicPricing: React.FC<DynamicPricingProps> = ({
                                                 Demo Mode: Only ₹1 charged for trial
                                             </p>
                                             <p className="text-xs text-green-600 dark:text-green-400 mt-1">
-                                                You will be charged ₹{formatPrice(parseFloat(calculateTotalPrice().toFixed(2)))}/month after {selectedPricingDetail.trial_days} days trial period
+                                                You will be charged ₹{formatPrice(parseFloat(Number(calculateTotalPrice()).toFixed(2)))}/month after {selectedPricingDetail.trial_days} days trial period
                                             </p>
                                         </motion.div>
                                     )}
 
                                     <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
                                         {isDemoMode ?
-                                            `Free trial for ${selectedPricingDetail.trial_days} days, then ₹${formatPrice(parseFloat(calculateTotalPrice().toFixed(2)))}/month` :
+                                            `Free trial for ${selectedPricingDetail.trial_days} days, then ₹${formatPrice(parseFloat(Number(calculateTotalPrice()).toFixed(2)))}/month` :
                                             selectedTenure === "monthly"
                                                 ? 'Amount does not include applicable taxes.'
                                                 : `Total for ${tenureOptions.find(t => t.value === selectedTenure)?.duration} months. Amount does not include applicable taxes.`
@@ -590,10 +604,10 @@ export const DynamicPricing: React.FC<DynamicPricingProps> = ({
                                             <>
                                                 <Button
                                                     onClick={handleTakeDemo}
-                                                    disabled={isFromCustomPlan}
-                                                    className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-lg shadow-sm transition-all duration-200"
+                                                    disabled={false}
+                                                    className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold py-3 rounded-lg shadow-sm transition-all duration-200"
                                                 >
-                                                    {isFromCustomPlan ? 'Demo Not Available for Custom Plans' : 'Take Demo (₹1 only)'}
+                                                    {isFromCustomPlan ? 'Take Custom Demo (₹1 only)' : 'Take Demo (₹1 only)'}
                                                 </Button>
                                                 <Button
                                                     onClick={handleCompleteDemo}
@@ -608,7 +622,7 @@ export const DynamicPricing: React.FC<DynamicPricingProps> = ({
                                             <>
                                                 <Button
                                                     onClick={handleCompleteDemo}
-                                                    disabled={isSubmitting || isFromCustomPlan}
+                                                    disabled={isSubmitting}
                                                     className="w-full bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-lg shadow-sm transition-all duration-200"
                                                 >
                                                     {isSubmitting ? (
@@ -617,7 +631,7 @@ export const DynamicPricing: React.FC<DynamicPricingProps> = ({
                                                             <span>Processing...</span>
                                                         </div>
                                                     ) : isFromCustomPlan ? (
-                                                        'Demo Not Available for Custom Plans'
+                                                        'Complete Custom Demo (₹1)'
                                                     ) : (
                                                         'Start Demo (₹1)'
                                                     )}

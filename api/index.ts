@@ -13,6 +13,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import mysql from 'mysql2';
+import fetch from 'node-fetch';
 
 // Cloudinary configuration for permanent image storage
 let cloudinary: any = null;
@@ -30,7 +31,7 @@ async function initCloudinary() {
             api_key: process.env.CLOUDINARY_API_KEY,
             api_secret: process.env.CLOUDINARY_API_SECRET,
         });
-        console.log('✅ Cloudinary configured successfully');
+        
         return cloudinary;
     } catch (error) {
         console.warn('⚠️ Cloudinary not configured:', error.message);
@@ -246,13 +247,23 @@ async function handleProcessPayment(req: express.Request, res: express.Response)
 async function handleOtpRequest(req: express.Request, res: express.Response) {
     try {
         // Validate required fields
-        const { mobile, request_type } = req.body;
+        const { email, request_type } = req.body;
 
-        if (!mobile) {
+        if (!email) {
             return res.status(400).json({
                 success: false,
-                error: 'Missing mobile number',
-                message: 'Mobile number is required'
+                error: 'Missing email address',
+                message: 'Email address is required'
+            });
+        }
+
+        // Basic email validation
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid email address',
+                message: 'Please provide a valid email address'
             });
         }
 
@@ -269,7 +280,11 @@ async function handleOtpRequest(req: express.Request, res: express.Response) {
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify(req.body)
+            body: JSON.stringify({
+                email: email,
+                request_type: request_type,
+                otp: req.body.otp // Include OTP for validation requests
+            })
         });
 
         let data;
@@ -328,7 +343,7 @@ if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
             // Get the intent from state parameter in the OAuth callback
             const intent = req.query?.state || 'login'; // Google returns state in query params
 
-            console.log('[OAuth Strategy] Intent:', intent, 'Query state:', req.query?.state);
+            // console.log('[OAuth Strategy] Intent:', intent, 'Query state:', req.query?.state);
 
             if (!email || !googleId) {
                 return done(null, false, {
@@ -996,98 +1011,123 @@ async function handleGetServicesList(req: express.Request, res: express.Response
 
 async function handleCalculateCustomPlan(req: express.Request, res: express.Response) {
     try {
-        const { selectedServices, applicationTypeId } = req.body;
+        const { generic_module_id, service_names } = req.body;
+        console.log('[Custom Plan] Received generic_module_id:', generic_module_id);
+        console.log('[Custom Plan] Received service_names:', service_names);
 
-        if (!selectedServices || !Array.isArray(selectedServices) || selectedServices.length === 0) {
+        if (!generic_module_id || !Array.isArray(generic_module_id) || generic_module_id.length === 0) {
             return res.status(400).json({
                 response: false,
-                error: 'Selected services are required',
-                message: 'Please provide an array of selected services'
+                error: 'generic_module_id is required',
+                message: 'Please provide a valid array of generic_module_id'
             });
         }
 
-        // Calculate total monthly price from selected services
-        // Note: services API returns daily prices, so we multiply by 30 to get monthly price
-        const totalDailyPrice = selectedServices.reduce((total: number, service: any) => {
-            const dailyPrice = parseFloat(service.external_price_per_user || service.price || "0");
-            return total + dailyPrice;
-        }, 0);
-
-        // Convert daily price to monthly price (daily * 30)
-        const totalMonthlyPrice = totalDailyPrice * 30;
-
-        // For yearly calculation: monthly * 12 * discount / 12 = monthly * discount
-        const yearlyMonthlyPrice = totalMonthlyPrice * 0.8; // 20% discount
-        const sixMonthlyPrice = totalMonthlyPrice * 0.9;    // 10% discount  
-        const quarterlyPrice = totalMonthlyPrice * 0.95;    // 5% discount
-
-        // Create plan details with different tenure discounts
-        const planDetails = [
-            {
-                id: 1,
-                plan_name: "Custom Plan",
-                duration: "monthly",
-                base_price_per_user: totalMonthlyPrice.toFixed(2),
-                base_price_per_user_external: totalMonthlyPrice.toFixed(2),
-                discount: "0",
-                min_users: 1,
-                max_users: Number.MAX_SAFE_INTEGER, // Truly unlimited for custom plans
-                trial_days: 7,
-                base_price_per_external_user_per_month: totalMonthlyPrice
-            },
-            {
-                id: 2,
-                plan_name: "Custom Plan",
-                duration: "quaterly",
-                base_price_per_user: quarterlyPrice.toFixed(2), // 5% discount
-                base_price_per_user_external: quarterlyPrice.toFixed(2),
-                discount: "5",
-                min_users: 1,
-                max_users: Number.MAX_SAFE_INTEGER, // Truly unlimited for custom plans
-                trial_days: 7,
-                base_price_per_external_user_per_month: quarterlyPrice
-            },
-            {
-                id: 3,
-                plan_name: "Custom Plan",
-                duration: "half_yearly",
-                base_price_per_user: sixMonthlyPrice.toFixed(2), // 10% discount
-                base_price_per_user_external: sixMonthlyPrice.toFixed(2),
-                discount: "10",
-                min_users: 1,
-                max_users: Number.MAX_SAFE_INTEGER, // Truly unlimited for custom plans
-                trial_days: 7,
-                base_price_per_external_user_per_month: sixMonthlyPrice
-            },
-            {
-                id: 4,
-                plan_name: "Custom Plan",
-                duration: "yearly",
-                base_price_per_user: yearlyMonthlyPrice.toFixed(2), // 20% discount
-                base_price_per_user_external: yearlyMonthlyPrice.toFixed(2),
-                discount: "20",
-                min_users: 1,
-                max_users: Number.MAX_SAFE_INTEGER, // Truly unlimited for custom plans
-                trial_days: 7,
-                base_price_per_external_user_per_month: yearlyMonthlyPrice
-            }
-        ];
-
-        // Create the custom plan structure
-        const customPlan = {
-            plan_name: "Custom Plan",
-            plan_id: 999, // Use a unique ID for custom plans
-            features_list: selectedServices.map((service: any) => service.generic_name || service.name),
-            plan_details: planDetails
+        const requestBody = {
+            generic_module_id: generic_module_id
         };
 
-        res.status(200).json({
-            response: true,
-            data: customPlan,
-            message: 'Custom plan calculated successfully'
+        console.log('[Calculate Custom Plan] Request payload:', requestBody);
+
+        const response = await fetch('http://122.176.112.254/www-demo-msell-in/public/api/calculate-customized-services-price', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestBody)
         });
 
+        console.log('[Calculate Custom Plan] Response status:', response.status);
+
+        const data = await response.json();
+        console.log('[Calculate Custom Plan] Response data:', data);
+
+        if (response.ok && (data as any).status === true) {
+            // Transform the response to match our expected format
+            const apiData = (data as any).data;
+
+            // Use service names from frontend if available, otherwise use generic names
+            const features_list = service_names && service_names.length > 0
+                ? service_names
+                : generic_module_id.map((id: number) => `Service Module ${id}`);
+
+            const transformedData = {
+                plan_name: "Custom Plan",
+                plan_id: 999,
+                features_list: features_list,
+                plan_details: [
+                    {
+                        id: 1,
+                        plan_name: "Custom Plan",
+                        duration: "monthly",
+                        base_price_per_user: apiData.monthly.per_month_external.toString(),
+                        base_price_per_user_external: apiData.monthly.per_month_external.toString(),
+                        discount: apiData.discount.monthly.discount.toString(),
+                        discount_label: apiData.discount.monthly.discount_label,
+                        min_users: 1,
+                        max_users: Number.MAX_SAFE_INTEGER,
+                        trial_days: 7,
+                        base_price_per_external_user_per_month: apiData.monthly.per_month_external
+                    },
+                    {
+                        id: 2,
+                        plan_name: "Custom Plan",
+                        duration: "quaterly",
+                        base_price_per_user: apiData.quaterly.per_month_external.toString(),
+                        base_price_per_user_external: apiData.quaterly.per_month_external.toString(),
+                        discount: apiData.discount.quaterly.discount.toString(),
+                        discount_label: apiData.discount.quaterly.discount_label,
+                        min_users: 1,
+                        max_users: Number.MAX_SAFE_INTEGER,
+                        trial_days: 7,
+                        base_price_per_external_user_per_month: apiData.quaterly.per_month_external
+                    },
+                    {
+                        id: 3,
+                        plan_name: "Custom Plan",
+                        duration: "half_yearly",
+                        base_price_per_user: apiData.half_yearly.per_month_external.toString(),
+                        base_price_per_user_external: apiData.half_yearly.per_month_external.toString(),
+                        discount: apiData.discount.half_yearly.discount.toString(),
+                        discount_label: apiData.discount.half_yearly.discount_label,
+                        min_users: 1,
+                        max_users: Number.MAX_SAFE_INTEGER,
+                        trial_days: 7,
+                        base_price_per_external_user_per_month: apiData.half_yearly.per_month_external
+                    },
+                    {
+                        id: 4,
+                        plan_name: "Custom Plan",
+                        duration: "yearly",
+                        base_price_per_user: apiData.yearly.per_month_external.toString(),
+                        base_price_per_user_external: apiData.yearly.per_month_external.toString(),
+                        discount: apiData.discount.yearly.discount.toString(),
+                        discount_label: apiData.discount.yearly.discount_label,
+                        min_users: 1,
+                        max_users: Number.MAX_SAFE_INTEGER,
+                        trial_days: 7,
+                        base_price_per_external_user_per_month: apiData.yearly.per_month_external
+                    }
+                ],
+                // Store the original pricing data for step 3
+                pricing_data: apiData
+            };
+
+            res.status(200).json({
+                response: true,
+                data: transformedData,
+                message: 'Custom plan calculated successfully'
+            });
+        } else {
+            const errorMessage = (data as any).message || (data as any).error || 'Failed to calculate custom plan pricing';
+            res.status(response.status || 500).json({
+                response: false,
+                error: 'Failed to calculate custom plan pricing',
+                message: errorMessage
+            });
+        }
     } catch (error) {
+        console.error('[Calculate Custom Plan] Error:', error);
         res.status(500).json({
             response: false,
             error: 'Failed to calculate custom plan pricing',
@@ -1096,11 +1136,98 @@ async function handleCalculateCustomPlan(req: express.Request, res: express.Resp
     }
 };
 
+async function handleCreateCustomizedPlan(req: express.Request, res: express.Response) {
+    try {
+        const { plan_name, application_type, generic_module_id, duration, max_users } = req.body;
+
+        console.log('[Create Customized Plan] Received request:', {
+            plan_name,
+            application_type,
+            generic_module_id,
+            duration,
+            max_users
+        });
+
+        // Validate required fields
+        if (!plan_name || !application_type || !generic_module_id || !Array.isArray(generic_module_id) || !duration || !max_users) {
+            return res.status(400).json({
+                response: false,
+                error: 'Missing required fields',
+                message: 'plan_name, application_type, generic_module_id, duration, and max_users are required'
+            });
+        }
+
+        const requestBody = {
+            plan_name,
+            application_type,
+            generic_module_id,
+            duration,
+            max_users
+        };
+
+        console.log('[Create Customized Plan] Request payload:', requestBody);
+
+        const response = await fetch('http://122.176.112.254/www-demo-msell-in/public/api/create-customized-plan', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestBody)
+        });
+
+        console.log('[Create Customized Plan] Response status:', response.status);
+
+        const data = await response.json();
+        console.log('[Create Customized Plan] Response data:', data);
+
+        // Forward the response from external API
+        res.status(response.status).json(data);
+    } catch (error) {
+        console.error('[Create Customized Plan] Error:', error);
+        res.status(500).json({
+            response: false,
+            error: 'Failed to create customized plan',
+            message: error instanceof Error ? error.message : 'Unknown error'
+        });
+    }
+};
+
 app.post("/api/get-plan", handleGetPlans);
 app.post("/api/get-services-list", handleGetServicesList);
 app.post("/api/calculate-custom-plan", handleCalculateCustomPlan);
+app.post("/api/create-customized-plan", handleCreateCustomizedPlan);
 app.post("/api/process-payment", handleProcessPayment);
 app.post("/api/otp-request", handleOtpRequest);
+
+// Save trial user endpoint - proxy to external API
+app.post("/api/save-trial-user", async (req, res) => {
+    try {
+        console.log('[Save Trial User Proxy] Request body:', req.body);
+
+        // Make request to external API
+        const response = await fetch('http://122.176.112.254/www-demo-msell-in/public/api/save-trial-user', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(req.body)
+        });
+
+        console.log('[Save Trial User Proxy] External API response status:', response.status);
+
+        const data = await response.json();
+        console.log('[Save Trial User Proxy] External API response data:', data);
+
+        // Forward the response from external API
+        res.status(response.status).json(data);
+    } catch (error) {
+        console.error('[Save Trial User Proxy] Error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to save trial user details'
+        });
+    }
+});
 
 // Blog API endpoints
 // Helper function to generate slug from title

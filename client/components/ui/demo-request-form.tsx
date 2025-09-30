@@ -10,12 +10,13 @@ interface FormData {
     // user_name: string;
     // password: string;
     email: string;
-    mobile: string;
     otp: string;
     company_name: string;
     company_title: string;
     website: string;
     address: string;
+    pincode: string;
+    mobile: string;
     // no_employees: number;
     contact_per_name: string;
     application_type: number;
@@ -40,6 +41,7 @@ interface PlanDetail {
     base_price_per_user_internal?: string;
     base_price_per_user_external?: string;
     discount: string | null;
+    discount_label?: string;
     min_users: number;
     max_users: number;
     trial_days: number;
@@ -471,6 +473,40 @@ const StatCounter = ({ stat, index }: { stat: typeof statsData[0], index: number
 };
 
 export function DemoRequestForm() {
+    // Email validation helper function - requires complete email with domain
+    const isValidCompleteEmail = (email: string): boolean => {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        return emailRegex.test(email);
+    };
+
+    // Helper function to generate login ID from company name
+    const generateLoginId = (companyName: string): string => {
+        if (!companyName.trim()) return "";
+
+        // Get first word, convert to lowercase, remove spaces and special characters
+        const firstWord = companyName.trim().split(/\s+/)[0];
+        return firstWord.toLowerCase().replace(/[^a-z0-9]/g, '');
+    };
+
+    // Helper function to generate custom plan name from company name
+    const generateCustomPlanName = (companyName: string): string => {
+        if (!companyName.trim()) return "Custom Plan";
+
+        // Split company name into words and clean them
+        const words = companyName.trim().split(/\s+/).filter(word => word.length > 0);
+
+        if (words.length >= 2) {
+            // Use first two words + "Custom Plan"
+            return `${words[0]} ${words[1]} Custom Plan`;
+        } else if (words.length === 1) {
+            // Use single word + "Custom Plan"
+            return `${words[0]} Custom Plan`;
+        } else {
+            // Fallback
+            return "Custom Plan";
+        }
+    };
+
     const [currentStep, setCurrentStep] = useState(() => {
         if (typeof window !== 'undefined') {
             const saved = localStorage.getItem('demoFormStep');
@@ -577,12 +613,13 @@ export function DemoRequestForm() {
                         // user_name: parsed.user_name || "",
                         // password: parsed.password || "",
                         email: parsed.email || "",
-                        mobile: parsed.mobile || "",
                         otp: parsed.otp || "",
                         company_name: parsed.company_name || "",
                         company_title: parsed.company_title || "",
                         website: parsed.website || "",
                         address: parsed.address || "",
+                        pincode: parsed.pincode || "",
+                        mobile: parsed.mobile || "",
                         // no_employees: parsed.no_employees || 0,
                         contact_per_name: parsed.contact_per_name || "",
                         application_type: parsed.application_type || 0
@@ -592,12 +629,13 @@ export function DemoRequestForm() {
                         // user_name: "",
                         // password: "",
                         email: "",
-                        mobile: "",
                         otp: "",
                         company_name: "",
                         company_title: "",
                         website: "",
                         address: "",
+                        pincode: "",
+                        mobile: "",
                         // no_employees: 0,
                         contact_per_name: "",
                         application_type: 0
@@ -609,12 +647,13 @@ export function DemoRequestForm() {
             // user_name: "",
             // password: "",
             email: "",
-            mobile: "",
             otp: "",
             company_name: "",
             company_title: "",
             website: "",
             address: "",
+            pincode: "",
+            mobile: "",
             // no_employees: 0,
             contact_per_name: "",
             application_type: 0
@@ -693,7 +732,7 @@ export function DemoRequestForm() {
     const [isOtpVerified, setIsOtpVerified] = useState(() => {
         // Check localStorage for OTP verification status
         if (typeof window !== 'undefined') {
-            return localStorage.getItem('mobile_otp_verified') === 'true';
+            return localStorage.getItem('email_otp_verified') === 'true';
         }
         return false;
     });
@@ -704,26 +743,33 @@ export function DemoRequestForm() {
     const [otpVerificationMessage, setOtpVerificationMessage] = useState('');
     const otpCountdownRef = useRef<NodeJS.Timeout | null>(null);
 
-    // Store the last verified mobile number to track changes
-    const [lastVerifiedMobile, setLastVerifiedMobile] = useState(() => {
+    // Save trial user API states
+    const [isSavingTrialUser, setIsSavingTrialUser] = useState(false);
+    const [saveTrialUserError, setSaveTrialUserError] = useState<string | null>(null);
+
+    // Track if user has made changes after seeing an error modal (to reactivate continue button)
+    const [hasUserChangedAfterError, setHasUserChangedAfterError] = useState(false);
+
+    // Store the last verified email address to track changes
+    const [lastVerifiedEmail, setLastVerifiedEmail] = useState(() => {
         if (typeof window !== 'undefined') {
-            return localStorage.getItem('verified_mobile_number') || '';
+            return localStorage.getItem('verified_email_address') || '';
         }
         return '';
     });
 
-    // Monitor mobile number changes and clear verification if mobile changes
+    // Monitor email changes and clear verification if email changes
     useEffect(() => {
-        if (formData.mobile && lastVerifiedMobile && formData.mobile !== lastVerifiedMobile) {
-            console.log('[Mobile Change] Mobile number changed, clearing verification status');
+        if (formData.email && lastVerifiedEmail && formData.email !== lastVerifiedEmail) {
+            console.log('[Email Change] Email address changed, clearing verification status');
             setIsOtpVerified(false);
             if (typeof window !== 'undefined') {
-                localStorage.removeItem('mobile_otp_verified');
-                localStorage.removeItem('verified_mobile_number');
+                localStorage.removeItem('email_otp_verified');
+                localStorage.removeItem('verified_email_address');
             }
-            setLastVerifiedMobile('');
+            setLastVerifiedEmail('');
         }
-    }, [formData.mobile, lastVerifiedMobile]);
+    }, [formData.email, lastVerifiedEmail]);
 
     // Set initialized flag after first render to prevent clearing OTP on initial load
     useEffect(() => {
@@ -748,12 +794,10 @@ export function DemoRequestForm() {
                         customPlanData ||
                         selectedPlan ||
                         formData.email ||
-                        formData.mobile ||
-                        formData.company_name ||
                         formData.application_type > 0;
 
                     if (shouldHaveData) {
-                        console.log('[LocalStorage Check] Detected cleared localStorage, resetting all states');
+                        
                         setIsResettingFromClearedStorage(true);
 
                         // Reset all form states
@@ -770,12 +814,13 @@ export function DemoRequestForm() {
                         // Reset form data
                         setFormData({
                             email: "",
-                            mobile: "",
                             otp: "",
                             company_name: "",
                             company_title: "",
                             website: "",
                             address: "",
+                            pincode: "",
+                            mobile: "",
                             contact_per_name: "",
                             application_type: 0
                         });
@@ -818,7 +863,7 @@ export function DemoRequestForm() {
             window.removeEventListener('focus', handleFocus);
             clearInterval(interval);
         };
-    }, [currentStep, isCustomPlanView, selectedServices, customPlanData, selectedPlan, formData.email, formData.mobile, formData.company_name, formData.application_type]); // Add dependencies to check when these change
+    }, [currentStep, isCustomPlanView, selectedServices, customPlanData, selectedPlan, formData.email, formData.application_type]); // Add dependencies to check when these change
 
     // Browser history management for form steps
     useEffect(() => {
@@ -1049,14 +1094,14 @@ export function DemoRequestForm() {
         setServicesLoading(true);
         setServicesError(null);
 
-        console.log('[Fetch Services] Starting for application type:', applicationType);
+      
 
         try {
             const requestBody = {
                 application_type: applicationType
             };
 
-            console.log('[Fetch Services] Request body:', requestBody);
+            
 
             const response = await fetch('/api/get-services-list', {
                 method: 'POST',
@@ -1066,23 +1111,23 @@ export function DemoRequestForm() {
                 body: JSON.stringify(requestBody)
             });
 
-            console.log('[Fetch Services] Response status:', response.status);
+            
 
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
 
             const data = await response.json();
-            console.log('[Fetch Services] Response data:', data);
+            
 
             if (data.response && data.data && Array.isArray(data.data) && data.data.length > 0) {
-                console.log('[Fetch Services] Services found:', data.data.length);
+               
                 setAvailableServices(data.data);
                 setServicesError(null);
                 setShowCustomPlan(true);
                 setCustomPlanMessage("");
             } else {
-                console.log('[Fetch Services] No services available from API');
+                
                 // No services available from API
                 setAvailableServices([]);
                 setShowCustomPlan(false);
@@ -1098,7 +1143,60 @@ export function DemoRequestForm() {
             setServicesError("Failed to load services. Please try again later.");
         } finally {
             setServicesLoading(false);
-            console.log('[Fetch Services] Completed');
+            
+        }
+    };
+
+    // API function to save trial user details for lead generation
+    const saveTrialUser = async (): Promise<{ success: boolean; message?: string }> => {
+        setSaveTrialUserError(null);
+        setIsSavingTrialUser(true);
+
+        try {
+            const requestBody = {
+                company_name: formData.company_title,
+                company_code: formData.company_name,
+                website: formData.website,
+                email: formData.email,
+                contact_person_name: formData.contact_per_name,
+                mobile: formData.mobile,
+                pincode: formData.pincode,
+                address: formData.address || ""
+            };
+
+            
+
+            const response = await fetch('/api/save-trial-user', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(requestBody)
+            });
+
+        
+
+            const data = await response.json();
+            
+
+            // Check for success based on the API response structure
+            if (response.ok && (data.status === true || data.success === true || data.response === true)) {
+      
+                const successMessage = data.message || 'User details saved successfully';
+                return { success: true, message: successMessage };
+            } else {
+                const errorMessage = data.message || data.error || 'Failed to save user details';
+             
+                setSaveTrialUserError(errorMessage);
+                return { success: false, message: errorMessage };
+            }
+        } catch (error) {
+            
+            const errorMessage = 'Network error. Please check your connection and try again.';
+            setSaveTrialUserError(errorMessage);
+            return { success: false, message: errorMessage };
+        } finally {
+            setIsSavingTrialUser(false);
         }
     };
 
@@ -1148,7 +1246,8 @@ export function DemoRequestForm() {
             if (!yearlyDetail) {
                 // Fallback to first available plan detail if yearly not found
                 const fallbackDetail = plan.plan_details[0];
-                const monthlyPrice = fallbackDetail.base_price_per_external_user_per_month || parseFloat(fallbackDetail.base_price_per_user_external || fallbackDetail.base_price_per_user || "0");
+                const monthlyPrice = Number(fallbackDetail.base_price_per_external_user_per_month) ||
+                    Number(parseFloat(fallbackDetail.base_price_per_user_external || fallbackDetail.base_price_per_user || "0")) || 0;
                 return {
                     name: plan.plan_name,
                     price: `₹${monthlyPrice.toFixed(2)}`,
@@ -1162,7 +1261,8 @@ export function DemoRequestForm() {
             }
 
             // Use base_price_per_external_user_per_month from yearly plan for display
-            const monthlyPrice = yearlyDetail.base_price_per_external_user_per_month || parseFloat(yearlyDetail.base_price_per_user_external || yearlyDetail.base_price_per_user || "0");
+            const monthlyPrice = Number(yearlyDetail.base_price_per_external_user_per_month) ||
+                Number(parseFloat(yearlyDetail.base_price_per_user_external || yearlyDetail.base_price_per_user || "0")) || 0;
 
             return {
                 name: plan.plan_name,
@@ -1239,23 +1339,23 @@ export function DemoRequestForm() {
 
     // OTP functions
     const sendOtp = async () => {
-        if (!formData.mobile || formData.mobile.length < 10) {
-
-            showAlert('error', 'Invalid Mobile Number', 'Please enter a valid 10-digit mobile number');
+        // Validate email format
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!formData.email || !emailRegex.test(formData.email)) {
+            showAlert('error', 'Invalid Email Address', 'Please enter a valid email address');
             return;
         }
 
-        const cleanMobile = formData.mobile.replace(/\D/g, '');
         const isResendOperation = isOtpSent;
-
 
         setOtpLoading(true);
         try {
             const requestPayload = {
-                mobile: cleanMobile,
+                email: formData.email,
                 request_type: "SENT"
             };
 
+            console.log('[OTP Send] Sending request payload:', JSON.stringify(requestPayload, null, 2));
 
             const response = await fetch('/api/otp-request', {
                 method: 'POST',
@@ -1266,11 +1366,11 @@ export function DemoRequestForm() {
             });
 
             console.log('[OTP Send] Raw response status:', response.status);
+            console.log(response);
             console.log('[OTP Send] Raw response headers:', Object.fromEntries(response.headers.entries()));
 
             const data = await response.json();
             console.log('[OTP Send] Complete response data:', JSON.stringify(data, null, 2));
-
 
             // Handle cases where HTTP status is not OK but response contains error details
             if (!response.ok && data && (data.message || data.error)) {
@@ -1282,12 +1382,12 @@ export function DemoRequestForm() {
 
             if (data.success === true || data.response === true) {
                 const isResend = isOtpSent; // Check if this is a resend operation
-                console.log('[OTP Send] Success - OTP', isResend ? 'resent' : 'sent', 'successfully');
+                console.log('[OTP Send] Success - OTP', isResend ? 'resent' : 'sent', 'successfully to email:', formData.email);
 
                 setIsOtpSent(true);
                 setCanResendOtp(false);
                 setOtpCountdown(30);
-                setOtpSentMessage(isResend ? 'OTP resent successfully to your mobile number' : 'OTP sent successfully to your mobile number');
+                setOtpSentMessage(isResend ? 'OTP resent successfully to your email address' : 'OTP sent successfully to your email address');
                 setOtpVerificationMessage(''); // Clear any previous verification message
 
                 console.log('[OTP Send] State updated - isOtpSent: true, countdown: 30, canResendOtp: false');
@@ -1331,17 +1431,16 @@ export function DemoRequestForm() {
     const validateOtp = async () => {
         if (!formData.otp || formData.otp.length < 4) {
             console.log('[OTP Validation] Validation failed - Invalid OTP length:', formData.otp?.length || 0);
-            showAlert('error', 'Invalid OTP', 'Please enter the OTP sent to your mobile number');
+            showAlert('error', 'Invalid OTP', 'Please enter the OTP sent to your email address');
             return;
         }
 
-        const cleanMobile = formData.mobile.replace(/\D/g, '');
-        console.log('[OTP Validation] Starting OTP validation for mobile:', cleanMobile, 'with OTP:', formData.otp);
+        console.log('[OTP Validation] Starting OTP validation for email:', formData.email, 'with OTP:', formData.otp);
 
         setOtpLoading(true);
         try {
             const requestPayload = {
-                mobile: cleanMobile,
+                email: formData.email,
                 request_type: "VALIDATE",
                 otp: formData.otp
             };
@@ -1376,17 +1475,17 @@ export function DemoRequestForm() {
                 console.log('[OTP Validation] Success - OTP validated successfully');
                 setIsOtpVerified(true);
 
-                // Store verification status and mobile number in localStorage
+                // Store verification status and email address in localStorage
                 if (typeof window !== 'undefined') {
-                    localStorage.setItem('mobile_otp_verified', 'true');
-                    localStorage.setItem('verified_mobile_number', formData.mobile);
-                    console.log('[OTP Validation] Verification status stored in localStorage');
+                    localStorage.setItem('email_otp_verified', 'true');
+                    localStorage.setItem('verified_email_address', formData.email);
+                   
                 }
 
-                // Update the last verified mobile state
-                setLastVerifiedMobile(formData.mobile);
+                // Update the last verified email state
+                setLastVerifiedEmail(formData.email);
 
-                setOtpVerificationMessage('Mobile number verified successfully');
+                setOtpVerificationMessage('Email address verified successfully');
                 setOtpSentMessage(''); // Clear the sent message
                 console.log('[OTP Validation] State updated - isOtpVerified: true');
                 // No modal alert for success - using inline message instead
@@ -1397,7 +1496,7 @@ export function DemoRequestForm() {
                     (data.success === false ? 'Invalid OTP. Please try again.' : 'Invalid OTP. Please try again.');
                 showAlert('error', 'OTP Validation Failed', errorMessage);
                 setIsOtpVerified(false);
-                console.log('[OTP Validation] State updated - isOtpVerified: false');
+               
             }
         } catch (error) {
             console.error('[OTP Validation] Network error:', error);
@@ -1415,11 +1514,12 @@ export function DemoRequestForm() {
         }
     };
 
-    // Reset OTP states when mobile number changes (but not on initial load)
+    // Reset OTP states when email changes (but not on initial load)
     useEffect(() => {
-        if (isInitialized && formData.mobile) {
-            // Only reset if the mobile number is different from the verified one
-            if (lastVerifiedMobile && formData.mobile !== lastVerifiedMobile) {
+        if (isInitialized && formData.email) {
+            // Only reset if the email is different from the verified one
+            if (lastVerifiedEmail && formData.email !== lastVerifiedEmail) {
+                console.log('[OTP Reset] Email changed, resetting OTP states');
                 setIsOtpSent(false);
                 setIsOtpVerified(false);
                 setOtpSentMessage('');
@@ -1432,7 +1532,7 @@ export function DemoRequestForm() {
                 }
             }
         }
-    }, [formData.mobile, isInitialized, lastVerifiedMobile]);
+    }, [formData.email, isInitialized, lastVerifiedEmail]);
 
     // Cleanup countdown on unmount
     useEffect(() => {
@@ -1449,6 +1549,12 @@ export function DemoRequestForm() {
     // Modern alert function
     const showAlert = (type: 'success' | 'error' | 'warning', title: string, message: string) => {
         setAlertConfig({ show: true, type, title, message });
+
+        // Reset the user change tracking when showing an error
+        if (type === 'error') {
+            setHasUserChangedAfterError(false);
+        }
+
         // Auto-hide after 4 seconds for success/warning, keep error alerts open
         if (type !== 'error') {
             setTimeout(() => {
@@ -1471,11 +1577,11 @@ export function DemoRequestForm() {
                 // !formData.user_name &&
                 // !formData.password &&
                 !formData.email &&
-                !formData.mobile &&
-                !formData.company_name &&
                 !formData.company_title &&
+                !formData.company_name &&
                 !formData.website &&
                 !formData.address &&
+                !formData.pincode &&
                 // formData.no_employees === 0 &&
                 !formData.contact_per_name &&
                 formData.application_type === 0 &&
@@ -1595,11 +1701,23 @@ export function DemoRequestForm() {
         }
     }, [formData.application_type]);
 
+    // Auto-fill custom plan name when entering custom plan view
+    useEffect(() => {
+        if (isCustomPlanView && formData.company_title && !customPlanDescription) {
+            const autoGeneratedPlanName = generateCustomPlanName(formData.company_title);
+            setCustomPlanDescription(autoGeneratedPlanName);
+        }
+    }, [isCustomPlanView, formData.company_title, customPlanDescription]);
+
     // Note: remove any test-only localStorage clearing on mount
 
     const handleInputChange = (field: keyof FormData, value: string | number) => {
         const prevApplicationType = formData.application_type;
         setFormData(prev => ({ ...prev, [field]: value }));
+
+        // Mark that user has made changes (to reactivate continue button after error)
+        setHasUserChangedAfterError(true);
+
         // Clear error when user starts typing
         if (errors[field]) {
             setErrors(prev => ({ ...prev, [field]: undefined }));
@@ -1647,11 +1765,11 @@ export function DemoRequestForm() {
     const validateStep1 = (): boolean => {
         const newErrors: any = {};
 
-        // Company Code validation with enhanced restrictions
-        if (!formData.company_name?.trim()) newErrors.company_name = "Company Code is required";
-        else if (formData.company_name.includes(' ')) newErrors.company_name = "Company Code cannot contain spaces";
+        // Login ID validation with enhanced restrictions
+        if (!formData.company_name?.trim()) newErrors.company_code = "Login ID is required";
+        else if (formData.company_name.includes(' ')) newErrors.company_code = "Login ID cannot contain spaces";
         else if (/[@#$%^&*()+=\[\]{}|\\:";'<>?,./]/.test(formData.company_name)) {
-            newErrors.company_name = "Company Code cannot contain special characters like @, #, $, etc.";
+            newErrors.company_name = "Login ID cannot contain special characters like @, #, $, etc.";
         }
 
         if (!formData.company_title?.trim()) newErrors.company_title = "Company Name is required";
@@ -1664,11 +1782,14 @@ export function DemoRequestForm() {
         if (!formData.email) newErrors.email = "Email is required";
         else if (!/\S+@\S+\.\S+/.test(formData.email)) newErrors.email = "Invalid email format";
 
+        if (!formData.contact_per_name?.trim()) newErrors.contact_per_name = "Contact person name is required";
+
         if (!formData.mobile) newErrors.mobile = "Mobile number is required";
         else if (!/^\d{10}$/.test(formData.mobile)) newErrors.mobile = "Mobile number must be 10 digits";
 
-        if (!formData.contact_per_name?.trim()) newErrors.contact_per_name = "Contact person name is required";
         if (!formData.address?.trim()) newErrors.address = "Address is required";
+        if (!formData.pincode?.trim()) newErrors.pincode = "Pincode is required";
+        else if (!/^\d{6}$/.test(formData.pincode)) newErrors.pincode = "Pincode must be 6 digits";
 
         // Always set the field errors first so they show up
         setErrors(newErrors);
@@ -1678,18 +1799,16 @@ export function DemoRequestForm() {
             return false;
         }
 
-        // Now check OTP verification only if basic fields are valid
-        // TODO: Temporarily commented out OTP verification requirement - will uncomment later
-        /*
-        if (!isOtpVerified) {
-            if (formData.mobile && formData.mobile.length === 10) {
-                showAlert('warning', 'Mobile Verification Required', 'Please verify your mobile number with OTP to continue');
-            } else {
-                showAlert('error', 'Mobile Number Required', 'Please enter a valid mobile number and verify it with OTP');
-            }
-            return false;
-        }
-        */
+        // COMMENTED OUT: Email OTP verification requirement for step 1 continuation
+        // Now check email OTP verification only if basic fields are valid
+        // if (!isOtpVerified) {
+        //     if (formData.email && isValidCompleteEmail(formData.email)) {
+        //         showAlert('warning', 'Email Verification Required', 'Please verify your email address with OTP to continue');
+        //     } else {
+        //         showAlert('error', 'Email Address Required', 'Please enter a valid email address and verify it with OTP');
+        //     }
+        //     return false;
+        // }
 
         return true;
     };
@@ -1699,64 +1818,92 @@ export function DemoRequestForm() {
     //     return true;
     // };
 
-    const handleNext = () => {
+    const handleNext = async () => {
         if (navLock) return;
         if (currentStep === 1 && validateStep1()) {
-            setDirection(1);
-            setNavLock(true);
-            setCurrentStep(2);
-            saveToLocalStorage();
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-            setTimeout(() => setNavLock(false), 350);
+            // Clear any previous save trial user error
+            setSaveTrialUserError(null);
 
-            // Update URL
-            if (typeof window !== 'undefined') {
-                const currentUrl = new URL(window.location.href);
-                currentUrl.searchParams.set('step', '2');
-                window.history.pushState({ step: 2 }, '', currentUrl.toString());
-            }
-        } else if (currentStep === 2) {
-            // Handle custom plan flow
-            if (isCustomPlanView && customPlanData) {
-                // User is in custom plan view and has already calculated pricing
-                // Navigate to step 3 with custom plan data
+            // Call save trial user API before proceeding to next step
+            const saveResult = await saveTrialUser();
+
+            if (saveResult.success) {
+                // Reset user change tracking since we're proceeding successfully
+                setHasUserChangedAfterError(false);
+
+                // If save was successful, proceed to next step silently (no modal)
                 setDirection(1);
                 setNavLock(true);
-                setCurrentStep(3);
-                setShowDynamicPricing(true);
-                setSelectedPlanForPricing(999); // Custom plan ID
-                setIsFromCustomPlan(true);
+                setCurrentStep(2);
                 saveToLocalStorage();
-
-                // Scroll to pricing section after a delay to ensure component is rendered
-                setTimeout(() => {
-                    const pricingSection = document.querySelector('[data-pricing-section="true"]');
-                    if (pricingSection) {
-                        pricingSection.scrollIntoView({
-                            behavior: 'smooth',
-                            block: 'start'
-                        });
-                    } else {
-                        window.scrollTo({ top: 0, behavior: 'smooth' });
-                    }
-                    setNavLock(false);
-                }, 500); // Increased delay to ensure DynamicPricing component is fully rendered
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                setTimeout(() => setNavLock(false), 350);
 
                 // Update URL
                 if (typeof window !== 'undefined') {
                     const currentUrl = new URL(window.location.href);
-                    currentUrl.searchParams.set('step', '3');
-                    currentUrl.searchParams.set('plan', '999');
-                    currentUrl.searchParams.set('fromCustom', 'true');
-                    currentUrl.searchParams.delete('view');
-                    window.history.pushState({
-                        step: 3,
-                        planId: 999,
-                        isCustomPlan: true,
-                        fromCustomPlan: true,
-                        previousStep: 2,
-                        previousView: 'custom'
-                    }, '', currentUrl.toString());
+                    currentUrl.searchParams.set('step', '2');
+                    window.history.pushState({ step: 2 }, '', currentUrl.toString());
+                }
+            } else {
+                // Show error message and don't proceed to next step
+                showAlert('error', 'Unable to Save Details', saveResult.message || 'Failed to save your details. Please try again.');
+                return;
+            }
+        } else if (currentStep === 2) {
+            // Handle custom plan flow
+            if (isCustomPlanView) {
+                // Validate custom plan name is required
+                if (!customPlanDescription?.trim()) {
+                    showAlert('error', 'Plan Name Required', 'Please enter a plan name to continue.');
+                    return;
+                }
+
+                if (customPlanData) {
+                    // User is in custom plan view and has already calculated pricing
+                    // Navigate to step 3 with custom plan data
+                    setDirection(1);
+                    setNavLock(true);
+                    setCurrentStep(3);
+                    setShowDynamicPricing(true);
+                    setSelectedPlanForPricing(999); // Custom plan ID
+                    setIsFromCustomPlan(true);
+                    saveToLocalStorage();
+
+                    // Scroll to pricing section after a delay to ensure component is rendered
+                    setTimeout(() => {
+                        const pricingSection = document.querySelector('[data-pricing-section="true"]');
+                        if (pricingSection) {
+                            pricingSection.scrollIntoView({
+                                behavior: 'smooth',
+                                block: 'start'
+                            });
+                        } else {
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }
+                        setNavLock(false);
+                    }, 500); // Increased delay to ensure DynamicPricing component is fully rendered
+
+                    // Update URL
+                    if (typeof window !== 'undefined') {
+                        const currentUrl = new URL(window.location.href);
+                        currentUrl.searchParams.set('step', '3');
+                        currentUrl.searchParams.set('plan', '999');
+                        currentUrl.searchParams.set('fromCustom', 'true');
+                        currentUrl.searchParams.delete('view');
+                        window.history.pushState({
+                            step: 3,
+                            planId: 999,
+                            isCustomPlan: true,
+                            fromCustomPlan: true,
+                            previousStep: 2,
+                            previousView: 'custom'
+                        }, '', currentUrl.toString());
+                    }
+                } else {
+                    // Custom plan view but no pricing calculated yet - show error
+                    showAlert('error', 'Calculate Pricing First', 'Please calculate the pricing for your custom plan before continuing.');
+                    return;
                 }
             } else {
                 // Regular flow - go to step 3 (pricing selection)
@@ -1828,19 +1975,20 @@ export function DemoRequestForm() {
         localStorage.removeItem('demoFormHasSelected');
 
         // Clear OTP verification status on form clear
-        localStorage.removeItem('mobile_otp_verified');
-        localStorage.removeItem('verified_mobile_number');
+        localStorage.removeItem('email_otp_verified');
+        localStorage.removeItem('verified_email_address');
         console.log('[Form Clear] All localStorage data cleared');
 
         // Reset form data
         setFormData({
             email: "",
-            mobile: "",
             otp: "",
             company_name: "",
             company_title: "",
             website: "",
             address: "",
+            pincode: "",
+            mobile: "",
             contact_per_name: "",
             application_type: 0
         });
@@ -1869,7 +2017,12 @@ export function DemoRequestForm() {
         setCanResendOtp(false);
         setOtpSentMessage('');
         setOtpVerificationMessage('');
-        setLastVerifiedMobile('');
+        setLastVerifiedEmail('');
+
+        // Reset save trial user states
+        setIsSavingTrialUser(false);
+        setSaveTrialUserError(null);
+        setHasUserChangedAfterError(false);
 
         // Reset other form states
         setHasSelectedBefore(false);
@@ -1895,7 +2048,7 @@ export function DemoRequestForm() {
             saveTimeoutRef.current = null;
         }
 
-        console.log('[Form Clear] All states reset to initial values');
+
 
         // Clear reset flag after state updates complete
         setTimeout(() => {
@@ -1942,7 +2095,8 @@ export function DemoRequestForm() {
             }
             // Prepare the API request body with correct IDs from get-plan API response
             const requestBody = {
-                company_name: formData.company_name,
+                company_name: formData.company_name, // Use company_title as the actual company name
+                // Include the login ID
                 company_title: formData.company_title,
                 // user_name: formData.user_name,
                 // password: formData.password,
@@ -1950,9 +2104,10 @@ export function DemoRequestForm() {
                 email: formData.email,
                 state_code: null, // Default state code as per your example
                 address: formData.address,
+                pincode: formData.pincode,
                 contact_per_name: formData.contact_per_name,
                 landline: "", // Not collected in form
-                mobile: formData.mobile,
+                mobile: formData.mobile, // Include mobile number
                 otp: formData.otp, // Include OTP for verification
                 application_type: formData.application_type,
                 pricing_id: planDetail.id, // ID from plan_details array for selected tenure
@@ -2095,6 +2250,194 @@ export function DemoRequestForm() {
     };
 
     const handleCompleteDemoFromPricing = async (planId: number, pricingId: number, numberOfUsers: number) => {
+       
+
+        // Check if this is a custom plan (plan_id 999 indicates custom plan)
+        if (isFromCustomPlan && planId === 999 && customPlanData) {
+            
+            await handleCustomPlanCompletion(pricingId, numberOfUsers);
+            return;
+        }
+
+        // Regular plan flow
+ 
+        await handleRegularPlanCompletion(planId, pricingId, numberOfUsers);
+    };
+
+    // Handle custom plan completion with two-step API process
+    const handleCustomPlanCompletion = async (pricingId: number, numberOfUsers: number) => {
+        setIsSubmitting(true);
+
+        try {
+            // Step 1: Create customized plan
+            
+
+            // Extract duration from pricing ID
+            const pricingDetail = customPlanData.plan_details.find((detail: any) => detail.id === pricingId);
+            if (!pricingDetail) {
+                throw new Error('Invalid pricing selection');
+            }
+
+            // Use the stored generic_module_id array from when the custom plan was created
+            const genericModuleIds: number[] = customPlanData.original_generic_module_id || [];
+
+            
+            if (genericModuleIds.length === 0) {
+                throw new Error('No service modules found for custom plan. Please go back and recreate your custom plan.');
+            }
+
+            const createPlanPayload = {
+                plan_name: customPlanDescription || customPlanData.plan_name || "Custom Plan",
+                application_type: formData.application_type,
+                generic_module_id: genericModuleIds,
+                duration: pricingDetail.duration,
+                max_users: numberOfUsers
+            };
+
+          
+
+            const createPlanResponse = await fetch('/api/create-customized-plan', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(createPlanPayload)
+            });
+
+            const createPlanData = await createPlanResponse.json();
+           
+
+            // Check for success based on actual API response format
+            // API returns status 200 with success message, so check response status and message
+            if (!createPlanResponse.ok) {
+                throw new Error(createPlanData.message || 'Failed to create customized plan');
+            }
+
+            // Check if the response indicates success
+            const isCreatePlanSuccess = createPlanResponse.ok && (
+                createPlanData.success === true ||
+                (createPlanData.message && createPlanData.message.toLowerCase().includes('success')) ||
+                createPlanData.data // If data exists, assume success
+            );
+
+            if (!isCreatePlanSuccess) {
+                throw new Error(createPlanData.message || 'Failed to create customized plan');
+            }
+
+            // Step 2: Process payment with the created plan
+            
+
+            const processPaymentPayload = {
+                company_name: formData.company_name, // Use company_code (login_id) as company_name for backend
+                company_title: formData.company_title, // This is the actual company display name
+                website: formData.website,
+                email: formData.email,
+                state_code: null,
+                address: formData.address,
+                pincode: formData.pincode,
+                contact_per_name: formData.contact_per_name,
+                landline: "",
+                mobile: formData.mobile,
+                otp: formData.otp,
+                application_type: formData.application_type,
+                pricing_id: createPlanData.selected_pricing_id || pricingId,
+                plan_id: createPlanData.plan_id,
+                num_users: numberOfUsers
+            };
+
+
+            const processPaymentResponse = await fetch('/api/process-payment', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(processPaymentPayload)
+            });
+
+            let paymentData;
+            const contentType = processPaymentResponse.headers.get('content-type');
+
+            try {
+                if (contentType && contentType.includes('application/json')) {
+                    paymentData = await processPaymentResponse.json();
+                } else {
+                    const textResponse = await processPaymentResponse.text();
+                    console.error('[Custom Plan Completion] Non-JSON payment response:', textResponse);
+                    throw new Error('Server returned invalid response format. Please try again later.');
+                }
+            } catch (parseError) {
+                console.error('[Custom Plan Completion] JSON parse error:', parseError);
+                throw new Error('Invalid response format from server. Please try again.');
+            }
+
+        
+
+            // Handle payment response
+            const isSuccessResponse = paymentData.response === true ||
+                paymentData.success === true ||
+                (paymentData.message && (
+                    paymentData.message.toLowerCase().includes('payment successful') ||
+                    paymentData.message.toLowerCase().includes('created') ||
+                    paymentData.message.toLowerCase().includes('success')
+                ));
+
+            if (processPaymentResponse.ok && isSuccessResponse) {
+                const apiMessage = paymentData.message &&
+                    (paymentData.message.toLowerCase().includes('payment successful') ||
+                        paymentData.message.toLowerCase().includes('created') ||
+                        paymentData.message.toLowerCase().includes('success'))
+                    ? paymentData.message
+                    : 'Custom plan created and demo request submitted successfully!';
+
+                const successMessage = apiMessage + '\n\nOur team will connect with you shortly and your credentials will be shared via email within 24 hours.';
+
+                setSubmissionResult({
+                    success: true,
+                    message: successMessage,
+                    showResultPage: true
+                });
+                clearForm();
+                setShowDynamicPricing(false);
+            } else {
+                let errorMessage = 'Failed to submit demo request. Please try again.';
+
+                if (paymentData) {
+                    errorMessage = paymentData.message ||
+                        paymentData.error ||
+                        paymentData.msg ||
+                        paymentData.details ||
+                        (paymentData.errors && Array.isArray(paymentData.errors) ? paymentData.errors.join(', ') : '') ||
+                        (paymentData.data && paymentData.data.message) ||
+                        errorMessage;
+                }
+
+                setSubmissionResult({
+                    success: false,
+                    message: errorMessage,
+                    showResultPage: true
+                });
+            }
+
+        } catch (error) {
+            console.error('[Custom Plan Completion] Error:', error);
+
+            let errorMessage = 'Failed to process custom plan request. Please try again.';
+            if (error instanceof Error && error.message) {
+                errorMessage = error.message;
+            }
+
+            setSubmissionResult({
+                success: false,
+                message: errorMessage,
+                showResultPage: true
+            });
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    // Handle regular plan completion (existing logic)
+    const handleRegularPlanCompletion = async (planId: number, pricingId: number, numberOfUsers: number) => {
         // Update form data with selected plan and pricing details
         const updatedFormData = {
             ...formData,
@@ -2105,17 +2448,18 @@ export function DemoRequestForm() {
         // Submit to process-payment API
         setIsSubmitting(true);
 
-        console.log('[Dynamic Pricing] Starting API call with data:', {
-            planId,
-            pricingId,
-            numberOfUsers,
-            formData: {
-                company_name: formData.company_name,
-                email: formData.email,
-                mobile: formData.mobile,
-                application_type: formData.application_type
-            }
-        });
+        // console.log('[Regular Plan Completion] Starting API call with data:', {
+        //     planId,
+        //     pricingId,
+        //     numberOfUsers,
+        //     formData: {
+        //         company_name: formData.company_name,
+        //         company_title: formData.company_title,
+        //         email: formData.email,
+        //         mobile: formData.mobile,
+        //         application_type: formData.application_type
+        //     }
+        // });
 
         try {
             const response = await fetch('/api/process-payment', {
@@ -2124,15 +2468,17 @@ export function DemoRequestForm() {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    company_name: formData.company_name,
-                    company_title: formData.company_title,
+                    company_name: formData.company_name, // Use company_code (login_id) as company_name for backend
+                    // Include login ID
+                    company_title: formData.company_title, // This is the actual company display name
                     website: formData.website,
                     email: formData.email,
                     state_code: null,
                     address: formData.address,
+                    pincode: formData.pincode,
                     contact_per_name: formData.contact_per_name,
                     landline: "",
-                    mobile: formData.mobile,
+                    mobile: formData.mobile, // Include mobile number
                     otp: formData.otp,
                     application_type: formData.application_type,
                     pricing_id: pricingId,
@@ -2150,16 +2496,15 @@ export function DemoRequestForm() {
                 } else {
                     // Handle non-JSON responses (HTML error pages, etc.)
                     const textResponse = await response.text();
-                    console.error('[Dynamic Pricing] Non-JSON response:', textResponse);
+                    console.error('[Regular Plan Completion] Non-JSON response:', textResponse);
                     throw new Error('Server returned invalid response format. Please try again later.');
                 }
             } catch (parseError) {
-                console.error('[Dynamic Pricing] JSON parse error:', parseError);
+                console.error('[Regular Plan Completion] JSON parse error:', parseError);
                 throw new Error('Invalid response format from server. Please try again.');
             }
 
-            console.log('[Dynamic Pricing] API Response:', responseData);
-
+          
             // Check for success conditions - either response.response === true OR success keywords in message
             const isSuccessResponse = responseData.response === true ||
                 responseData.success === true ||
@@ -2204,17 +2549,17 @@ export function DemoRequestForm() {
                     // Don't include status details in user-facing message
                 }
 
-                console.error('[Dynamic Pricing] API Error:', {
+                console.error('[Regular Plan Completion] API Error:', {
                     status: response.status,
                     statusText: response.statusText,
                     responseData: responseData
                 });
 
-                console.log('[Dynamic Pricing] Setting error submission result:', {
-                    success: false,
-                    message: errorMessage,
-                    showResultPage: true
-                });
+                // console.log('[Regular Plan Completion] Setting error submission result:', {
+                //     success: false,
+                //     message: errorMessage,
+                //     showResultPage: true
+                // });
 
                 setSubmissionResult({
                     success: false,
@@ -2223,7 +2568,7 @@ export function DemoRequestForm() {
                 });
             }
         } catch (error) {
-            console.error('[Dynamic Pricing] Network/Parse error:', error);
+            console.error('[Regular Plan Completion] Network/Parse error:', error);
 
             // Provide more specific error messages based on error type
             let errorMessage = 'Network error occurred. Please check your connection and try again.';
@@ -2232,16 +2577,16 @@ export function DemoRequestForm() {
                 errorMessage = 'Unable to connect to server. Please check your internet connection and try again.';
             } else if (error instanceof SyntaxError) {
                 errorMessage = 'Server response format error. Please try again later.';
-            } else if (error.message) {
+            } else if (error instanceof Error && error.message) {
                 // Use the specific error message if available
                 errorMessage = error.message;
             }
 
-            console.log('[Dynamic Pricing] Setting network error submission result:', {
-                success: false,
-                message: errorMessage,
-                showResultPage: true
-            });
+            // console.log('[Regular Plan Completion] Setting network error submission result:', {
+            //     success: false,
+            //     message: errorMessage,
+            //     showResultPage: true
+            // });
 
             setSubmissionResult({
                 success: false,
@@ -2262,26 +2607,55 @@ export function DemoRequestForm() {
 
         try {
             // Call backend API to calculate custom plan pricing
+            // Extract only the IDs from selected services, filter out invalid IDs and remove duplicates
+            const genericModuleIds = [...new Set(selectedServices
+                .map(service => service.id)
+                .filter(id => id && id > 0)  // Filter out 0, null, undefined, and negative values
+            )];
+
+            if (genericModuleIds.length === 0) {
+                showAlert('error', 'Invalid Services', 'No valid services selected. Please try again.');
+                return;
+            }
+
+            const requestPayload = {
+                generic_module_id: genericModuleIds,
+                // service_names: selectedServices
+                //     .filter(service => service.id && service.id > 0)
+                //     .map(service => service.generic_name || service.name || `Service ${service.id}`)
+            };
+
+            // console.log('[Custom Plan Submit] Request payload:', requestPayload);
+
             const response = await fetch('/api/calculate-custom-plan', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({
-                    selectedServices: selectedServices,
-                    applicationTypeId: formData.application_type
-                })
+                body: JSON.stringify(requestPayload)
             });
 
+            // console.log('[Custom Plan Submit] Response status:', response.status);
+
             if (!response.ok) {
+                const errorText = await response.text();
+                console.error('[Custom Plan Submit] Error response:', errorText);
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
 
             const data = await response.json();
+            // console.log('[Custom Plan Submit] Response data:', data);
 
             if (data.response && data.data) {
                 // Set custom plan data and navigate to step 3
-                setCustomPlanData(data.data);
+                // Store the original generic_module_id array for later use
+                const enhancedCustomPlanData = {
+                    ...data.data,
+                    original_generic_module_id: genericModuleIds, // Store the original array
+                    selected_services: selectedServices // Also store the selected services for reference
+                };
+
+                setCustomPlanData(enhancedCustomPlanData);
                 setSelectedPlanForPricing(999); // Set special custom plan ID
                 setIsFromCustomPlan(true);
                 setCurrentStep(3);
@@ -2629,7 +3003,14 @@ export function DemoRequestForm() {
                                                             value={formData.company_title}
                                                             onFocus={() => setIsCompanyNameFocused(true)}
                                                             onBlur={() => setIsCompanyNameFocused(false)}
-                                                            onChange={(e) => handleInputChange("company_title", e.target.value)}
+                                                            onChange={(e) => {
+                                                                const value = e.target.value;
+                                                                handleInputChange("company_title", value);
+
+                                                                // Auto-generate login ID from first word of company name
+                                                                const generatedLoginId = generateLoginId(value);
+                                                                handleInputChange("company_name", generatedLoginId);
+                                                            }}
                                                             className={`w-full px-3 py-2.5 border-2 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border-gray-200 dark:border-slate-600 text-gray-900 dark:text-white transition-all duration-200 group-hover:border-blue-300 ${errors.company_title ? "border-red-400 focus:ring-red-500/20 focus:border-red-500" : ""
                                                                 }`}
                                                             placeholder="Full company name (e.g., ABC Corp Pvt Ltd)"
@@ -2676,7 +3057,7 @@ export function DemoRequestForm() {
                                                         <div className="w-5 h-5 rounded-md bg-gradient-to-r from-blue-400 to-indigo-400 flex items-center justify-center mr-2 shadow-sm">
                                                             <Building className="w-3 h-3 text-white" />
                                                         </div>
-                                                        Company Code
+                                                        Login ID
                                                         {/* Question Mark Icon with Tooltip - Hidden on small screens */}
                                                         <div className="relative ml-2 hidden md:block">
                                                             <div
@@ -2804,86 +3185,21 @@ export function DemoRequestForm() {
                                                         <div className="w-5 h-5 rounded-md bg-gradient-to-r from-blue-400 to-cyan-400 flex items-center justify-center mr-2 shadow-sm">
                                                             <Mail className="w-3 h-3 text-white" />
                                                         </div>
-                                                        Email Address
-                                                    </label>
-                                                    <div className="relative group">
-                                                        <input
-                                                            type="email"
-                                                            value={formData.email}
-                                                            onChange={(e) => handleInputChange("email", e.target.value)}
-                                                            className={`w-full px-3 py-2.5 border-2 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border-gray-200 dark:border-slate-600 text-gray-900 dark:text-white transition-all duration-200 group-hover:border-blue-300 ${errors.email ? "border-red-400 focus:ring-red-500/20 focus:border-red-500" : ""
-                                                                }`}
-                                                            placeholder="Enter your email address"
-                                                        />
-                                                        <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-500/5 to-indigo-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" />
-                                                    </div>
-                                                    {errors.email && (
-                                                        <motion.p
-                                                            className="text-red-500 text-sm mt-2 flex items-center"
-                                                            initial={{ opacity: 0, x: -10 }}
-                                                            animate={{ opacity: 1, x: 0 }}
-                                                        >
-                                                            <div className="w-1 h-1 bg-red-500 rounded-full mr-2" />
-                                                            {errors.email}
-                                                        </motion.p>
-                                                    )}
-                                                </motion.div>
-                                            </div>
-
-                                            {/* Contact Person Name and Mobile Number - Side by Side */}
-                                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
-                                                <motion.div variants={inputVariants} transition={{ delay: 0.5 }}>
-                                                    <label className="flex items-center text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
-                                                        <div className="w-5 h-5 rounded-md bg-gradient-to-r from-blue-400 to-indigo-400 flex items-center justify-center mr-2 shadow-sm">
-                                                            <User className="w-3 h-3 text-white" />
-                                                        </div>
-                                                        Contact Person
-                                                    </label>
-                                                    <div className="relative group">
-                                                        <input
-                                                            type="text"
-                                                            value={formData.contact_per_name}
-                                                            onChange={(e) => handleInputChange("contact_per_name", e.target.value)}
-                                                            className={`w-full px-3 py-2.5 border-2 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border-gray-200 dark:border-slate-600 text-gray-900 dark:text-white transition-all duration-200 group-hover:border-blue-300 ${errors.contact_per_name ? "border-red-400 focus:ring-red-500/20 focus:border-red-500" : ""
-                                                                }`}
-                                                            placeholder="Full name of contact person"
-                                                        />
-                                                        <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-500/5 to-indigo-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" />
-                                                    </div>
-                                                    {errors.contact_per_name && (
-                                                        <motion.p
-                                                            className="text-red-500 text-sm mt-2 flex items-center"
-                                                            initial={{ opacity: 0, x: -10 }}
-                                                            animate={{ opacity: 1, x: 0 }}
-                                                        >
-                                                            <div className="w-1 h-1 bg-red-500 rounded-full mr-2" />
-                                                            {errors.contact_per_name}
-                                                        </motion.p>
-                                                    )}
-                                                </motion.div>
-
-                                                {/* Mobile Number Verification Section */}
-                                                <motion.div variants={inputVariants} transition={{ delay: 0.6 }}>
-                                                    <label className="flex items-center text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
-                                                        <div className="w-5 h-5 rounded-md bg-gradient-to-r from-green-400 to-emerald-400 flex items-center justify-center mr-2 shadow-sm">
-                                                            <Phone className="w-3 h-3 text-white" />
-                                                        </div>
-                                                        Mobile Number
+                                                        Business Email ID
                                                     </label>
 
-                                                    {/* Mobile Number Input */}
+                                                    {/* Email Input */}
                                                     <div className="space-y-2">
                                                         <div className="flex gap-3 items-end lg:flex-col lg:items-stretch lg:gap-2">
                                                             <div className="flex-1 lg:w-full">
                                                                 <div className="relative group">
                                                                     <input
-                                                                        type="tel"
-                                                                        value={formData.mobile}
-                                                                        onChange={(e) => handleInputChange("mobile", e.target.value.replace(/\D/g, ''))}
-                                                                        className={`w-full px-3 py-2.5 border-2 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border-gray-200 dark:border-slate-600 text-gray-900 dark:text-white transition-all duration-200 group-hover:border-blue-300 ${errors.mobile ? "border-red-400 focus:ring-red-500/20 focus:border-red-500" : ""
+                                                                        type="email"
+                                                                        value={formData.email}
+                                                                        onChange={(e) => handleInputChange("email", e.target.value)}
+                                                                        className={`w-full px-3 py-2.5 border-2 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border-gray-200 dark:border-slate-600 text-gray-900 dark:text-white transition-all duration-200 group-hover:border-blue-300 ${errors.email ? "border-red-400 focus:ring-red-500/20 focus:border-red-500" : ""
                                                                             } ${isOtpVerified ? "border-green-500 bg-green-50 dark:bg-green-900/10" : ""}`}
-                                                                        placeholder="10-digit mobile number"
-                                                                        maxLength={10}
+                                                                        placeholder="Enter your email address"
                                                                         disabled={isOtpVerified}
                                                                     />
                                                                     <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-500/5 to-indigo-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" />
@@ -2895,16 +3211,16 @@ export function DemoRequestForm() {
                                                                 </div>
                                                             </div>
 
-                                                            {/* Verify Number Button - Responsive positioning */}
+                                                            {/* Verify Email Button - Responsive positioning */}
                                                             <div className="lg:hidden">
                                                                 {/* Small/Medium screens: Button next to input */}
-                                                                {formData.mobile.length === 10 && !isOtpSent && !isOtpVerified && (
+                                                                {formData.email && isValidCompleteEmail(formData.email) && !isOtpSent && !isOtpVerified && (
                                                                     <Button
                                                                         onClick={sendOtp}
                                                                         disabled={otpLoading}
                                                                         className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                                                                     >
-                                                                        {otpLoading ? 'Sending...' : 'Verify Number'}
+                                                                        {otpLoading ? 'Sending...' : 'Verify Email'}
                                                                     </Button>
                                                                 )}
 
@@ -2930,13 +3246,13 @@ export function DemoRequestForm() {
 
                                                         {/* Large screens: Button below input */}
                                                         <div className="hidden lg:block">
-                                                            {formData.mobile.length === 10 && !isOtpSent && !isOtpVerified && (
+                                                            {formData.email && isValidCompleteEmail(formData.email) && !isOtpSent && !isOtpVerified && (
                                                                 <Button
                                                                     onClick={sendOtp}
                                                                     disabled={otpLoading}
                                                                     className="w-full px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                                                                 >
-                                                                    {otpLoading ? 'Sending...' : 'Verify Number'}
+                                                                    {otpLoading ? 'Sending...' : 'Verify Email'}
                                                                 </Button>
                                                             )}
 
@@ -2988,15 +3304,15 @@ export function DemoRequestForm() {
                                                             </motion.div>
                                                         )}
 
-                                                        {/* Mobile Error */}
-                                                        {errors.mobile && (
+                                                        {/* Email Error */}
+                                                        {errors.email && (
                                                             <motion.p
                                                                 className="text-red-500 text-sm flex items-center"
                                                                 initial={{ opacity: 0, x: -10 }}
                                                                 animate={{ opacity: 1, x: 0 }}
                                                             >
                                                                 <div className="w-1 h-1 bg-red-500 rounded-full mr-2" />
-                                                                {errors.mobile}
+                                                                {errors.email}
                                                             </motion.p>
                                                         )}
 
@@ -3026,35 +3342,140 @@ export function DemoRequestForm() {
                                                 </motion.div>
                                             </div>
 
-                                            {/* Address - Full Width */}
-                                            <motion.div variants={inputVariants} transition={{ delay: 0.7 }}>
-                                                <label className="flex items-center text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
-                                                    <div className="w-5 h-5 rounded-md bg-gradient-to-r from-blue-400 to-indigo-400 flex items-center justify-center mr-2 shadow-sm">
-                                                        <MapPin className="w-3 h-3 text-white" />
+                                            {/* Contact Person Name and Mobile Number - Side by Side */}
+                                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+                                                <motion.div variants={inputVariants} transition={{ delay: 0.5 }}>
+                                                    <label className="flex items-center text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
+                                                        <div className="w-5 h-5 rounded-md bg-gradient-to-r from-blue-400 to-indigo-400 flex items-center justify-center mr-2 shadow-sm">
+                                                            <User className="w-3 h-3 text-white" />
+                                                        </div>
+                                                        Contact Person Name
+                                                    </label>
+                                                    <div className="relative group">
+                                                        <input
+                                                            type="text"
+                                                            value={formData.contact_per_name}
+                                                            onChange={(e) => handleInputChange("contact_per_name", e.target.value)}
+                                                            className={`w-full px-3 py-2.5 border-2 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border-gray-200 dark:border-slate-600 text-gray-900 dark:text-white transition-all duration-200 group-hover:border-blue-300 ${errors.contact_per_name ? "border-red-400 focus:ring-red-500/20 focus:border-red-500" : ""
+                                                                }`}
+                                                            placeholder="Full name of contact person"
+                                                        />
+                                                        <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-500/5 to-indigo-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" />
                                                     </div>
-                                                    Address
-                                                </label>
-                                                <div className="relative group">
-                                                    <textarea
-                                                        value={formData.address}
-                                                        onChange={(e) => handleInputChange("address", e.target.value)}
-                                                        rows={3}
-                                                        className={`w-full px-3 py-2.5 border-2 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border-gray-200 dark:border-slate-600 text-gray-900 dark:text-white resize-none transition-all duration-200 group-hover:border-blue-300 ${errors.address ? "border-red-400 focus:ring-red-500/20 focus:border-red-500" : ""
-                                                            }`}
-                                                        placeholder="Complete business address"
-                                                    />
-                                                    <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-500/5 to-indigo-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" />
+                                                    {errors.contact_per_name && (
+                                                        <motion.p
+                                                            className="text-red-500 text-sm mt-2 flex items-center"
+                                                            initial={{ opacity: 0, x: -10 }}
+                                                            animate={{ opacity: 1, x: 0 }}
+                                                        >
+                                                            <div className="w-1 h-1 bg-red-500 rounded-full mr-2" />
+                                                            {errors.contact_per_name}
+                                                        </motion.p>
+                                                    )}
+                                                </motion.div>
+
+                                                {/* Mobile Number */}
+                                                <motion.div variants={inputVariants} transition={{ delay: 0.6 }}>
+                                                    <label className="flex items-center text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
+                                                        <div className="w-5 h-5 rounded-md bg-gradient-to-r from-green-400 to-emerald-400 flex items-center justify-center mr-2 shadow-sm">
+                                                            <Phone className="w-3 h-3 text-white" />
+                                                        </div>
+                                                        Mobile Number
+                                                    </label>
+                                                    <div className="relative group">
+                                                        <input
+                                                            type="tel"
+                                                            value={formData.mobile}
+                                                            onChange={(e) => handleInputChange("mobile", e.target.value.replace(/\D/g, ''))}
+                                                            className={`w-full px-3 py-2.5 border-2 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border-gray-200 dark:border-slate-600 text-gray-900 dark:text-white transition-all duration-200 group-hover:border-blue-300 ${errors.mobile ? "border-red-400 focus:ring-red-500/20 focus:border-red-500" : ""
+                                                                }`}
+                                                            placeholder="10-digit mobile number"
+                                                            maxLength={10}
+                                                        />
+                                                        <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-500/5 to-indigo-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" />
+                                                    </div>
+                                                    {errors.mobile && (
+                                                        <motion.p
+                                                            className="text-red-500 text-sm mt-2 flex items-center"
+                                                            initial={{ opacity: 0, x: -10 }}
+                                                            animate={{ opacity: 1, x: 0 }}
+                                                        >
+                                                            <div className="w-1 h-1 bg-red-500 rounded-full mr-2" />
+                                                            {errors.mobile}
+                                                        </motion.p>
+                                                    )}
+                                                </motion.div>
+                                            </div>
+
+                                            {/* Address and Pincode - 70% / 30% Layout */}
+                                            <motion.div variants={inputVariants} transition={{ delay: 0.7 }}>
+                                                <div className="grid grid-cols-1 md:grid-cols-10 gap-4">
+                                                    {/* Address - 70% width on medium+ screens, full width on mobile */}
+                                                    <div className="md:col-span-7">
+                                                        <label className="flex items-center text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
+                                                            <div className="w-5 h-5 rounded-md bg-gradient-to-r from-blue-400 to-indigo-400 flex items-center justify-center mr-2 shadow-sm">
+                                                                <MapPin className="w-3 h-3 text-white" />
+                                                            </div>
+                                                            Address
+                                                        </label>
+                                                        <div className="relative group">
+                                                            <textarea
+                                                                value={formData.address}
+                                                                onChange={(e) => handleInputChange("address", e.target.value)}
+                                                                rows={3}
+                                                                className={`w-full px-3 py-2.5 border-2 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border-gray-200 dark:border-slate-600 text-gray-900 dark:text-white resize-none transition-all duration-200 group-hover:border-blue-300 ${errors.address ? "border-red-400 focus:ring-red-500/20 focus:border-red-500" : ""
+                                                                    }`}
+                                                                placeholder="Complete business address"
+                                                            />
+                                                            <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-500/5 to-indigo-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" />
+                                                        </div>
+                                                        {errors.address && (
+                                                            <motion.p
+                                                                className="text-red-500 text-sm mt-2 flex items-center"
+                                                                initial={{ opacity: 0, x: -10 }}
+                                                                animate={{ opacity: 1, x: 0 }}
+                                                            >
+                                                                <div className="w-1 h-1 bg-red-500 rounded-full mr-2" />
+                                                                {errors.address}
+                                                            </motion.p>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Pincode - 30% width on medium+ screens, full width on mobile */}
+                                                    <div className="md:col-span-3">
+                                                        <label className="flex items-center text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
+                                                            <div className="w-5 h-5 rounded-md bg-gradient-to-r from-green-400 to-emerald-400 flex items-center justify-center mr-2 shadow-sm">
+                                                                <MapPin className="w-3 h-3 text-white" />
+                                                            </div>
+                                                            Pincode
+                                                        </label>
+                                                        <div className="relative group">
+                                                            <input
+                                                                type="text"
+                                                                value={formData.pincode}
+                                                                onChange={(e) => {
+                                                                    const value = e.target.value.replace(/\D/g, ''); // Only allow digits
+                                                                    handleInputChange("pincode", value);
+                                                                }}
+                                                                maxLength={6}
+                                                                className={`w-full px-3 py-2.5 border-2 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border-gray-200 dark:border-slate-600 text-gray-900 dark:text-white transition-all duration-200 group-hover:border-blue-300 ${errors.pincode ? "border-red-400 focus:ring-red-500/20 focus:border-red-500" : ""
+                                                                    }`}
+                                                                placeholder="123456"
+                                                            />
+                                                            <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-green-500/5 to-emerald-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" />
+                                                        </div>
+                                                        {errors.pincode && (
+                                                            <motion.p
+                                                                className="text-red-500 text-sm mt-2 flex items-center"
+                                                                initial={{ opacity: 0, x: -10 }}
+                                                                animate={{ opacity: 1, x: 0 }}
+                                                            >
+                                                                <div className="w-1 h-1 bg-red-500 rounded-full mr-2" />
+                                                                {errors.pincode}
+                                                            </motion.p>
+                                                        )}
+                                                    </div>
                                                 </div>
-                                                {errors.address && (
-                                                    <motion.p
-                                                        className="text-red-500 text-sm mt-2 flex items-center"
-                                                        initial={{ opacity: 0, x: -10 }}
-                                                        animate={{ opacity: 1, x: 0 }}
-                                                    >
-                                                        <div className="w-1 h-1 bg-red-500 rounded-full mr-2" />
-                                                        {errors.address}
-                                                    </motion.p>
-                                                )}
                                             </motion.div>
 
                                             {/* Commented out Number of Employees field */}
@@ -3439,7 +3860,10 @@ export function DemoRequestForm() {
                                                         <input
                                                             type="text"
                                                             value={customPlanDescription}
-                                                            onChange={(e) => setCustomPlanDescription(e.target.value)}
+                                                            onChange={(e) => {
+                                                                setCustomPlanDescription(e.target.value);
+                                                                setHasUserChangedAfterError(true);
+                                                            }}
                                                             className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
                                                             placeholder="Enter your custom plan name..."
                                                         />
@@ -3713,7 +4137,7 @@ export function DemoRequestForm() {
                                                                                 whileHover={{ scale: 1.02 }}
                                                                                 whileTap={{ scale: 0.98 }}
                                                                                 onClick={handleCustomPlanSubmit}
-                                                                                disabled={isSubmitting || selectedServices.length === 0}
+                                                                                disabled={isSubmitting || selectedServices.length === 0 || !customPlanDescription?.trim()}
                                                                                 className="w-full mt-6 bg-white text-purple-600 font-bold py-3 rounded-lg hover:bg-purple-50 transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                                                                             >
                                                                                 {isSubmitting ? (
@@ -4200,16 +4624,35 @@ export function DemoRequestForm() {
                                     >
                                         <Button
                                             onClick={handleNext}
-                                            disabled={currentStep === 2 && !selectedPlanForPricing}
-                                            className={`relative flex items-center justify-center gap-2 lg:gap-3 xl:gap-2 px-6 lg:px-8 xl:px-6 py-3 lg:py-4 xl:py-3 w-full sm:w-auto font-bold shadow-xl hover:shadow-2xl transition-all duration-300 rounded-xl group overflow-hidden ${currentStep === 2 && !selectedPlanForPricing
-                                                ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
-                                                : 'bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 hover:from-orange-600 hover:via-amber-600 hover:to-orange-700 text-white'
+                                            disabled={
+                                                (currentStep === 2 && !selectedPlanForPricing) ||
+                                                isSavingTrialUser ||
+                                                (currentStep === 1 && !!saveTrialUserError && !hasUserChangedAfterError)
+                                            }
+                                            className={`relative flex items-center justify-center gap-2 lg:gap-3 xl:gap-2 px-6 lg:px-8 xl:px-6 py-3 lg:py-4 xl:py-3 w-full sm:w-auto font-bold shadow-xl hover:shadow-2xl transition-all duration-300 rounded-xl group overflow-hidden ${(currentStep === 2 && !selectedPlanForPricing) ||
+                                                    isSavingTrialUser ||
+                                                    (currentStep === 1 && !!saveTrialUserError && !hasUserChangedAfterError)
+                                                    ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                                                    : 'bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 hover:from-orange-600 hover:via-amber-600 hover:to-orange-700 text-white'
                                                 }`}
                                         >
-                                            <div className={`absolute inset-0 bg-gradient-to-r from-white/20 to-transparent transition-opacity duration-300 ${currentStep === 2 && !selectedPlanForPricing ? 'opacity-0' : 'opacity-0 group-hover:opacity-100'
+                                            <div className={`absolute inset-0 bg-gradient-to-r from-white/20 to-transparent transition-opacity duration-300 ${(currentStep === 2 && !selectedPlanForPricing) ||
+                                                    isSavingTrialUser ||
+                                                    (currentStep === 1 && !!saveTrialUserError && !hasUserChangedAfterError)
+                                                    ? 'opacity-0'
+                                                    : 'opacity-0 group-hover:opacity-100'
                                                 }`} />
-                                            <span className="relative z-10">Continue</span>
-                                            <ArrowRight className="w-5 h-5 relative z-10 transition-transform group-hover:translate-x-0.5" />
+                                            {isSavingTrialUser ? (
+                                                <>
+                                                    <div className="relative z-10 w-5 h-5 border-2 border-white/30 border-t-white rounded-full" style={{ animation: 'spin 1s linear infinite' }}></div>
+                                                    <span className="relative z-10">Processing...</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <span className="relative z-10">Continue</span>
+                                                    <ArrowRight className="w-5 h-5 relative z-10 transition-transform group-hover:translate-x-0.5" />
+                                                </>
+                                            )}
                                         </Button>
                                     </motion.div>
                                 ) : (

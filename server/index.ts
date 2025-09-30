@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import express from "express";
 import cors from "cors";
-import { handleDemo, handleGetPlans, handleProcessPayment, handleGetServicesList, handleCalculateCustomPlan } from "./routes/demo";
+import { handleDemo, handleGetPlans, handleProcessPayment, handleGetServicesList, handleCalculateCustomPlan, handleCreateCustomizedPlan } from "./routes/demo";
 import {
   handleSaveCompanyDetails,
   handleGenerateSite,
@@ -19,14 +19,15 @@ import bcrypt from "bcryptjs";
 import { db } from "./routes/auto-site";
 import { formProgressRouter } from './routes/auto-site';
 import mysql from 'mysql2';
+import fetch from 'node-fetch';
 
 // Create a separate connection pool specifically for blog database
-const blogDbConfig = { 
-  host: process.env.DB_HOST || 'localhost', 
-  user: process.env.DB_USER || 'root', 
-  password: process.env.DB_PASS || '', 
-  port: process.env.DB_PORT ? Number(process.env.DB_PORT) : 3306, 
-  database: process.env.DB_NAME || 'manacle_blogs' 
+const blogDbConfig = {
+  host: process.env.DB_HOST || 'localhost',
+  user: process.env.DB_USER || 'root',
+  password: process.env.DB_PASS || '',
+  port: process.env.DB_PORT ? Number(process.env.DB_PORT) : 3306,
+  database: process.env.DB_NAME || 'manacle_blogs'
 };
 const blogPool = mysql.createPool({
   ...blogDbConfig,
@@ -172,15 +173,24 @@ export function createServer() {
 
   async function handleOtpRequest(req: express.Request, res: express.Response) {
     try {
-
       // Validate required fields
-      const { mobile, request_type } = req.body;
+      const { email, request_type } = req.body;
 
-      if (!mobile) {
+      if (!email) {
         return res.status(400).json({
           success: false,
-          error: 'Missing mobile number',
-          message: 'Mobile number is required'
+          error: 'Missing email address',
+          message: 'Email address is required'
+        });
+      }
+
+      // Basic email validation
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid email address',
+          message: 'Please provide a valid email address'
         });
       }
 
@@ -192,15 +202,17 @@ export function createServer() {
         });
       }
 
-
       const response = await fetch('http://122.176.112.254/www-demo-msell-in/public/api/otp_send_status', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(req.body)
+        body: JSON.stringify({
+          email: email,
+          request_type: request_type,
+          otp: req.body.otp // Include OTP for validation requests
+        })
       });
-
 
       let data;
       const contentType = response.headers.get('content-type');
@@ -218,7 +230,6 @@ export function createServer() {
       }
       res.status(response.status).json(data);
     } catch (error) {
-
       res.status(500).json({
         success: false,
         error: 'Failed to process OTP request via external API',
@@ -238,8 +249,41 @@ export function createServer() {
   app.post("/api/get-plan", handleGetPlans);
   app.post("/api/get-services-list", handleGetServicesList);
   app.post("/api/calculate-custom-plan", handleCalculateCustomPlan);
+  app.post("/api/create-customized-plan", handleCreateCustomizedPlan);
   app.post("/api/otp-request", handleOtpRequest);
-  app.post("/api/process-payment", handleProcessPayment);  // Google auth routes
+  app.post("/api/process-payment", handleProcessPayment);
+
+  // Save trial user endpoint - proxy to external API
+  app.post("/api/save-trial-user", async (req, res) => {
+    try {
+      // console.log('[Save Trial User Proxy] Request body:', req.body);
+
+      // Make request to external API
+      const response = await fetch('http://122.176.112.254/www-demo-msell-in/public/api/save-trial-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(req.body)
+      });
+
+      // console.log('[Save Trial User Proxy] External API response status:', response.status);
+
+      const data = await response.json();
+      // console.log('[Save Trial User Proxy] External API response data:', data);
+
+      // Forward the response from external API
+      res.status(response.status).json(data);
+    } catch (error) {
+      console.error('[Save Trial User Proxy] Error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to save trial user details'
+      });
+    }
+  });
+
+  // Google auth routes
   app.get('/api/auth/google', (req, res, next) => {
     if (!GOOGLE_CLIENT_ID) return res.status(500).json({ error: 'Google OAuth not configured' });
     const callbackURL = `${req.protocol}://${req.get('host')}/api/auth/google/callback`;

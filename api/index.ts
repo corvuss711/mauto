@@ -126,7 +126,10 @@ pool.getConnection((err, conn) => {
 });
 
 const app = express();
-app.use(cors({ origin: true, credentials: true }));
+app.use(cors({
+    origin: ['https://mauto-six.vercel.app'], // Add more domains if needed
+    credentials: true
+}));
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
 // Serve existing repo-seeded uploads (read-only) and dynamic tmp uploads via unified handler

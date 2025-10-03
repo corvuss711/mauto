@@ -145,7 +145,13 @@ let sessionStore: any;
 
 if (MySQLStore && dbConfig) {
     try {
-        console.log('[Session] Initializing MySQL session store...');
+        console.log('[Session] Initializing MySQL session store with config:', {
+            host: dbConfig.host,
+            port: dbConfig.port,
+            database: dbConfig.database,
+            user: dbConfig.user.substring(0, 3) + '...'
+        });
+        
         sessionStore = new MySQLStore({
             ...dbConfig,
             createDatabaseTable: true,
@@ -166,13 +172,20 @@ if (MySQLStore && dbConfig) {
             console.error('[Session] MySQL session store error:', error);
         });
 
-        console.log('[Session] MySQL session store initialized successfully');
+        sessionStore.on('connect', () => {
+            console.log('[Session] MySQL session store connected successfully');
+        });
+
+        console.log('[Session] MySQL session store initialized');
     } catch (e) {
         console.error('[Session] MySQLStore init failed, using MemoryStore:', (e as any)?.message);
         sessionStore = null;
     }
 } else {
-    console.warn('[Session] MySQLStore not available or dbConfig missing, using MemoryStore');
+    console.warn('[Session] MySQLStore not available or dbConfig missing, using MemoryStore', {
+        hasMySQLStore: !!MySQLStore,
+        hasDbConfig: !!dbConfig
+    });
 }
 const crossSite = process.env.CROSS_SITE === 'true';
 app.use(session({
@@ -180,7 +193,7 @@ app.use(session({
     resave: false,
     saveUninitialized: false,
     store: sessionStore,
-    name: 'mauto.sid', // Custom session name
+    name: 'connect.sid', // Use standard session name to match local
     rolling: true, // Reset expiration on activity
     cookie: {
         maxAge: 86400000, // 24 hours
@@ -210,6 +223,21 @@ app.use(passport.session());
 
 // Middleware to check if session user still exists in DB (matches local implementation)
 app.use(async (req, res, next) => {
+    const sessionId = (req as any).sessionID;
+    const isAuth = req.isAuthenticated?.();
+    const user = (req as any).user;
+    
+    // Debug session state for authentication-critical endpoints only
+    if (req.path.includes('/save-step') || req.path.includes('/load-form') || req.path.includes('/company-details') || req.path.includes('/me')) {
+        console.log(`[${req.method} ${req.path}] Session debug:`, {
+            sessionId,
+            isAuthenticated: isAuth,
+            hasUser: !!user,
+            userId: user?.id,
+            hasCookies: !!req.headers.cookie
+        });
+    }
+    
     if (req.isAuthenticated && req.isAuthenticated()) {
         try {
             const userId = req.user && (req.user as any).id;
@@ -694,10 +722,38 @@ app.get('/api/auth/google/callback', (req, res, next) => {
 });
 
 // Session debug endpoint
-app.get('/api/debug/session', (req, res) => {
+app.get('/api/debug/session', async (req, res) => {
     const session = (req as any).session;
     const user = (req as any).user;
     const sessionId = (req as any).sessionID;
+
+    // Try session store fallback for testing
+    let sessionStoreFallback: any = null;
+    if (sessionId && sessionStore) {
+        try {
+            const [sessionRows] = await db.promise().query(
+                'SELECT data FROM sessions WHERE session_id = ? AND expires > NOW()',
+                [sessionId]
+            );
+            
+            if (Array.isArray(sessionRows) && sessionRows.length > 0) {
+                const sessionData = (sessionRows as any[])[0].data;
+                if (sessionData) {
+                    try {
+                        const parsed = JSON.parse(sessionData);
+                        sessionStoreFallback = {
+                            userId: parsed.passport?.user,
+                            fullData: parsed
+                        };
+                    } catch (parseError) {
+                        sessionStoreFallback = { error: 'Failed to parse session data' };
+                    }
+                }
+            }
+        } catch (fallbackError) {
+            sessionStoreFallback = { error: fallbackError.message };
+        }
+    }
 
     res.json({
         sessionId,
@@ -715,6 +771,7 @@ app.get('/api/debug/session', (req, res) => {
         } : null,
         isAuthenticated: req.isAuthenticated?.(),
         cookies: req.headers.cookie,
+        sessionStoreFallback,
         timestamp: new Date().toISOString()
     });
 });
@@ -736,51 +793,99 @@ app.get('/api/auth/google/debug', (req, res) => {
     });
 });
 
-// Auth status
-app.get('/api/me', (req, res) => {
-    //manual changes
-    // const sessionId = (req as any).sessionID;
-    // const isAuth = req.isAuthenticated?.();
-    // const user = (req as any).user;
-    // const cookies = req.headers.cookie;
+// Auth status with serverless session fallback
+app.get('/api/me', async (req, res) => {
+    const sessionId = (req as any).sessionID;
+    const isAuth = req.isAuthenticated?.();
+    const user = (req as any).user;
+    const cookies = req.headers.cookie;
 
-
-
-    // if (req.isAuthenticated && req.isAuthenticated()) {
-    //     const u: any = (req as any).user;
-    //     if (!u || !u.id) {
-    //         console.warn('[/api/me] User object missing or no ID:', u);
-    //         return res.json({
-    //             authenticated: false,
-    //             error: 'User data incomplete',
-    //             debug: { sessionId, user: u, hasSession: !!(req as any).session }
-    //         });
-    //     }
-    //     const userData = {
-    //         id: String(u.id), // Ensure ID is string
-    //         email: u.email_id || u.email
-    //     };
-    //     console.log('[/api/me] SUCCESS - Returning user data:', userData);
-    //     return res.json({ authenticated: true, user: userData });
-    // }
-    // console.log('[/api/me] Not authenticated - returning false');
-    // res.json({
-    //     authenticated: false,
-    //     debug: {
-    //         sessionId,
-    //         hasIsAuthenticated: typeof req.isAuthenticated === 'function',
-    //         isAuthResult: isAuth,
-    //         hasUser: !!user,
-    //         hasSession: !!(req as any).session,
-    //         cookies: !!cookies
-    //     }
-    // });
+    console.log('[/api/me] Request debug:', {
+        sessionId,
+        isAuth,
+        hasUser: !!user,
+        userId: user?.id,
+        cookies: !!cookies
+    });
 
     if (req.isAuthenticated && req.isAuthenticated()) {
-      const u: any = (req as any).user;
-      return res.json({ authenticated: true, user: { id: u.id, email: u.email_id || u.email } });
+        const u: any = (req as any).user;
+        if (!u || !u.id) {
+            console.warn('[/api/me] User object missing or no ID:', u);
+            return res.json({
+                authenticated: false,
+                error: 'User data incomplete',
+                debug: { sessionId, user: u, hasSession: !!(req as any).session }
+            });
+        }
+        const userData = {
+            id: String(u.id), // Ensure ID is string
+            email: u.email_id || u.email
+        };
+        console.log('[/api/me] SUCCESS - Returning user data:', userData);
+        return res.json({ authenticated: true, user: userData });
     }
-    res.json({ authenticated: false });
+    
+    // Serverless fallback: Try to find session in database if passport session fails
+    if (sessionId && sessionStore) {
+        try {
+            console.log('[/api/me] Attempting session store fallback for sessionId:', sessionId);
+            
+            // This is a fallback for serverless environments where req.user might not be populated
+            // We'll check the sessions table directly
+            const [sessionRows] = await db.promise().query(
+                'SELECT data FROM sessions WHERE session_id = ? AND expires > NOW()',
+                [sessionId]
+            );
+            
+            if (Array.isArray(sessionRows) && sessionRows.length > 0) {
+                const sessionData = (sessionRows as any[])[0].data;
+                console.log('[/api/me] Found session data in store:', !!sessionData);
+                
+                if (sessionData) {
+                    try {
+                        const parsed = JSON.parse(sessionData);
+                        const userId = parsed.passport?.user;
+                        console.log('[/api/me] Parsed userId from session store:', userId);
+                        
+                        if (userId) {
+                            const [userRows] = await db.promise().query('SELECT * FROM users WHERE id = ?', [userId]);
+                            if (Array.isArray(userRows) && userRows.length > 0) {
+                                const dbUser = (userRows as any[])[0];
+                                console.log('[/api/me] Found user via session store fallback:', dbUser.id);
+                                return res.json({
+                                    authenticated: true,
+                                    user: {
+                                        id: String(dbUser.id),
+                                        email: dbUser.email_id || dbUser.email
+                                    },
+                                    source: 'session_store_fallback'
+                                });
+                            }
+                        }
+                    } catch (parseError) {
+                        console.error('[/api/me] Error parsing session data:', parseError);
+                    }
+                }
+            }
+        } catch (fallbackError) {
+            console.error('[/api/me] Session store fallback error:', fallbackError);
+        }
+    }
+    
+    console.log('[/api/me] Not authenticated - returning false');
+    res.json({
+        authenticated: false,
+        debug: {
+            sessionId,
+            hasIsAuthenticated: typeof req.isAuthenticated === 'function',
+            isAuthResult: isAuth,
+            hasUser: !!user,
+            hasSession: !!(req as any).session,
+            cookies: !!cookies,
+            hasSessionStore: !!sessionStore
+        }
+    });
 });
 
 // Business sectors
@@ -789,13 +894,70 @@ app.get('/api/business-sectors', async (_req, res) => {
     catch (e) { res.status(500).json({ error: 'Failed to fetch business sectors' }); }
 });
 
-// Form progress routes
+// Form progress routes with serverless session fallback
 app.post('/api/save-step', async (req, res) => {
     let { step_number, form_data } = req.body || {};
     // Get user_id from authenticated session
-    const user_id = (req as any).user?.id;
+    let user_id = (req as any).user?.id;
+    const sessionId = (req as any).sessionID;
+    const isAuth = req.isAuthenticated?.();
+    
+    // Enhanced logging for debugging authentication issues
+    console.log('[save-step] Request debug:', {
+        sessionId,
+        isAuthenticated: isAuth,
+        hasUser: !!(req as any).user,
+        userId: user_id,
+        stepNumber: step_number,
+        hasFormData: !!form_data,
+        cookies: req.headers.cookie
+    });
+    
+    // Serverless fallback: Try to get user from session store if passport fails
+    if (!user_id && sessionId && sessionStore) {
+        try {
+            console.log('[save-step] Attempting session store fallback for sessionId:', sessionId);
+            const [sessionRows] = await db.promise().query(
+                'SELECT data FROM sessions WHERE session_id = ? AND expires > NOW()',
+                [sessionId]
+            );
+            
+            if (Array.isArray(sessionRows) && sessionRows.length > 0) {
+                const sessionData = (sessionRows as any[])[0].data;
+                if (sessionData) {
+                    try {
+                        const parsed = JSON.parse(sessionData);
+                        user_id = parsed.passport?.user;
+                        console.log('[save-step] Retrieved userId from session store:', user_id);
+                    } catch (parseError) {
+                        console.error('[save-step] Error parsing session data:', parseError);
+                    }
+                }
+            }
+        } catch (fallbackError) {
+            console.error('[save-step] Session store fallback error:', fallbackError);
+        }
+    }
+    
     if (typeof step_number !== 'number' || form_data == null || !user_id) {
-        return res.status(400).json({ error: 'Missing required fields or user not authenticated' });
+        console.error('[save-step] Validation failed:', {
+            stepNumberType: typeof step_number,
+            stepNumberValue: step_number,
+            hasFormData: form_data != null,
+            userId: user_id,
+            isAuthenticated: isAuth,
+            sessionId
+        });
+        return res.status(400).json({ 
+            error: 'Missing required fields or user not authenticated',
+            debug: {
+                stepNumberValid: typeof step_number === 'number',
+                formDataValid: form_data != null,
+                userAuthenticated: !!user_id,
+                sessionId,
+                hasSessionStore: !!sessionStore
+            }
+        });
     }
     try {
         await db.promise().query(
@@ -803,6 +965,7 @@ app.post('/api/save-step', async (req, res) => {
          ON DUPLICATE KEY UPDATE step_number=VALUES(step_number), form_data=VALUES(form_data)`,
             [user_id, step_number, JSON.stringify(form_data)]
         );
+        console.log('[save-step] Success for user:', user_id, 'step:', step_number);
         res.json({ success: true });
     } catch (e) {
         console.error('[save-step] DB error', e);
@@ -814,7 +977,35 @@ app.post('/api/save-step', async (req, res) => {
 // app.get('/api/load-form', async (req,res)=>{ ... })
 app.post('/api/load-form', async (req, res) => {
     // Get user_id from authenticated session or fallback to request body for backward compatibility
-    const userId = (req as any).user?.id || req.body?.user_id;
+    let userId = (req as any).user?.id || req.body?.user_id;
+    const sessionId = (req as any).sessionID;
+    
+    // Serverless fallback: Try to get user from session store if passport fails
+    if (!userId && sessionId && sessionStore) {
+        try {
+            console.log('[load-form] Attempting session store fallback for sessionId:', sessionId);
+            const [sessionRows] = await db.promise().query(
+                'SELECT data FROM sessions WHERE session_id = ? AND expires > NOW()',
+                [sessionId]
+            );
+            
+            if (Array.isArray(sessionRows) && sessionRows.length > 0) {
+                const sessionData = (sessionRows as any[])[0].data;
+                if (sessionData) {
+                    try {
+                        const parsed = JSON.parse(sessionData);
+                        userId = parsed.passport?.user;
+                        console.log('[load-form] Retrieved userId from session store:', userId);
+                    } catch (parseError) {
+                        console.error('[load-form] Error parsing session data:', parseError);
+                    }
+                }
+            }
+        } catch (fallbackError) {
+            console.error('[load-form] Session store fallback error:', fallbackError);
+        }
+    }
+    
     if (!userId) return res.status(400).json({ error: 'User not authenticated' });
     try {
         const [progressRows] = await db.promise().query('SELECT step_number, form_data FROM user_form_progress WHERE user_id = ? LIMIT 1', [userId]);
@@ -950,12 +1141,40 @@ app.post('/api/domain-check', async (req, res) => {
     } catch (e) { res.status(500).json({ error: 'Failed to check domain' }); }
 });
 
-// Company details save (comprehensive)
+// Company details save (comprehensive) with serverless session fallback
 app.post('/api/company-details', async (req, res) => {
     const data = req.body || {};
     try {
         // Get user_id from authenticated session
-        const user_id = (req as any).user?.id;
+        let user_id = (req as any).user?.id;
+        const sessionId = (req as any).sessionID;
+        
+        // Serverless fallback: Try to get user from session store if passport fails
+        if (!user_id && sessionId && sessionStore) {
+            try {
+                console.log('[company-details] Attempting session store fallback for sessionId:', sessionId);
+                const [sessionRows] = await db.promise().query(
+                    'SELECT data FROM sessions WHERE session_id = ? AND expires > NOW()',
+                    [sessionId]
+                );
+                
+                if (Array.isArray(sessionRows) && sessionRows.length > 0) {
+                    const sessionData = (sessionRows as any[])[0].data;
+                    if (sessionData) {
+                        try {
+                            const parsed = JSON.parse(sessionData);
+                            user_id = parsed.passport?.user;
+                            console.log('[company-details] Retrieved userId from session store:', user_id);
+                        } catch (parseError) {
+                            console.error('[company-details] Error parsing session data:', parseError);
+                        }
+                    }
+                }
+            } catch (fallbackError) {
+                console.error('[company-details] Session store fallback error:', fallbackError);
+            }
+        }
+        
         if (!user_id) {
             return res.status(401).json({ error: 'User not authenticated' });
         }

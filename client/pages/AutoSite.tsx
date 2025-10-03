@@ -188,7 +188,6 @@ export default function AutoSite() {
       localStorage.removeItem('autoSiteFormData');
       localStorage.removeItem('autoSiteCurrentStep');
       localStorage.removeItem('autoSiteCompanyId');
-      localStorage.removeItem('userID');
 
       // Mark that a logout occurred, but keep the user ID for continuity check
       localStorage.setItem('autoSiteLoggedOut', 'true');

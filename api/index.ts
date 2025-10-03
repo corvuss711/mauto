@@ -720,6 +720,50 @@ app.get('/api/debug/session', (req, res) => {
     });
 });
 
+// Test session persistence endpoint
+app.post('/api/debug/test-session', async (req, res) => {
+    const session = (req as any).session;
+    const sessionId = (req as any).sessionID;
+    
+    // Try to manually set a user in the session
+    const testUserId = 1; // Use a test user ID
+    
+    try {
+        // Get a test user from database
+        const [rows] = await db.promise().query('SELECT * FROM users WHERE id = ? LIMIT 1', [testUserId]);
+        const testUser = Array.isArray(rows) && rows.length ? rows[0] : null;
+        
+        if (testUser) {
+            const user = testUser as any;
+            // Manually create passport session
+            if (!session.passport) {
+                session.passport = {};
+            }
+            session.passport.user = user.id;
+            
+            // Save session
+            session.save((err) => {
+                if (err) {
+                    console.error('[Test Session] Save error:', err);
+                    return res.status(500).json({ error: 'Session save failed', details: err.message });
+                }
+                
+                res.json({
+                    success: true,
+                    message: 'Test session created',
+                    sessionId,
+                    userId: user.id,
+                    userEmail: user.email_id
+                });
+            });
+        } else {
+            res.status(404).json({ error: 'No test user found with ID 1' });
+        }
+    } catch (error) {
+        res.status(500).json({ error: 'Database error', details: error.message });
+    }
+});
+
 // OAuth debug endpoint for production troubleshooting
 app.get('/api/auth/google/debug', (req, res) => {
     res.json({
@@ -743,8 +787,19 @@ app.get('/api/me', (req, res) => {
     const isAuth = req.isAuthenticated?.();
     const user = (req as any).user;
     const cookies = req.headers.cookie;
+    const session = (req as any).session;
 
-
+    console.log('[/api/me] Request details:', {
+        sessionId,
+        hasSession: !!session,
+        sessionKeys: session ? Object.keys(session) : [],
+        passportSession: session?.passport,
+        hasUser: !!user,
+        userId: user?.id,
+        isAuthenticatedFunc: typeof req.isAuthenticated === 'function',
+        isAuthResult: isAuth,
+        cookies: cookies ? 'present' : 'missing'
+    });
 
     if (req.isAuthenticated && req.isAuthenticated()) {
         const u: any = (req as any).user;
@@ -753,7 +808,7 @@ app.get('/api/me', (req, res) => {
             return res.json({
                 authenticated: false,
                 error: 'User data incomplete',
-                debug: { sessionId, user: u, hasSession: !!(req as any).session }
+                debug: { sessionId, user: u, hasSession: !!session }
             });
         }
         const userData = {
@@ -771,7 +826,8 @@ app.get('/api/me', (req, res) => {
             hasIsAuthenticated: typeof req.isAuthenticated === 'function',
             isAuthResult: isAuth,
             hasUser: !!user,
-            hasSession: !!(req as any).session,
+            hasSession: !!session,
+            sessionPassport: session?.passport,
             cookies: !!cookies
         }
     });

@@ -31,7 +31,7 @@ async function initCloudinary() {
             api_key: process.env.CLOUDINARY_API_KEY,
             api_secret: process.env.CLOUDINARY_API_SECRET,
         });
-        
+
         return cloudinary;
     } catch (error) {
         console.warn('⚠️ Cloudinary not configured:', error.message);
@@ -140,17 +140,39 @@ app.get('/uploads/*', (req, res) => {
 });
 // Production session store (falls back to MemoryStore if DB unavailable)
 let MySQLStore: any;
-try { MySQLStore = (MySQLStoreImport as any)(session); } catch { /* ignore */ }
+try { MySQLStore = (MySQLStoreImport as any)(session); } catch (e) { console.warn('[Session] MySQLStore import failed:', e); }
 let sessionStore: any;
-if (MySQLStore) {
+
+if (MySQLStore && dbConfig) {
     try {
+        console.log('[Session] Initializing MySQL session store...');
         sessionStore = new MySQLStore({
             ...dbConfig,
             createDatabaseTable: true,
-            expiration: 86400000,
-            clearExpired: true
+            expiration: 86400000, // 24 hours
+            clearExpired: true,
+            checkExpirationInterval: 900000, // 15 minutes
+            schema: {
+                tableName: 'sessions',
+                columnNames: {
+                    session_id: 'session_id',
+                    expires: 'expires',
+                    data: 'data'
+                }
+            }
         });
-    } catch (e) { console.warn('[Session] MySQLStore init failed, using MemoryStore', (e as any)?.message); }
+
+        sessionStore.on('error', (error: any) => {
+            console.error('[Session] MySQL session store error:', error);
+        });
+
+        console.log('[Session] MySQL session store initialized successfully');
+    } catch (e) {
+        console.error('[Session] MySQLStore init failed, using MemoryStore:', (e as any)?.message);
+        sessionStore = null;
+    }
+} else {
+    console.warn('[Session] MySQLStore not available or dbConfig missing, using MemoryStore');
 }
 const crossSite = process.env.CROSS_SITE === 'true';
 app.use(session({
@@ -185,6 +207,33 @@ passport.deserializeUser(async (id: number, d) => {
 });
 app.use(passport.initialize());
 app.use(passport.session());
+
+// Middleware to check if session user still exists in DB (matches local implementation)
+app.use(async (req, res, next) => {
+    if (req.isAuthenticated && req.isAuthenticated()) {
+        try {
+            const userId = req.user && (req.user as any).id;
+            if (userId) {
+                const [rows] = await db.promise().query('SELECT id FROM users WHERE id = ? LIMIT 1', [userId]);
+                if (!Array.isArray(rows) || rows.length === 0) {
+                    console.warn('[SESSION] User not found in DB, destroying session:', userId);
+                    req.logout(function (e) {
+                        if (e) console.error('[SESSION] Logout error:', e);
+                    });
+                    return next();
+                }
+            }
+        } catch (err) {
+            console.error('[SESSION] DB error during user validation:', err);
+            // On DB error, destroy session for safety
+            req.logout(function (e) {
+                if (e) console.error('[SESSION] Logout error after DB error:', e);
+            });
+            return next();
+        }
+    }
+    next();
+});
 
 function isAuth(req, res, next) {
     if (req.isAuthenticated && req.isAuthenticated()) return next();
@@ -317,7 +366,7 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
 // Use HTTPS for production by default, HTTP only for local development
 const DEFAULT_BASE_URL = process.env.BASE_URL ||
-    (process.env.NODE_ENV === 'production' ? 'https://mauto-ten.vercel.app' : 'http://localhost:8080');
+    (process.env.NODE_ENV === 'production' ? 'https://mauto-six.vercel.app' : 'http://localhost:8080');
 
 // Helper function to get the correct protocol (force HTTPS in production)
 function getCorrectProtocol(req: express.Request): string {
@@ -462,6 +511,34 @@ function toHttpsAbsolute(p: string | undefined | null, req: express.Request): st
 // Ping
 app.get('/api/ping', (_req, res) => res.json({ ok: true }));
 
+// Database and session health check
+app.get('/api/health', async (req, res) => {
+    const healthInfo: any = {
+        timestamp: new Date().toISOString(),
+        database: { connected: false, error: null },
+        session: {
+            store: sessionStore ? 'mysql' : 'memory',
+            sessionId: (req as any).sessionID,
+            hasSession: !!(req as any).session
+        },
+        authentication: {
+            isAuthenticated: req.isAuthenticated?.() || false,
+            hasUser: !!(req as any).user,
+            userId: (req as any).user?.id || null
+        }
+    };
+
+    // Test database connection
+    try {
+        await db.promise().query('SELECT 1');
+        healthInfo.database.connected = true;
+    } catch (error) {
+        healthInfo.database.error = error instanceof Error ? error.message : 'Unknown error';
+    }
+
+    res.json(healthInfo);
+});
+
 // Test Cloudinary connection
 app.get('/api/test-cloudinary', async (_req, res) => {
     try {
@@ -583,29 +660,35 @@ app.get('/api/auth/google/callback', (req, res, next) => {
             return res.redirect(`/${redirectPage}?error=google_auth_failed&code=${encodeURIComponent(errorCode)}&message=${encodeURIComponent(userMessage)}`);
         }
         req.login(user, (e) => {
-            if (e) {
-                console.error('[OAuth Login Error]', e);
-                return res.redirect('/login?error=session_failed');
-            }
-            console.log('[OAuth] Session created successfully for user:', user.id);
-            console.log('[OAuth] Session ID:', (req as any).sessionID);
-            console.log('[OAuth] User object in session:', JSON.stringify(user, null, 2));
+            // if (e) {
+            //     console.error('[OAuth Login Error]', e);
+            //     return res.redirect('/login?error=session_failed');
+            // }
+            // console.log('[OAuth] Session created successfully for user:', user.id);
+            // console.log('[OAuth] Session ID:', (req as any).sessionID);
+            // console.log('[OAuth] User object in session:', JSON.stringify(user, null, 2));
 
-            const isNew = (info as any)?.createdNewUser ? '1' : '0';
+            // const isNew = (info as any)?.createdNewUser ? '1' : '0';
 
             // Force session save before redirect (important for serverless)
-            (req as any).session.save((saveErr) => {
-                if (saveErr) {
-                    console.error('[OAuth] Session save error:', saveErr);
-                }
-                console.log('[OAuth] Session save result - error:', saveErr ? 'YES' : 'NO');
+            // (req as any).session.save((saveErr) => {
+            //     if (saveErr) {
+            //         console.error('[OAuth] Session save error:', saveErr);
+            //     }
+            //     console.log('[OAuth] Session save result - error:', saveErr ? 'YES' : 'NO');
 
-                // Always redirect - AuthResult will handle session verification
-                // Pass user ID as backup in case session doesn't work in serverless
-                const userId = encodeURIComponent(String(user.id));
-                const email = encodeURIComponent(user.email_id || user.email || '');
-                res.redirect(`/auth/result?new=${isNew}&uid=${userId}&email=${email}`);
-            });
+            //     // Always redirect - AuthResult will handle session verification
+            //     // Pass user ID as backup in case session doesn't work in serverless
+            //     const userId = encodeURIComponent(String(user.id));
+            //     const email = encodeURIComponent(user.email_id || user.email || '');
+            //     res.redirect(`/auth/result?new=${isNew}&uid=${userId}&email=${email}`);
+            // });
+
+            //manual changes
+            if (e) return res.redirect('/login?error=session_failed');
+            // If handler set a flag on req for new user, propagate via query string
+            const isNew = (info as any)?.createdNewUser ? '1' : '0';
+            res.redirect(`/auth/result?new=${isNew}`);
         });
     })(req, res, next);
 });
@@ -700,109 +783,41 @@ app.get('/api/business-sectors', async (_req, res) => {
 });
 
 // Form progress routes
-app.post('/api/save-step', /*isAuth,*/ async (req, res) => {
+app.post('/api/save-step', async (req, res) => {
     let { step_number, form_data, user_id } = req.body || {};
-
-    // Get user_id from authenticated session (preferred) or request body (fallback)
-    // if (!user_id && (req as any).user?.id) user_id = (req as any).user.id;
-    // if (!user_id) user_id = (req as any).user?.id; // Since we have isAuth, this should always exist
-
-    // Enhanced validation
-    if (typeof step_number !== 'number' || form_data == null || !user_id) {
-        // console.warn('[save-step] Missing required fields:', { step_number, has_form_data: !!form_data, user_id });
-        return res.status(400).json({ error: 'Missing required fields (user_id, step_number, form_data)' });
-    }
-
-    // Validate step number is reasonable (0-9)
-    if (step_number < 0 || step_number > 9) {
-        // console.warn('[save-step] Invalid step number:', step_number, 'for user:', user_id);
-        return res.status(400).json({ error: 'Invalid step number' });
-    }
-
+    if (!user_id && (req as any).user?.id) user_id = (req as any).user.id;
+    if (typeof step_number !== 'number' || form_data == null || !user_id) return res.status(400).json({ error: 'Missing required fields (user_id, step_number, form_data)' });
     try {
-        // console.log('[save-step] Saving step:', step_number, 'for user:', user_id, 'with data keys:', Object.keys(form_data));
-
-        const formDataString = JSON.stringify(form_data);
-        await db.promise().query(
-            `INSERT INTO user_form_progress (user_id, step_number, form_data) VALUES (?,?,?) 
-             ON DUPLICATE KEY UPDATE step_number=VALUES(step_number), form_data=VALUES(form_data)`,
-            [user_id, step_number, formDataString]
-        );
-
-        // console.log('[save-step] Successfully saved step:', step_number, 'for user:', user_id);
-        res.json({ success: true, step_number, user_id });
+      await db.promise().query(
+        `INSERT INTO user_form_progress (user_id, step_number, form_data) VALUES (?,?,?)
+         ON DUPLICATE KEY UPDATE step_number=VALUES(step_number), form_data=VALUES(form_data)`,
+        [user_id, step_number, JSON.stringify(form_data)]
+      );
+      res.json({ success: true });
     } catch (e) {
-        console.error('[save-step] DB error for user:', user_id, 'step:', step_number, 'error:', e);
-        res.status(500).json({ error: 'DB error' });
+      console.error('[save-step] DB error', e);
+      res.status(500).json({ error: 'DB error' });
     }
 });
 
 // Previous GET + query param version commented out
 // app.get('/api/load-form', async (req,res)=>{ ... })
-app.post('/api/load-form', /*isAuth,*/ async (req, res) => {
-    let userId = req.body?.user_id;
-
-    // Get user_id from authenticated session (preferred) or request body (fallback)
-    // if (!userId && (req as any).user?.id) userId = (req as any).user.id;
-    // if (!userId) userId = (req as any).user?.id; // Since we have isAuth, this should always exist
-
+app.post('/api/load-form', async (req, res) => {
+    const userId = req.body?.user_id;
     if (!userId) return res.status(400).json({ error: 'Missing user_id' });
-
     try {
-        // console.log('[load-form] Loading form for user:', userId);
-
-        // First, check if user has any form progress saved
-        const [progressRows] = await db.promise().query('SELECT step_number, form_data FROM user_form_progress WHERE user_id = ? LIMIT 1', [userId]);
-
-        let step_number = 0;
-        let form_data: any = {};
-        let hasProgress = false;
-
-        if (Array.isArray(progressRows) && (progressRows as any[]).length > 0) {
-            const row: any = (progressRows as any[])[0];
-            step_number = row.step_number;
-            hasProgress = true;
-            try {
-                form_data = typeof row.form_data === 'string' ? JSON.parse(row.form_data) : row.form_data;
-            } catch {
-                // console.warn('[load-form] Failed to parse form_data for user:', userId);
-                form_data = {};
-            }
-        }
-
-        // console.log('[load-form] User progress:', { userId, hasProgress, step_number, form_data_keys: Object.keys(form_data) });
-
-        // Check if company exists (only for informational purposes, doesn't affect step)
-        let company: any = null;
-        const [companyRows] = await db.promise().query('SELECT * FROM company_mast WHERE user_id = ? LIMIT 1', [userId]);
-        if (Array.isArray(companyRows) && (companyRows as any[]).length > 0) {
-            company = (companyRows as any[])[0];
-            // console.log('[load-form] Found company for user:', userId, 'company_id:', company.id);
-        } else {
-            // console.log('[load-form] No company found for user:', userId);
-        }
-
-        // For new users (no progress), always start at step 0
-        if (!hasProgress) {
-            // console.log('[load-form] New user, starting at step 0');
-            step_number = 0;
-            form_data = {};
-            company = null; // Don't send company data for new users
-        }
-
-        res.json({
-            step_number,
-            form_data,
-            company,
-            debug: {
-                hasProgress,
-                userId,
-                timestamp: new Date().toISOString()
-            }
-        });
-    } catch (e) {
-        console.error('[load-form] Database error:', e);
-        res.status(500).json({ error: 'DB error' });
+      const [progressRows] = await db.promise().query('SELECT step_number, form_data FROM user_form_progress WHERE user_id = ? LIMIT 1', [userId]);
+      let step_number = 0; let form_data: any = {};
+      if (Array.isArray(progressRows) && (progressRows as any[]).length > 0) {
+        const row: any = (progressRows as any[])[0];
+        step_number = row.step_number;
+        try { form_data = typeof row.form_data === 'string' ? JSON.parse(row.form_data) : row.form_data; } catch { form_data = {}; }
+      }
+      const [companyRows] = await db.promise().query('SELECT * FROM company_mast WHERE user_id = ? LIMIT 1', [userId]);
+      const company = Array.isArray(companyRows) && (companyRows as any[]).length ? (companyRows as any[])[0] : null;
+      res.json({ step_number, form_data, company });
+    } catch {
+      res.status(500).json({ error: 'DB error' });
     }
 });
 
@@ -858,6 +873,57 @@ app.post('/api/reset-form', isAuth, async (req, res) => {
     } catch (e) {
         console.error('[reset-form] Error resetting form for user:', userId, 'error:', e);
         res.status(500).json({ error: 'DB error' });
+    }
+});
+
+// Test form progress functionality
+app.get('/api/test-form-progress', async (req, res) => {
+    const userId = (req as any).user?.id;
+
+    if (!userId) {
+        return res.json({
+            authenticated: false,
+            message: 'Not authenticated - testing with mock user ID 999',
+            test_user_id: 999
+        });
+    }
+
+    try {
+        // Test save operation
+        const testFormData = {
+            test: true,
+            timestamp: new Date().toISOString(),
+            company_title: 'Test Company'
+        };
+
+        await db.promise().query(
+            `INSERT INTO user_form_progress (user_id, step_number, form_data) VALUES (?,?,?) 
+             ON DUPLICATE KEY UPDATE step_number=VALUES(step_number), form_data=VALUES(form_data)`,
+            [userId, 2, JSON.stringify(testFormData)]
+        );
+
+        // Test load operation
+        const [rows] = await db.promise().query('SELECT step_number, form_data FROM user_form_progress WHERE user_id = ? LIMIT 1', [userId]);
+
+        const result = {
+            authenticated: true,
+            user_id: userId,
+            save_test: 'success',
+            load_test: Array.isArray(rows) && rows.length > 0 ? 'success' : 'failed',
+            loaded_data: Array.isArray(rows) && rows.length > 0 ? {
+                step_number: (rows as any)[0].step_number,
+                form_data: JSON.parse((rows as any)[0].form_data || '{}')
+            } : null,
+            timestamp: new Date().toISOString()
+        };
+
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({
+            error: 'Test failed',
+            message: error instanceof Error ? error.message : 'Unknown error',
+            user_id: userId
+        });
     }
 });
 

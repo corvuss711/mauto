@@ -188,20 +188,20 @@ export default function AutoSite() {
       localStorage.removeItem('autoSiteFormData');
       localStorage.removeItem('autoSiteCurrentStep');
       localStorage.removeItem('autoSiteCompanyId');
-      
+
       // Mark that a logout occurred, but keep the user ID for continuity check
       localStorage.setItem('autoSiteLoggedOut', 'true');
 
-      // Reset to defaults
-      setFormData(defaultFormData);
-      setCurrentStep(0);
-      setCompanyId(0);
+      // Set loading state immediately to prevent flash
+      setIsFormDataLoaded(false);
+
+      // The form loading logic will handle showing defaults when it detects the logout flag
     };
 
     const handleUserLogin = () => {
       // On login, clear the logout flag 
       localStorage.removeItem('autoSiteLoggedOut');
-      
+
       // Trigger user change detection after a short delay to ensure userID is set
       setTimeout(() => {
         const currentUserID = localStorage.getItem('userID');
@@ -214,12 +214,22 @@ export default function AutoSite() {
       }, 100);
     };
 
+    // Also listen for direct localStorage changes (when userID is cleared)
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'userID' && e.newValue === null) {
+        // userID was cleared - trigger logout behavior immediately
+        handleUserLogout();
+      }
+    };
+
     window.addEventListener("user-logout", handleUserLogout);
     window.addEventListener("user-login", handleUserLogin);
-    
+    window.addEventListener("storage", handleStorageChange);
+
     return () => {
       window.removeEventListener("user-logout", handleUserLogout);
       window.removeEventListener("user-login", handleUserLogin);
+      window.removeEventListener("storage", handleStorageChange);
     };
   }, []);
   // Product/Service array state for step 3
@@ -500,7 +510,7 @@ export default function AutoSite() {
       // Check if this is a different user from the last stored userID
       const lastUserID = localStorage.getItem('autoSiteLastUserID');
       const wasLoggedOut = localStorage.getItem('autoSiteLoggedOut') === 'true';
-      
+
       if (!lastUserID) {
         // First time visit - store the user and continue
         // console.log('[AutoSite] First time user, setting current user:', userID);
@@ -547,7 +557,7 @@ export default function AutoSite() {
     };
 
     window.addEventListener('user-id-ready', handleUserIdReady);
-    
+
     return () => {
       window.removeEventListener('user-id-ready', handleUserIdReady);
     };
@@ -587,6 +597,19 @@ export default function AutoSite() {
     return saved === "true";
   });
   const [currentStep, setCurrentStep] = useState(getInitialStep());
+  const [isFormDataLoaded, setIsFormDataLoaded] = useState(() => {
+    // If we don't have a userID, we can show the form immediately (user not logged in)
+    const userID = localStorage.getItem('userID');
+    const isLoggedOut = localStorage.getItem('autoSiteLoggedOut') === 'true';
+
+    // If user just logged out, show loading state to prevent flash
+    if (isLoggedOut) {
+      return false;
+    }
+
+    // If no userID, user is not authenticated - show form immediately
+    return !userID;
+  });
   // Move these out of renderStep/case 4
   const [emailError, setEmailError] = useState<string>("");
   const [passwordError, setPasswordError] = useState<string>("");
@@ -736,6 +759,19 @@ export default function AutoSite() {
 
     // Wait for userID to be available after Google auth
     const attemptLoadForm = async () => {
+      // Check if user just logged out - if so, show defaults immediately
+      const isLoggedOut = localStorage.getItem('autoSiteLoggedOut') === 'true';
+      if (isLoggedOut) {
+        console.log('[AutoSite] User logged out, showing defaults');
+        setCurrentStep(0);
+        setFormData(defaultFormData);
+        setCompanyId(0);
+        localStorage.removeItem("autoSiteCompanyId");
+        localStorage.removeItem('autoSiteLoggedOut'); // Clear the flag
+        setIsFormDataLoaded(true);
+        return;
+      }
+
       // console.log('[AutoSite] Starting form load attempt...');
 
       let userID = localStorage.getItem('userID');
@@ -756,8 +792,12 @@ export default function AutoSite() {
         setFormData(defaultFormData);
         setCompanyId(0);
         localStorage.removeItem("autoSiteCompanyId");
+        setIsFormDataLoaded(true); // Mark as loaded even with defaults
         return;
       }
+
+      // Set loading state for authenticated users
+      setIsFormDataLoaded(false);
 
       // console.log('[AutoSite] Found userID:', userID, 'loading form data...');
 
@@ -822,12 +862,16 @@ export default function AutoSite() {
           localStorage.removeItem("autoSiteCompanyId");
           // console.log('[AutoSite] No company found, cleared companyId');
         }
+
+        // Mark form data as loaded
+        setIsFormDataLoaded(true);
       } catch (error) {
         console.error('[AutoSite] Failed to load form for user', userID, ':', error);
         setCurrentStep(0);
         setFormData(defaultFormData);
         setCompanyId(0);
         localStorage.removeItem("autoSiteCompanyId");
+        setIsFormDataLoaded(true); // Mark as loaded even on error
       }
     };
 
@@ -1343,7 +1387,7 @@ export default function AutoSite() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="max-w-md mx-auto"
+            className="max-w-4xl mx-auto"
           >
             <div className="mb-8 text-center">
               <FileText className="w-16 h-16 mx-auto mb-4 text-primary" />
@@ -1352,128 +1396,128 @@ export default function AutoSite() {
                 Fill in your company information
               </p>
             </div>
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="companyName">Company Name <span className="text-red-500">*</span></Label>
-                <Input
-                  id="companyName"
-                  type="text"
-                  placeholder="Your Company Name"
-                  value={formData.companyName}
-                  onChange={(e) => updateFormData("companyName", e.target.value)}
-                  className="mt-2"
-                  required
-                />
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Left Column - Basic Company Information */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-primary mb-4">Basic Information</h3>
+                <div>
+                  <Label htmlFor="companyName">Company Name <span className="text-red-500">*</span></Label>
+                  <Input
+                    id="companyName"
+                    type="text"
+                    placeholder="Your Company Name"
+                    value={formData.companyName}
+                    onChange={(e) => updateFormData("companyName", e.target.value)}
+                    className="mt-2"
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="email">Email <span className="text-red-500">*</span></Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="your@email.com"
+                    value={formData.email}
+                    onChange={handleEmailChange}
+                    className="mt-2"
+                    required
+                  />
+                  {emailError && <div className="text-red-500 text-xs mt-1">{emailError}</div>}
+                </div>
+                <div>
+                  <Label htmlFor="phone">Business Phone <span className="text-red-500">*</span></Label>
+                  <Input
+                    id="phone"
+                    type="tel"
+                    placeholder="9999999999"
+                    value={formData.phone}
+                    onChange={handlePhoneChange}
+                    className="mt-2"
+                    required
+                  />
+                  {phoneError && <div className="text-red-500 text-xs mt-1">{phoneError}</div>}
+                </div>
+                <div>
+                  <Label htmlFor="location">Address <span className="text-red-500">*</span></Label>
+                  <Input
+                    id="location"
+                    type="text"
+                    placeholder="City, Country"
+                    value={formData.location}
+                    onChange={(e) => updateFormData("location", e.target.value)}
+                    className="mt-2"
+                    required
+                  />
+                </div>
               </div>
-              <div>
-                <Label htmlFor="email">Email <span className="text-red-500">*</span></Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="your@email.com"
-                  value={formData.email}
-                  onChange={handleEmailChange}
-                  className="mt-2"
-                  required
-                />
-                {emailError && <div className="text-red-500 text-xs mt-1">{emailError}</div>}
-              </div>
-              <div>
-                <Label htmlFor="phone">Business Phone <span className="text-red-500">*</span></Label>
-                <Input
-                  id="phone"
-                  type="tel"
-                  placeholder="9999999999"
-                  value={formData.phone}
-                  onChange={handlePhoneChange}
-                  className="mt-2"
-                  required
-                />
-                {phoneError && <div className="text-red-500 text-xs mt-1">{phoneError}</div>}
-              </div>
-              {/* Social Links */}
-              <div>
-                <Label htmlFor="facebookLink">Facebook Link</Label>
-                <Input
-                  id="facebookLink"
-                  type="url"
-                  placeholder="https://facebook.com/yourpage"
-                  value={formData.facebookLink || ""}
-                  onChange={e => updateFormData("facebookLink", e.target.value)}
-                  className="mt-2"
-                />
-              </div>
-              <div>
-                <Label htmlFor="youtubeLink">YouTube Link</Label>
-                <Input
-                  id="youtubeLink"
-                  type="url"
-                  placeholder="https://youtube.com/yourchannel"
-                  value={formData.youtubeLink || ""}
-                  onChange={e => updateFormData("youtubeLink", e.target.value)}
-                  className="mt-2"
-                />
-              </div>
-              <div>
-                <Label htmlFor="linkedinLink">LinkedIn Link</Label>
-                <Input
-                  id="linkedinLink"
-                  type="url"
-                  placeholder="https://linkedin.com/in/yourprofile"
-                  value={formData.linkedinLink || ""}
-                  onChange={e => updateFormData("linkedinLink", e.target.value)}
-                  className="mt-2"
-                />
-              </div>
-              {/* <div>
-                <Label htmlFor="userPassword">Admin Password</Label>
-                <Input
-                  id="userPassword"
-                  type="password"
-                  placeholder="Set a password for your admin account"
-                  value={formData.userPassword}
-                  onChange={handlePasswordChange}
-                  className="mt-2"
-                /> */}
-              {/* {passwordError && <div className="text-red-500 text-xs mt-1">{passwordError}</div>} */}
-              {/* </div> */}
-              <div>
-                <Label htmlFor="logoUpload">Upload Your Logo <span className="text-red-500">*</span></Label>
-                <Input
-                  id="logoUpload"
-                  type="file"
-                  accept="image/*"
-                  onChange={handleLogoUpload}
-                  className="mt-2"
-                  required
-                  disabled={logoUploading}
-                />
 
-                {/* Loading indicator */}
-                {logoUploading && (
-                  <div className="mt-2 flex items-center gap-2 text-blue-600">
-                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-600 border-t-transparent"></div>
-                    <span className="text-sm">Uploading logo...</span>
-                  </div>
-                )}
+              {/* Right Column - Social Links and Media */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-primary mb-4">Media & Social Links</h3>
+                <div>
+                  <Label htmlFor="logoUpload">Upload Your Logo <span className="text-red-500">*</span></Label>
+                  <Input
+                    id="logoUpload"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleLogoUpload}
+                    className="mt-2"
+                    required
+                    disabled={logoUploading}
+                  />
 
-                {/* Success message */}
-                {formData.logoPath && !logoUploading && (
-                  <div className="mt-2 text-xs text-green-600">Logo uploaded: {formData.logoPath}</div>
-                )}
+                  {/* Loading indicator */}
+                  {logoUploading && (
+                    <div className="mt-2 flex items-center gap-2 text-blue-600">
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-600 border-t-transparent"></div>
+                      <span className="text-sm">Uploading logo...</span>
+                    </div>
+                  )}
+
+                  {/* Success message */}
+                  {formData.logoPath && !logoUploading && (
+                    <div className="mt-2 text-xs text-green-600">Logo uploaded: {formData.logoPath}</div>
+                  )}
+                </div>
+                <div>
+                  <Label htmlFor="facebookLink">Facebook Link</Label>
+                  <Input
+                    id="facebookLink"
+                    type="url"
+                    placeholder="https://facebook.com/yourpage"
+                    value={formData.facebookLink || ""}
+                    onChange={e => updateFormData("facebookLink", e.target.value)}
+                    className="mt-2"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="youtubeLink">YouTube Link</Label>
+                  <Input
+                    id="youtubeLink"
+                    type="url"
+                    placeholder="https://youtube.com/yourchannel"
+                    value={formData.youtubeLink || ""}
+                    onChange={e => updateFormData("youtubeLink", e.target.value)}
+                    className="mt-2"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="linkedinLink">LinkedIn Link</Label>
+                  <Input
+                    id="linkedinLink"
+                    type="url"
+                    placeholder="https://linkedin.com/in/yourprofile"
+                    value={formData.linkedinLink || ""}
+                    onChange={e => updateFormData("linkedinLink", e.target.value)}
+                    className="mt-2"
+                  />
+                </div>
               </div>
-              <div>
-                <Label htmlFor="location">Address <span className="text-red-500">*</span></Label>
-                <Input
-                  id="location"
-                  type="text"
-                  placeholder="City, Country"
-                  value={formData.location}
-                  onChange={(e) => updateFormData("location", e.target.value)}
-                  className="mt-2"
-                  required
-                />
-              </div>
+            </div>
+
+            {/* Map iframe section spans full width */}
+            <div className="mt-6">
               <div>
                 <Label htmlFor="iframe">Map Iframe</Label>
                 <div className="flex gap-2">
@@ -1494,6 +1538,10 @@ export default function AutoSite() {
                   </Button>
                 </div>
               </div>
+            </div>
+
+            {/* Navigation buttons */}
+            <div className="mt-8">
               <div className="flex gap-4 pt-4">
                 <Button
                   onClick={prevStep}
@@ -2181,42 +2229,62 @@ export default function AutoSite() {
               <div className="w-full mb-14">
                 {/* On small screens, stack vertically; on md+ screens, show in a row and center */}
                 <div className="flex flex-col gap-4 items-center px-2 sm:flex-row sm:justify-center sm:gap-2">
-                  {steps.map((step, index) => (
-                    <React.Fragment key={index}>
-                      <div className="flex flex-row sm:flex-col items-center sm:items-center min-w-[70px] max-w-[120px] flex-1 sm:flex-none">
-                        <div
-                          className={`w-9 h-9 flex items-center justify-center rounded-full border-2
+                  {!isFormDataLoaded ? (
+                    // Loading skeleton for progress steps
+                    <div className="flex flex-row gap-2 items-center justify-center opacity-50">
+                      {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((_, index) => (
+                        <React.Fragment key={index}>
+                          <div className="flex flex-col items-center">
+                            <div className="w-9 h-9 rounded-full border-2 border-foreground/20 animate-pulse"></div>
+                            <div className="mt-1 w-12 h-3 bg-foreground/10 rounded animate-pulse"></div>
+                          </div>
+                          {index < 8 && (
+                            <div className="hidden sm:flex items-center justify-center flex-none">
+                              <svg width="18" height="18" className="text-foreground/10" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M3 9h12m-3-3 3 3-3 3" />
+                              </svg>
+                            </div>
+                          )}
+                        </React.Fragment>
+                      ))}
+                    </div>
+                  ) : (
+                    steps.map((step, index) => (
+                      <React.Fragment key={index}>
+                        <div className="flex flex-row sm:flex-col items-center sm:items-center min-w-[70px] max-w-[120px] flex-1 sm:flex-none">
+                          <div
+                            className={`w-9 h-9 flex items-center justify-center rounded-full border-2
                             ${index <= currentStep ? "bg-primary border-primary text-white" : "border-foreground/30 text-foreground/50"}
                           `}
-                        >
-                          {index < currentStep ? (
-                            <CheckCircle className="w-4 h-4" />
-                          ) : (
-                            <step.icon className="w-4 h-4" />
-                          )}
-                        </div>
-                        <div className="ml-3 sm:ml-0 sm:mt-1 text-left sm:text-center">
-                          <p className="text-xs font-bold leading-tight">{step.title}</p>
-                          <p className="text-[10px] text-foreground/60 leading-tight">{step.description}</p>
-                        </div>
-                      </div>
-                      {index < steps.length - 1 && (
-                        <>
-                          {/* Down arrow for xs, right arrow for sm+ */}
-                          <div className="flex sm:hidden items-center justify-center flex-none">
-                            <svg width="18" height="18" className="text-foreground/20" fill="none" stroke="currentColor" strokeWidth="2">
-                              <path d="M9 3v12m-3-3 3 3 3-3" />
-                            </svg>
+                          >
+                            {index < currentStep ? (
+                              <CheckCircle className="w-4 h-4" />
+                            ) : (
+                              <step.icon className="w-4 h-4" />
+                            )}
                           </div>
-                          <div className="hidden sm:flex items-center justify-center flex-none">
-                            <svg width="18" height="18" className="text-foreground/20" fill="none" stroke="currentColor" strokeWidth="2">
-                              <path d="M3 9h12m-3-3 3 3-3 3" />
-                            </svg>
+                          <div className="ml-3 sm:ml-0 sm:mt-1 text-left sm:text-center">
+                            <p className="text-xs font-bold leading-tight">{step.title}</p>
+                            <p className="text-[10px] text-foreground/60 leading-tight">{step.description}</p>
                           </div>
-                        </>
-                      )}
-                    </React.Fragment>
-                  ))}
+                        </div>
+                        {index < steps.length - 1 && (
+                          <>
+                            {/* Down arrow for xs, right arrow for sm+ */}
+                            <div className="flex sm:hidden items-center justify-center flex-none">
+                              <svg width="18" height="18" className="text-foreground/20" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M9 3v12m-3-3 3 3 3-3" />
+                              </svg>
+                            </div>
+                            <div className="hidden sm:flex items-center justify-center flex-none">
+                              <svg width="18" height="18" className="text-foreground/20" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M3 9h12m-3-3 3 3-3 3" />
+                              </svg>
+                            </div>
+                          </>
+                        )}
+                      </React.Fragment>
+                    )))}
                 </div>
               </div>
 
@@ -2225,7 +2293,21 @@ export default function AutoSite() {
                 <Card className="glass-effect">
                   <CardContent className="p-8">
                     <AnimatePresence mode="wait">
-                      {renderStep()}
+                      {!isFormDataLoaded ? (
+                        <motion.div
+                          key="loading"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          className="flex flex-col items-center justify-center py-12"
+                        >
+                          <Loader2 className="w-8 h-8 animate-spin mb-4 text-primary" />
+                          <p className="text-lg font-medium mb-2">Loading your progress...</p>
+                          <p className="text-sm text-foreground/60">Please wait while we restore your form data</p>
+                        </motion.div>
+                      ) : (
+                        renderStep()
+                      )}
                     </AnimatePresence>
                   </CardContent>
                 </Card>

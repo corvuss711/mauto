@@ -76,10 +76,11 @@ export const formProgressRouter = Router();
 
 // Save or update form progress for the logged-in user
 formProgressRouter.post('/save-step', /*isAuthenticated,*/ async (req: Request, res: Response) => {
-  // const userId = req.userId; // Commented out authentication
-  const { user_id, step_number, form_data } = req.body; // Get user_id from body instead
+  const { step_number, form_data } = req.body;
+  // Get user_id from authenticated session
+  const user_id = (req as any).user?.id;
   if (!user_id || typeof step_number !== 'number' || !form_data) {
-    return res.status(400).json({ error: 'Missing or invalid data (user_id, step_number, form_data)' });
+    return res.status(400).json({ error: 'Missing required fields or user not authenticated' });
   }
   try {
     await db.promise().query(
@@ -96,10 +97,10 @@ formProgressRouter.post('/save-step', /*isAuthenticated,*/ async (req: Request, 
 
 // Load saved form progress for the logged-in user
 formProgressRouter.post('/load-form', /*isAuthenticated,*/ async (req: Request, res: Response) => {
-  // const userId = req.userId; // Commented out authentication
-  const { user_id } = req.body; // Get user_id from body instead
+  // Get user_id from authenticated session or fallback to request body for backward compatibility
+  const user_id = (req as any).user?.id || req.body?.user_id;
   if (!user_id) {
-    return res.status(400).json({ error: 'Missing user_id' });
+    return res.status(400).json({ error: 'User not authenticated' });
   }
   try {
     // Fetch user_form_progress
@@ -124,6 +125,7 @@ formProgressRouter.post('/load-form', /*isAuthenticated,*/ async (req: Request, 
 
     res.json({ step_number, form_data, company });
   } catch (err) {
+    console.error('[load-form] DB error', err);
     res.status(500).json({ error: 'DB error' });
   }
 });
@@ -542,11 +544,15 @@ export const handleSaveCompanyDetails = async (req: Request, res: Response) => {
   // Data expected from frontend:
   // {
   //   companyName, email, phone, domain, businessSector, theme, logoPath,
-  //   homeContent, aboutContent, contactContent, location, facebookLink, youtubeLink, linkedinLink, iframe, user_id
+  //   homeContent, aboutContent, contactContent, location, facebookLink, youtubeLink, linkedinLink, iframe
   // }
   try {
     if (!db) throw new Error("Database not configured");
-    const user_id = data.user_id;
+    // Get user_id from authenticated session
+    const user_id = (req as any).user?.id;
+    if (!user_id) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
     // Ensure template_type_id is either a valid number or null
     let template_type_id = null;
     if (data.template_type_id !== undefined && data.template_type_id !== null && !isNaN(Number(data.template_type_id))) {

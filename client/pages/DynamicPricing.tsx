@@ -58,7 +58,7 @@ export const DynamicPricing: React.FC<DynamicPricingProps> = ({
     const [selectedTenure, setSelectedTenure] = useState("yearly");
     const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
     const [selectedPricingDetail, setSelectedPricingDetail] = useState<PlanDetail | null>(null);
-    const [numberOfUsers, setNumberOfUsers] = useState(1);
+    const [numberOfUsers, setNumberOfUsers] = useState<number>(1);
     const [isDemoMode, setIsDemoMode] = useState(false);
     const [showDemoAnimation, setShowDemoAnimation] = useState(false);
 
@@ -114,10 +114,12 @@ export const DynamicPricing: React.FC<DynamicPricingProps> = ({
         }
     }, [selectedPlanId, allPlans, isFromCustomPlan, customPlanUserCount]);
 
-    // Scroll to top when component mounts
+    // Scroll to top when pricing section is shown (step 3, both normal and custom plan)
     useEffect(() => {
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-    }, []);
+        if (selectedPlan && selectedPricingDetail) {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    }, [selectedPlan, selectedPricingDetail]);
 
     // Update pricing detail when tenure changes
     useEffect(() => {
@@ -196,8 +198,9 @@ export const DynamicPricing: React.FC<DynamicPricingProps> = ({
     };
 
     const incrementUsers = () => {
-        // Always allow increment, remove max limit
-        const newCount = numberOfUsers + 1;
+        // Ensure numberOfUsers is a number and increment mathematically
+        const current = typeof numberOfUsers === 'string' ? parseInt(numberOfUsers as any, 10) : numberOfUsers;
+        const newCount = current + 1;
         setNumberOfUsers(newCount);
 
         // Store the count for custom plans to prevent resets

@@ -5,6 +5,7 @@ import { ArrowRight, ArrowLeft, Check, Eye, EyeOff, Globe, Mail, Phone, Building
 import { TrustedByCompanies } from "./trusted-by-companies";
 import { CompanyEllipse } from "./company-ellipse";
 import { DynamicPricing } from "../../pages/DynamicPricing";
+import { PaytmPaymentModal } from "./paytm-payment-modal";
 
 interface FormData {
     // user_name: string;
@@ -727,6 +728,15 @@ export function DemoRequestForm() {
     // Track if we're currently resetting due to localStorage being cleared
     const [isResettingFromClearedStorage, setIsResettingFromClearedStorage] = useState(false);
 
+    // Payment modal state
+    const [showPaymentModal, setShowPaymentModal] = useState(false);
+    const [paymentData, setPaymentData] = useState<any>(null);
+    const [pendingDemoCompletion, setPendingDemoCompletion] = useState<{
+        planId: number;
+        pricingId: number;
+        numberOfUsers: number;
+    } | null>(null);
+
     // OTP related states
     const [isOtpSent, setIsOtpSent] = useState(false);
     const [isOtpVerified, setIsOtpVerified] = useState(() => {
@@ -797,7 +807,7 @@ export function DemoRequestForm() {
                         formData.application_type > 0;
 
                     if (shouldHaveData) {
-                        
+
                         setIsResettingFromClearedStorage(true);
 
                         // Reset all form states
@@ -1094,14 +1104,14 @@ export function DemoRequestForm() {
         setServicesLoading(true);
         setServicesError(null);
 
-      
+
 
         try {
             const requestBody = {
                 application_type: applicationType
             };
 
-            
+
 
             const response = await fetch('/api/get-services-list', {
                 method: 'POST',
@@ -1111,23 +1121,23 @@ export function DemoRequestForm() {
                 body: JSON.stringify(requestBody)
             });
 
-            
+
 
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
 
             const data = await response.json();
-            
+
 
             if (data.response && data.data && Array.isArray(data.data) && data.data.length > 0) {
-               
+
                 setAvailableServices(data.data);
                 setServicesError(null);
                 setShowCustomPlan(true);
                 setCustomPlanMessage("");
             } else {
-                
+
                 // No services available from API
                 setAvailableServices([]);
                 setShowCustomPlan(false);
@@ -1143,7 +1153,7 @@ export function DemoRequestForm() {
             setServicesError("Failed to load services. Please try again later.");
         } finally {
             setServicesLoading(false);
-            
+
         }
     };
 
@@ -1164,7 +1174,7 @@ export function DemoRequestForm() {
                 address: formData.address || ""
             };
 
-            
+
 
             const response = await fetch('/api/save-trial-user', {
                 method: 'POST',
@@ -1174,24 +1184,24 @@ export function DemoRequestForm() {
                 body: JSON.stringify(requestBody)
             });
 
-        
+
 
             const data = await response.json();
-            
+
 
             // Check for success based on the API response structure
             if (response.ok && (data.status === true || data.success === true || data.response === true)) {
-      
+
                 const successMessage = data.message || 'User details saved successfully';
                 return { success: true, message: successMessage };
             } else {
                 const errorMessage = data.message || data.error || 'Failed to save user details';
-             
+
                 setSaveTrialUserError(errorMessage);
                 return { success: false, message: errorMessage };
             }
         } catch (error) {
-            
+
             const errorMessage = 'Network error. Please check your connection and try again.';
             setSaveTrialUserError(errorMessage);
             return { success: false, message: errorMessage };
@@ -1479,7 +1489,7 @@ export function DemoRequestForm() {
                 if (typeof window !== 'undefined') {
                     localStorage.setItem('email_otp_verified', 'true');
                     localStorage.setItem('verified_email_address', formData.email);
-                   
+
                 }
 
                 // Update the last verified email state
@@ -1496,7 +1506,7 @@ export function DemoRequestForm() {
                     (data.success === false ? 'Invalid OTP. Please try again.' : 'Invalid OTP. Please try again.');
                 showAlert('error', 'OTP Validation Failed', errorMessage);
                 setIsOtpVerified(false);
-               
+
             }
         } catch (error) {
             console.error('[OTP Validation] Network error:', error);
@@ -2250,18 +2260,64 @@ export function DemoRequestForm() {
     };
 
     const handleCompleteDemoFromPricing = async (planId: number, pricingId: number, numberOfUsers: number) => {
-       
+        // Store the demo completion data for after payment
+        setPendingDemoCompletion({ planId, pricingId, numberOfUsers });
 
-        // Check if this is a custom plan (plan_id 999 indicates custom plan)
-        if (isFromCustomPlan && planId === 999 && customPlanData) {
-            
-            await handleCustomPlanCompletion(pricingId, numberOfUsers);
+        // Generate unique order ID
+        const orderId = `DEMO_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const customerId = formData.email || `GUEST_${Date.now()}`;
+
+        // Prepare payment data
+        const payment = {
+            orderId,
+            customerId,
+            amount: "1.00", // Demo price
+            mobile: formData.mobile || "0000000000",
+            email: formData.email || "",
+            planId,
+            pricingId,
+            numberOfUsers,
+            formData,
+            isCustomPlan: isFromCustomPlan && planId === 999
+        };
+
+        setPaymentData(payment);
+        setShowPaymentModal(true);
+    };
+
+    // Handle successful payment - then proceed with demo completion
+    const handlePaymentSuccess = async () => {
+        setShowPaymentModal(false);
+
+        if (!pendingDemoCompletion) {
+            console.error('No pending demo completion data found');
             return;
         }
 
-        // Regular plan flow
- 
-        await handleRegularPlanCompletion(planId, pricingId, numberOfUsers);
+        const { planId, pricingId, numberOfUsers } = pendingDemoCompletion;
+
+        try {
+            // Check if this is a custom plan (plan_id 999 indicates custom plan)
+            if (isFromCustomPlan && planId === 999 && customPlanData) {
+                await handleCustomPlanCompletion(pricingId, numberOfUsers);
+            } else {
+                // Regular plan flow
+                await handleRegularPlanCompletion(planId, pricingId, numberOfUsers);
+            }
+        } finally {
+            setPendingDemoCompletion(null);
+            setPaymentData(null);
+        }
+    };
+
+    // Handle payment failure
+    const handlePaymentFailure = (error: string) => {
+        setShowPaymentModal(false);
+        setPendingDemoCompletion(null);
+        setPaymentData(null);
+
+        // Show error message to user
+        showAlert('error', 'Payment Failed', error + '\n\nPlease try again or contact support if the issue persists.');
     };
 
     // Handle custom plan completion with two-step API process
@@ -2270,7 +2326,7 @@ export function DemoRequestForm() {
 
         try {
             // Step 1: Create customized plan
-            
+
 
             // Extract duration from pricing ID
             const pricingDetail = customPlanData.plan_details.find((detail: any) => detail.id === pricingId);
@@ -2281,7 +2337,7 @@ export function DemoRequestForm() {
             // Use the stored generic_module_id array from when the custom plan was created
             const genericModuleIds: number[] = customPlanData.original_generic_module_id || [];
 
-            
+
             if (genericModuleIds.length === 0) {
                 throw new Error('No service modules found for custom plan. Please go back and recreate your custom plan.');
             }
@@ -2294,7 +2350,7 @@ export function DemoRequestForm() {
                 max_users: numberOfUsers
             };
 
-          
+
 
             const createPlanResponse = await fetch('/api/create-customized-plan', {
                 method: 'POST',
@@ -2305,7 +2361,7 @@ export function DemoRequestForm() {
             });
 
             const createPlanData = await createPlanResponse.json();
-           
+
 
             // Check for success based on actual API response format
             // API returns status 200 with success message, so check response status and message
@@ -2325,7 +2381,7 @@ export function DemoRequestForm() {
             }
 
             // Step 2: Process payment with the created plan
-            
+
 
             const processPaymentPayload = {
                 company_name: formData.company_name, // Use company_code (login_id) as company_name for backend
@@ -2370,7 +2426,7 @@ export function DemoRequestForm() {
                 throw new Error('Invalid response format from server. Please try again.');
             }
 
-        
+
 
             // Handle payment response
             const isSuccessResponse = paymentData.response === true ||
@@ -2504,7 +2560,7 @@ export function DemoRequestForm() {
                 throw new Error('Invalid response format from server. Please try again.');
             }
 
-          
+
             // Check for success conditions - either response.response === true OR success keywords in message
             const isSuccessResponse = responseData.response === true ||
                 responseData.success === true ||
@@ -4630,17 +4686,17 @@ export function DemoRequestForm() {
                                                 (currentStep === 1 && !!saveTrialUserError && !hasUserChangedAfterError)
                                             }
                                             className={`relative flex items-center justify-center gap-2 lg:gap-3 xl:gap-2 px-6 lg:px-8 xl:px-6 py-3 lg:py-4 xl:py-3 w-full sm:w-auto font-bold shadow-xl hover:shadow-2xl transition-all duration-300 rounded-xl group overflow-hidden ${(currentStep === 2 && !selectedPlanForPricing) ||
-                                                    isSavingTrialUser ||
-                                                    (currentStep === 1 && !!saveTrialUserError && !hasUserChangedAfterError)
-                                                    ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
-                                                    : 'bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 hover:from-orange-600 hover:via-amber-600 hover:to-orange-700 text-white'
+                                                isSavingTrialUser ||
+                                                (currentStep === 1 && !!saveTrialUserError && !hasUserChangedAfterError)
+                                                ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                                                : 'bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 hover:from-orange-600 hover:via-amber-600 hover:to-orange-700 text-white'
                                                 }`}
                                         >
                                             <div className={`absolute inset-0 bg-gradient-to-r from-white/20 to-transparent transition-opacity duration-300 ${(currentStep === 2 && !selectedPlanForPricing) ||
-                                                    isSavingTrialUser ||
-                                                    (currentStep === 1 && !!saveTrialUserError && !hasUserChangedAfterError)
-                                                    ? 'opacity-0'
-                                                    : 'opacity-0 group-hover:opacity-100'
+                                                isSavingTrialUser ||
+                                                (currentStep === 1 && !!saveTrialUserError && !hasUserChangedAfterError)
+                                                ? 'opacity-0'
+                                                : 'opacity-0 group-hover:opacity-100'
                                                 }`} />
                                             {isSavingTrialUser ? (
                                                 <>
@@ -5021,6 +5077,21 @@ export function DemoRequestForm() {
                     </motion.div>
                 )}
             </AnimatePresence>
+
+            {/* Paytm Payment Modal */}
+            {paymentData && (
+                <PaytmPaymentModal
+                    isOpen={showPaymentModal}
+                    onClose={() => {
+                        setShowPaymentModal(false);
+                        setPendingDemoCompletion(null);
+                        setPaymentData(null);
+                    }}
+                    onPaymentSuccess={handlePaymentSuccess}
+                    onPaymentFailure={handlePaymentFailure}
+                    paymentData={paymentData}
+                />
+            )}
         </>
     );
 }

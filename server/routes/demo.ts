@@ -13,7 +13,7 @@ export const handleGetPlans: RequestHandler = async (req, res) => {
   try {
     // console.log('📤 Proxying request to external API:', req.body);
 
-    const response = await fetch('http://122.176.112.254/www-demo-msell-in/public/api/get-plan', {
+    const response = await fetch('https://salesforce.msell.in/public/api/get-plan', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -38,7 +38,7 @@ export const handleGetPlans: RequestHandler = async (req, res) => {
 export const handleProcessPayment: RequestHandler = async (req, res) => {
   try {
 
-    const response = await fetch('http://122.176.112.254/www-demo-msell-in/public/api/process-payment', {
+    const response = await fetch('https://salesforce.msell.in/public/api/process-payment', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -62,7 +62,7 @@ export const handleProcessPayment: RequestHandler = async (req, res) => {
 
 export const handleGetServicesList: RequestHandler = async (req, res) => {
   try {
-    const response = await fetch('http://122.176.112.254/www-demo-msell-in/public/api/get-services-list', {
+    const response = await fetch('https://salesforce.msell.in/public/api/get-services-list', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -102,7 +102,7 @@ export const handleCalculateCustomPlan: RequestHandler = async (req, res) => {
 
     // console.log('[Calculate Custom Plan] Request payload:', requestBody);
 
-    const response = await fetch('http://122.176.112.254/www-demo-msell-in/public/api/calculate-customized-services-price', {
+    const response = await fetch('https://salesforce.msell.in/public/api/calculate-customized-services-price', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -240,7 +240,7 @@ export const handleCreateCustomizedPlan: RequestHandler = async (req, res) => {
 
 
 
-    const response = await fetch('http://122.176.112.254/www-demo-msell-in/public/api/create-customized-plan', {
+    const response = await fetch('https://salesforce.msell.in/public/api/create-customized-plan', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -248,7 +248,7 @@ export const handleCreateCustomizedPlan: RequestHandler = async (req, res) => {
       body: JSON.stringify(requestBody)
     });
 
-  
+
 
     const data = await response.json();
 

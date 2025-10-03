@@ -13,6 +13,7 @@ import {
   handleTimesEdited,
   getBusinessSectors
 } from "./routes/auto-site";
+import { initializePayment, handlePaymentCallback, verifyPaymentStatus } from "./routes/paytm";
 import passport from "passport";
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import bcrypt from "bcryptjs";
@@ -202,7 +203,7 @@ export function createServer() {
         });
       }
 
-      const response = await fetch('http://122.176.112.254/www-demo-msell-in/public/api/otp_send_status', {
+      const response = await fetch('https://salesforce.msell.in/public/api/otp_send_status', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -253,13 +254,18 @@ export function createServer() {
   app.post("/api/otp-request", handleOtpRequest);
   app.post("/api/process-payment", handleProcessPayment);
 
+  // Paytm Payment Gateway Routes
+  app.post("/api/paytm/initialize", initializePayment);
+  app.post("/api/paytm/callback", handlePaymentCallback);
+  app.post("/api/paytm/verify-status", verifyPaymentStatus);
+
   // Save trial user endpoint - proxy to external API
   app.post("/api/save-trial-user", async (req, res) => {
     try {
       // console.log('[Save Trial User Proxy] Request body:', req.body);
 
       // Make request to external API
-      const response = await fetch('http://122.176.112.254/www-demo-msell-in/public/api/save-trial-user', {
+      const response = await fetch('https://salesforce.msell.in/public/api/save-trial-user', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -320,11 +326,14 @@ export function createServer() {
   });
 
   // Auth routes
-  // Save step with session fallback for user_id
+  // Save step with session-based authentication
   app.post('/api/save-step', async (req, res) => {
-    let { step_number, form_data, user_id } = req.body || {};
-    if (!user_id && (req as any).user?.id) user_id = (req as any).user.id;
-    if (typeof step_number !== 'number' || form_data == null || !user_id) return res.status(400).json({ error: 'Missing required fields (user_id, step_number, form_data)' });
+    let { step_number, form_data } = req.body || {};
+    // Get user_id from authenticated session
+    const user_id = (req as any).user?.id;
+    if (typeof step_number !== 'number' || form_data == null || !user_id) {
+      return res.status(400).json({ error: 'Missing required fields or user not authenticated' });
+    }
     try {
       await db.promise().query(
         `INSERT INTO user_form_progress (user_id, step_number, form_data) VALUES (?,?,?)
@@ -415,10 +424,11 @@ export function createServer() {
     });
   });
 
-  // Load form progress by user_id (POST variant to align with client)
+  // Load form progress using session-based authentication
   app.post('/api/load-form', async (req, res) => {
-    const userId = req.body?.user_id;
-    if (!userId) return res.status(400).json({ error: 'Missing user_id' });
+    // Get user_id from authenticated session or fallback to request body for backward compatibility
+    const userId = (req as any).user?.id || req.body?.user_id;
+    if (!userId) return res.status(400).json({ error: 'User not authenticated' });
     try {
       const [progressRows] = await db.promise().query('SELECT step_number, form_data FROM user_form_progress WHERE user_id = ? LIMIT 1', [userId]);
       let step_number = 0; let form_data: any = {};
@@ -430,7 +440,8 @@ export function createServer() {
       const [companyRows] = await db.promise().query('SELECT * FROM company_mast WHERE user_id = ? LIMIT 1', [userId]);
       const company = Array.isArray(companyRows) && (companyRows as any[]).length ? (companyRows as any[])[0] : null;
       res.json({ step_number, form_data, company });
-    } catch {
+    } catch (e) {
+      console.error('[load-form] DB error', e);
       res.status(500).json({ error: 'DB error' });
     }
   });

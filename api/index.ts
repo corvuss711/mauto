@@ -201,10 +201,22 @@ passport.use(new LocalStrategy({ usernameField: 'email', passwordField: 'passwor
         done(null, user);
     } catch (e) { done(e); }
 }));
-passport.serializeUser((u: any, d) => d(null, u.id));
+passport.serializeUser((u: any, d) => {
+    console.log('[Passport] Serializing user:', u.id);
+    d(null, u.id);
+});
 passport.deserializeUser(async (id: number, d) => {
-    try { const [rows] = await db.promise().query('SELECT * FROM users WHERE id = ? LIMIT 1', [id]); d(null, Array.isArray(rows) && rows.length ? rows[0] : null); }
-    catch (e) { d(e); }
+    console.log('[Passport] Deserializing user ID:', id);
+    try { 
+        const [rows] = await db.promise().query('SELECT * FROM users WHERE id = ? LIMIT 1', [id]); 
+        const user = Array.isArray(rows) && rows.length ? rows[0] : null;
+        console.log('[Passport] Deserialized user:', user ? `${(user as any).id} (${(user as any).email_id})` : 'null');
+        d(null, user);
+    }
+    catch (e) { 
+        console.error('[Passport] Deserialize error:', e);
+        d(e); 
+    }
 });
 app.use(passport.initialize());
 app.use(passport.session());
@@ -668,21 +680,33 @@ app.get('/api/auth/google/callback', (req, res, next) => {
             console.log('[OAuth] Session created successfully for user:', user.id);
             console.log('[OAuth] Session ID:', (req as any).sessionID);
             console.log('[OAuth] User object in session:', JSON.stringify(user, null, 2));
+            console.log('[OAuth] Session passport object:', (req as any).session?.passport);
 
             const isNew = (info as any)?.createdNewUser ? '1' : '0';
 
+            // Manually ensure passport session is set correctly
+            if (!(req as any).session.passport) {
+                (req as any).session.passport = {};
+            }
+            (req as any).session.passport.user = user.id;
+            console.log('[OAuth] Manually set passport session user ID:', user.id);
 
             (req as any).session.save((saveErr) => {
                 if (saveErr) {
                     console.error('[OAuth] Session save error:', saveErr);
+                    return res.redirect('/login?error=session_save_failed');
                 }
-                console.log('[OAuth] Session save result - error:', saveErr ? 'YES' : 'NO');
+                console.log('[OAuth] Session save successful');
+                console.log('[OAuth] Final session passport object:', (req as any).session?.passport);
 
-                // Always redirect - AuthResult will handle session verification
-                // Pass user ID as backup in case session doesn't work in serverless
-                const userId = encodeURIComponent(String(user.id));
-                const email = encodeURIComponent(user.email_id || user.email || '');
-                res.redirect(`/auth/result?new=${isNew}&uid=${userId}&email=${email}`);
+                // Small delay to ensure session is persisted before redirect
+                setTimeout(() => {
+                    // Always redirect - AuthResult will handle session verification
+                    // Pass user ID as backup in case session doesn't work in serverless
+                    const userId = encodeURIComponent(String(user.id));
+                    const email = encodeURIComponent(user.email_id || user.email || '');
+                    res.redirect(`/auth/result?new=${isNew}&uid=${userId}&email=${email}`);
+                }, 100);
             });
 
             //manual changes

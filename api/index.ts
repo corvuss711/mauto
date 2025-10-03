@@ -84,14 +84,27 @@ function parseMysqlUrl(url?: string) {
     return { host: m[3], user: m[1], password: m[2], port: Number(m[4]), database: m[5] };
 }
 let dbConfig;
-try { dbConfig = parseMysqlUrl(process.env.MYSQL_URL); } catch { dbConfig = { host: 'localhost', user: 'root', password: '', port: 3306, database: 'manacle_blogs' }; }
-// Create a basic pool for improved resilience & timeouts
+try { 
+    dbConfig = parseMysqlUrl(process.env.MYSQL_URL); 
+    console.log('[DB] Using MYSQL_URL connection:', dbConfig.host, dbConfig.database);
+} catch { 
+    dbConfig = { host: 'localhost', user: 'root', password: '', port: 3306, database: 'manacle_blogs' }; 
+    console.log('[DB] Using fallback connection:', dbConfig.host, dbConfig.database);
+}
+
+// Create a basic pool for improved resilience & timeouts (optimized for serverless)
 const pool = mysql.createPool({
     ...dbConfig,
     waitForConnections: true,
-    connectionLimit: 5,
+    connectionLimit: 3, // Reduced for serverless
     queueLimit: 0,
-    connectTimeout: 8000 // ms
+    connectTimeout: 10000, // Increased timeout
+    acquireTimeout: 10000, // Add acquire timeout
+    timeout: 10000, // Query timeout
+    reconnect: true, // Auto-reconnect
+    idleTimeout: 300000, // 5 minutes idle timeout
+    enableKeepAlive: true,
+    keepAliveInitialDelay: 0
 });
 
 // Helper to run queries via pool.promise()
@@ -116,12 +129,27 @@ const blogPool = mysql.createPool({
 // Helper function for blog database queries
 const blogDb = blogPool;
 
+// Test database connection but don't fail startup on connection errors
 pool.getConnection((err, conn) => {
     if (err) {
         console.error('[DB] initial pool error', err.code || err.message);
+        console.warn('[DB] Database connection failed, some features may not work properly');
+        // Don't crash the app - continue with limited functionality
     } else {
         console.log('[DB] pool ready');
         conn.release();
+    }
+});
+
+// Add connection error handler
+pool.on('connection', (connection) => {
+    console.log('[DB] New connection established as id ' + connection.threadId);
+});
+
+pool.on('error', (err) => {
+    console.error('[DB] Database pool error:', err);
+    if (err.code === 'PROTOCOL_CONNECTION_LOST') {
+        console.log('[DB] Database connection lost, will reconnect...');
     }
 });
 
@@ -156,8 +184,11 @@ if (MySQLStore && dbConfig) {
             ...dbConfig,
             createDatabaseTable: true,
             expiration: 86400000, // 24 hours
-            clearExpired: true,
-            checkExpirationInterval: 900000, // 15 minutes
+            clearExpired: false, // Disable for serverless - avoid background tasks
+            checkExpirationInterval: 0, // Disable background cleanup
+            connectionLimit: 3, // Reduce connections for serverless
+            acquireTimeout: 8000, // Timeout for getting connection
+            reconnect: true,
             schema: {
                 tableName: 'sessions',
                 columnNames: {
@@ -170,6 +201,7 @@ if (MySQLStore && dbConfig) {
 
         sessionStore.on('error', (error: any) => {
             console.error('[Session] MySQL session store error:', error);
+            // Don't crash on session store errors - fallback to memory
         });
 
         sessionStore.on('connect', () => {
@@ -188,20 +220,28 @@ if (MySQLStore && dbConfig) {
     });
 }
 const crossSite = process.env.CROSS_SITE === 'true';
-app.use(session({
+const isProduction = process.env.NODE_ENV === 'production';
+
+// Create session middleware with fallback handling
+const sessionMiddleware = session({
     secret: process.env.SESSION_SECRET || 'change_me',
-    resave: false,
+    resave: true, // Changed to true for serverless - force session save
     saveUninitialized: false,
-    store: sessionStore,
+    store: sessionStore, // Will fallback to memory store if null
     name: 'connect.sid', // Use standard session name to match local
     rolling: true, // Reset expiration on activity
+    proxy: isProduction, // Trust proxy in production (Vercel)
     cookie: {
         maxAge: 86400000, // 24 hours
         sameSite: (crossSite ? 'none' : 'lax') as any,
-        secure: process.env.NODE_ENV === 'production' || crossSite,
-        httpOnly: true
+        secure: isProduction || crossSite,
+        httpOnly: true,
+        // Remove domain restriction for better compatibility
+        domain: undefined
     }
-}));
+});
+
+app.use(sessionMiddleware);
 
 passport.use(new LocalStrategy({ usernameField: 'email', passwordField: 'password' }, async (email, password, done) => {
     try {
@@ -213,10 +253,23 @@ passport.use(new LocalStrategy({ usernameField: 'email', passwordField: 'passwor
         done(null, user);
     } catch (e) { done(e); }
 }));
-passport.serializeUser((u: any, d) => d(null, u.id));
+passport.serializeUser((u: any, d) => {
+    console.log('[Passport] Serializing user:', u.id);
+    d(null, u.id);
+});
+
 passport.deserializeUser(async (id: number, d) => {
-    try { const [rows] = await db.promise().query('SELECT * FROM users WHERE id = ? LIMIT 1', [id]); d(null, Array.isArray(rows) && rows.length ? rows[0] : null); }
-    catch (e) { d(e); }
+    console.log('[Passport] Deserializing user:', id);
+    try { 
+        const [rows] = await db.promise().query('SELECT * FROM users WHERE id = ? LIMIT 1', [id]);
+        const user = Array.isArray(rows) && rows.length ? rows[0] : null;
+        console.log('[Passport] Deserialized user:', user ? `ID: ${(user as any).id}` : 'null');
+        d(null, user);
+    }
+    catch (e) { 
+        console.error('[Passport] Deserialize error:', e);
+        d(null, null); // Return null instead of error to prevent session destruction
+    }
 });
 app.use(passport.initialize());
 app.use(passport.session());
@@ -698,25 +751,28 @@ app.get('/api/auth/google/callback', (req, res, next) => {
 
             const isNew = (info as any)?.createdNewUser ? '1' : '0';
 
+            // Force session save with multiple attempts for serverless
+            const attemptSessionSave = (attempts = 0) => {
+                (req as any).session.save((saveErr) => {
+                    if (saveErr) {
+                        console.error(`[OAuth] Session save error (attempt ${attempts + 1}):`, saveErr);
+                        if (attempts < 2) {
+                            // Retry up to 3 times
+                            setTimeout(() => attemptSessionSave(attempts + 1), 100);
+                            return;
+                        }
+                    }
+                    console.log('[OAuth] Session save result - error:', saveErr ? 'YES' : 'NO');
 
-            (req as any).session.save((saveErr) => {
-                if (saveErr) {
-                    console.error('[OAuth] Session save error:', saveErr);
-                }
-                console.log('[OAuth] Session save result - error:', saveErr ? 'YES' : 'NO');
+                    // Always redirect - AuthResult will handle session verification
+                    // Pass user ID as backup in case session doesn't work in serverless
+                    const userId = encodeURIComponent(String(user.id));
+                    const email = encodeURIComponent(user.email_id || user.email || '');
+                    res.redirect(`/auth/result?new=${isNew}&uid=${userId}&email=${email}`);
+                });
+            };
 
-                // Always redirect - AuthResult will handle session verification
-                // Pass user ID as backup in case session doesn't work in serverless
-                const userId = encodeURIComponent(String(user.id));
-                const email = encodeURIComponent(user.email_id || user.email || '');
-                res.redirect(`/auth/result?new=${isNew}&uid=${userId}&email=${email}`);
-            });
-
-            //manual changes
-            // if (e) return res.redirect('/login?error=session_failed');
-            // // If handler set a flag on req for new user, propagate via query string
-            // const isNew = (info as any)?.createdNewUser ? '1' : '0';
-            // res.redirect(`/auth/result?new=${isNew}`);
+            attemptSessionSave();
         });
     })(req, res, next);
 });
@@ -826,50 +882,80 @@ app.get('/api/me', async (req, res) => {
         return res.json({ authenticated: true, user: userData });
     }
     
-    // Serverless fallback: Try to find session in database if passport session fails
-    if (sessionId && sessionStore) {
+    // Serverless fallback: Try multiple methods to find authenticated user
+    if (sessionId) {
         try {
             console.log('[/api/me] Attempting session store fallback for sessionId:', sessionId);
             
-            // This is a fallback for serverless environments where req.user might not be populated
-            // We'll check the sessions table directly
-            const [sessionRows] = await db.promise().query(
-                'SELECT data FROM sessions WHERE session_id = ? AND expires > NOW()',
-                [sessionId]
-            );
-            
-            if (Array.isArray(sessionRows) && sessionRows.length > 0) {
-                const sessionData = (sessionRows as any[])[0].data;
-                console.log('[/api/me] Found session data in store:', !!sessionData);
-                
-                if (sessionData) {
-                    try {
-                        const parsed = JSON.parse(sessionData);
-                        const userId = parsed.passport?.user;
-                        console.log('[/api/me] Parsed userId from session store:', userId);
+            // Method 1: Try session store if available
+            if (sessionStore) {
+                try {
+                    const [sessionRows] = await db.promise().query(
+                        'SELECT data FROM sessions WHERE session_id = ? AND expires > NOW()',
+                        [sessionId]
+                    );
+                    
+                    if (Array.isArray(sessionRows) && sessionRows.length > 0) {
+                        const sessionData = (sessionRows as any[])[0].data;
+                        console.log('[/api/me] Found session data in store:', !!sessionData);
                         
-                        if (userId) {
-                            const [userRows] = await db.promise().query('SELECT * FROM users WHERE id = ?', [userId]);
-                            if (Array.isArray(userRows) && userRows.length > 0) {
-                                const dbUser = (userRows as any[])[0];
-                                console.log('[/api/me] Found user via session store fallback:', dbUser.id);
-                                return res.json({
-                                    authenticated: true,
-                                    user: {
-                                        id: String(dbUser.id),
-                                        email: dbUser.email_id || dbUser.email
-                                    },
-                                    source: 'session_store_fallback'
-                                });
+                        if (sessionData) {
+                            try {
+                                const parsed = JSON.parse(sessionData);
+                                const userId = parsed.passport?.user;
+                                console.log('[/api/me] Parsed userId from session store:', userId);
+                                
+                                if (userId) {
+                                    const [userRows] = await db.promise().query('SELECT * FROM users WHERE id = ?', [userId]);
+                                    if (Array.isArray(userRows) && userRows.length > 0) {
+                                        const dbUser = (userRows as any[])[0];
+                                        console.log('[/api/me] Found user via session store fallback:', dbUser.id);
+                                        return res.json({
+                                            authenticated: true,
+                                            user: {
+                                                id: String(dbUser.id),
+                                                email: dbUser.email_id || dbUser.email
+                                            },
+                                            source: 'session_store_fallback'
+                                        });
+                                    }
+                                }
+                            } catch (parseError) {
+                                console.error('[/api/me] Error parsing session data:', parseError);
                             }
                         }
-                    } catch (parseError) {
-                        console.error('[/api/me] Error parsing session data:', parseError);
                     }
+                } catch (sessionError) {
+                    console.error('[/api/me] Session store query error:', sessionError);
                 }
             }
+            
+            // Method 2: Check if session exists in memory store (fallback case)
+            if ((req as any).session && (req as any).session.passport && (req as any).session.passport.user) {
+                const userId = (req as any).session.passport.user;
+                console.log('[/api/me] Found userId in session object:', userId);
+                
+                try {
+                    const [userRows] = await db.promise().query('SELECT * FROM users WHERE id = ?', [userId]);
+                    if (Array.isArray(userRows) && userRows.length > 0) {
+                        const dbUser = (userRows as any[])[0];
+                        console.log('[/api/me] Found user via session object fallback:', dbUser.id);
+                        return res.json({
+                            authenticated: true,
+                            user: {
+                                id: String(dbUser.id),
+                                email: dbUser.email_id || dbUser.email
+                            },
+                            source: 'session_object_fallback'
+                        });
+                    }
+                } catch (userError) {
+                    console.error('[/api/me] User lookup error:', userError);
+                }
+            }
+            
         } catch (fallbackError) {
-            console.error('[/api/me] Session store fallback error:', fallbackError);
+            console.error('[/api/me] All fallback methods failed:', fallbackError);
         }
     }
     
@@ -913,29 +999,44 @@ app.post('/api/save-step', async (req, res) => {
         cookies: req.headers.cookie
     });
     
-    // Serverless fallback: Try to get user from session store if passport fails
-    if (!user_id && sessionId && sessionStore) {
+    // Serverless fallback: Try multiple methods to get authenticated user
+    if (!user_id && sessionId) {
         try {
-            console.log('[save-step] Attempting session store fallback for sessionId:', sessionId);
-            const [sessionRows] = await db.promise().query(
-                'SELECT data FROM sessions WHERE session_id = ? AND expires > NOW()',
-                [sessionId]
-            );
+            console.log('[save-step] Attempting session fallback for sessionId:', sessionId);
             
-            if (Array.isArray(sessionRows) && sessionRows.length > 0) {
-                const sessionData = (sessionRows as any[])[0].data;
-                if (sessionData) {
-                    try {
-                        const parsed = JSON.parse(sessionData);
-                        user_id = parsed.passport?.user;
-                        console.log('[save-step] Retrieved userId from session store:', user_id);
-                    } catch (parseError) {
-                        console.error('[save-step] Error parsing session data:', parseError);
+            // Method 1: Try session store if available
+            if (sessionStore) {
+                try {
+                    const [sessionRows] = await db.promise().query(
+                        'SELECT data FROM sessions WHERE session_id = ? AND expires > NOW()',
+                        [sessionId]
+                    );
+                    
+                    if (Array.isArray(sessionRows) && sessionRows.length > 0) {
+                        const sessionData = (sessionRows as any[])[0].data;
+                        if (sessionData) {
+                            try {
+                                const parsed = JSON.parse(sessionData);
+                                user_id = parsed.passport?.user;
+                                console.log('[save-step] Retrieved userId from session store:', user_id);
+                            } catch (parseError) {
+                                console.error('[save-step] Error parsing session data:', parseError);
+                            }
+                        }
                     }
+                } catch (sessionError) {
+                    console.error('[save-step] Session store query error:', sessionError);
                 }
             }
+            
+            // Method 2: Check session object directly
+            if (!user_id && (req as any).session && (req as any).session.passport && (req as any).session.passport.user) {
+                user_id = (req as any).session.passport.user;
+                console.log('[save-step] Retrieved userId from session object:', user_id);
+            }
+            
         } catch (fallbackError) {
-            console.error('[save-step] Session store fallback error:', fallbackError);
+            console.error('[save-step] All fallback methods failed:', fallbackError);
         }
     }
     

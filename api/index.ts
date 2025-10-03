@@ -326,7 +326,7 @@ async function handleGetPlans(req: express.Request, res: express.Response) {
     try {
         // console.log('📤 Proxying request to external API:', req.body);
 
-        const response = await fetch('http://salesforce.msell.in/public/api/get-plan', {
+        const response = await fetch('https://salesforce.msell.in/public/api/get-plan', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -352,7 +352,7 @@ async function handleProcessPayment(req: express.Request, res: express.Response)
     try {
 
 
-        const response = await fetch('http://salesforce.msell.in/public/api/process-payment', {
+        const response = await fetch('https://salesforce.msell.in/public/api/process-payment', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -405,7 +405,7 @@ async function handleOtpRequest(req: express.Request, res: express.Response) {
             });
         }
 
-        const response = await fetch('http://salesforce.msell.in/public/api/otp_send_status', {
+        const response = await fetch('https://salesforce.msell.in/public/api/otp_send_status', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -1391,7 +1391,7 @@ app.post('/api/times-edited', async (req, res) => {
 
 async function handleGetServicesList(req: express.Request, res: express.Response) {
     try {
-        const response = await fetch('http://salesforce.msell.in/public/api/get-services-list', {
+        const response = await fetch('https://salesforce.msell.in/public/api/get-services-list', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -1431,7 +1431,7 @@ async function handleCalculateCustomPlan(req: express.Request, res: express.Resp
 
         console.log('[Calculate Custom Plan] Request payload:', requestBody);
 
-        const response = await fetch('http://salesforce.msell.in/public/api/calculate-customized-services-price', {
+        const response = await fetch('https://salesforce.msell.in/public/api/calculate-customized-services-price', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -1569,7 +1569,7 @@ async function handleCreateCustomizedPlan(req: express.Request, res: express.Res
 
         console.log('[Create Customized Plan] Request payload:', requestBody);
 
-        const response = await fetch('http://salesforce.msell.in/public/api/create-customized-plan', {
+        const response = await fetch('https://salesforce.msell.in/public/api/create-customized-plan', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -1607,7 +1607,7 @@ app.post("/api/save-trial-user", async (req, res) => {
         console.log('[Save Trial User Proxy] Request body:', req.body);
 
         // Make request to external API
-        const response = await fetch('http://salesforce.msell.in/public/api/save-trial-user', {
+        const response = await fetch('https://salesforce.msell.in/public/api/save-trial-user', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

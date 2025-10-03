@@ -179,59 +179,6 @@ export default function AutoSite() {
     }
     // eslint-disable-next-line
   }, [campaigns]);
-  // Clear localStorage on logout or new user session
-  React.useEffect(() => {
-    // Listen for user logout/login events
-    const handleUserLogout = () => {
-      // On logout, clear form data and mark that user has logged out
-      // This allows us to detect if a different user logs in next
-      localStorage.removeItem('autoSiteFormData');
-      localStorage.removeItem('autoSiteCurrentStep');
-      localStorage.removeItem('autoSiteCompanyId');
-
-      // Mark that a logout occurred, but keep the user ID for continuity check
-      localStorage.setItem('autoSiteLoggedOut', 'true');
-
-      // Set loading state immediately to prevent flash
-      setIsFormDataLoaded(false);
-
-      // The form loading logic will handle showing defaults when it detects the logout flag
-    };
-
-    const handleUserLogin = () => {
-      // On login, clear the logout flag 
-      localStorage.removeItem('autoSiteLoggedOut');
-
-      // Trigger user change detection after a short delay to ensure userID is set
-      setTimeout(() => {
-        const currentUserID = localStorage.getItem('userID');
-        if (currentUserID) {
-          // Trigger the useEffect by updating a state that will cause re-evaluation
-          // This ensures user change detection runs even if userID wasn't immediately available
-          const event = new CustomEvent('user-id-ready', { detail: { userID: currentUserID } });
-          window.dispatchEvent(event);
-        }
-      }, 100);
-    };
-
-    // Also listen for direct localStorage changes (when userID is cleared)
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'userID' && e.newValue === null) {
-        // userID was cleared - trigger logout behavior immediately
-        handleUserLogout();
-      }
-    };
-
-    window.addEventListener("user-logout", handleUserLogout);
-    window.addEventListener("user-login", handleUserLogin);
-    window.addEventListener("storage", handleStorageChange);
-
-    return () => {
-      window.removeEventListener("user-logout", handleUserLogout);
-      window.removeEventListener("user-login", handleUserLogin);
-      window.removeEventListener("storage", handleStorageChange);
-    };
-  }, []);
   // Product/Service array state for step 3
   const [products, setProducts] = useState([
     {
@@ -478,110 +425,9 @@ export default function AutoSite() {
     goal: "",
     impact: ""
   };
-  /**
-   * PERSISTENCE FIX FOR GOOGLE OAUTH USERS:
-   * 
-   * Problem: When users logged out and back in with Google OAuth, their form progress 
-   * was being cleared because the system treated them as "different users".
-   * 
-   * Root Cause: The logout handler was clearing 'autoSiteLastUserID', so when the same 
-   * user logged back in, user change detection couldn't recognize them.
-   * 
-   * Solution: 
-   * 1. Preserve 'autoSiteLastUserID' across logout/login cycles
-   * 2. Use a 'autoSiteLoggedOut' flag to track logout state
-   * 3. Only reset progress for truly different users (different userID)
-   * 4. Handle OAuth timing issues with custom events
-   * 
-   * Result: Same user keeps their form progress across logout/login cycles,
-   * preventing multiple site creation abuse while maintaining good UX.
-   */
-  // Helper to detect user changes and reset form state ONLY for truly different users
-  useEffect(() => {
-    const checkUserChange = () => {
-      const userID = localStorage.getItem('userID');
 
-      // Only proceed if we have a current user ID
-      if (!userID) {
-        // console.log('[AutoSite] No userID found, skipping user change detection');
-        return;
-      }
 
-      // Check if this is a different user from the last stored userID
-      const lastUserID = localStorage.getItem('autoSiteLastUserID');
-      const wasLoggedOut = localStorage.getItem('autoSiteLoggedOut') === 'true';
-
-      if (!lastUserID) {
-        // First time visit - store the user and continue
-        // console.log('[AutoSite] First time user, setting current user:', userID);
-        localStorage.setItem('autoSiteLastUserID', userID);
-        localStorage.removeItem('autoSiteLoggedOut');
-        return;
-      }
-
-      if (userID !== lastUserID) {
-        // Different user detected - reset everything
-        // console.log('[AutoSite] DIFFERENT user detected:', { lastUserID, newUserID: userID });
-
-        // Store the new user ID
-        localStorage.setItem('autoSiteLastUserID', userID);
-        localStorage.removeItem('autoSiteLoggedOut');
-
-        // Clear all data and reset state
-        localStorage.removeItem('autoSiteFormData');
-        localStorage.removeItem('autoSiteCurrentStep');
-        localStorage.removeItem('autoSiteCompanyId');
-
-        // Reset component state to defaults (will be overridden by DB load)
-        setFormData(defaultFormData);
-        setCurrentStep(0);
-        setCompanyId(0);
-
-        // console.log('[AutoSite] Reset state for different user:', userID);
-      } else if (wasLoggedOut) {
-        // Same user returning after logout - clear the logout flag but keep their progress
-        // console.log('[AutoSite] Same user returning after logout:', userID, '- restoring progress');
-        localStorage.removeItem('autoSiteLoggedOut');
-      } else {
-        // Same user, no logout - continue normally
-        // console.log('[AutoSite] Same user continuing session:', userID);
-      }
-    };
-
-    // Run the check initially
-    checkUserChange();
-
-    // Also run the check when user-id-ready event is triggered
-    const handleUserIdReady = () => {
-      checkUserChange();
-    };
-
-    window.addEventListener('user-id-ready', handleUserIdReady);
-
-    return () => {
-      window.removeEventListener('user-id-ready', handleUserIdReady);
-    };
-  }, [localStorage.getItem('userID')]);
-
-  const getInitialFormData = () => {
-    const saved = localStorage.getItem("autoSiteFormData");
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch {
-        return defaultFormData;
-      }
-    }
-    return defaultFormData;
-  };
-  const getInitialStep = () => {
-    const saved = localStorage.getItem("autoSiteCurrentStep");
-    if (saved && !isNaN(Number(saved))) {
-      return Number(saved);
-    }
-    return 0;
-  };
-  const [formData, setFormData] = useState<FormData>(getInitialFormData());
+  const [formData, setFormData] = useState<FormData>(defaultFormData);
 
   const [isLoading, setIsLoading] = useState(false);
   const [buildStatus, setBuildStatus] = useState<string>("");
@@ -592,24 +438,9 @@ export default function AutoSite() {
   const [siteUrl, setSiteUrl] = useState<string>("");
   const [revealedStep, setRevealedStep] = useState<number>(0);
   const { toast } = useToast();
-  const [isSuccess, setIsSuccess] = useState(() => {
-    const saved = localStorage.getItem("autoSiteIsSuccess");
-    return saved === "true";
-  });
-  const [currentStep, setCurrentStep] = useState(getInitialStep());
-  const [isFormDataLoaded, setIsFormDataLoaded] = useState(() => {
-    // If we don't have a userID, we can show the form immediately (user not logged in)
-    const userID = localStorage.getItem('userID');
-    const isLoggedOut = localStorage.getItem('autoSiteLoggedOut') === 'true';
-
-    // If user just logged out, show loading state to prevent flash
-    if (isLoggedOut) {
-      return false;
-    }
-
-    // If no userID, user is not authenticated - show form immediately
-    return !userID;
-  });
+  const [isSuccess, setIsSuccess] = useState(false);
+  const [currentStep, setCurrentStep] = useState(0);
+  const [isFormDataLoaded, setIsFormDataLoaded] = useState(false);
   // Move these out of renderStep/case 4
   const [emailError, setEmailError] = useState<string>("");
   const [passwordError, setPasswordError] = useState<string>("");
@@ -628,10 +459,7 @@ export default function AutoSite() {
 
   const [heroTitleError, setHeroTitleError] = useState<string>("");
   const [bannerError, setBannerError] = useState<string>("");
-  const [companyId, setCompanyId] = useState(() => {
-    const saved = localStorage.getItem("autoSiteCompanyId");
-    return saved && !isNaN(Number(saved)) ? Number(saved) : 0;
-  });
+  const [companyId, setCompanyId] = useState(0);
 
   // Scroll to top when step changes
   useEffect(() => {
@@ -750,100 +578,71 @@ export default function AutoSite() {
     }
   }, [currentStep, buildStatus]);
 
+  // Load user's form data from database on component mount
   useEffect(() => {
-    // Restore companyId from localStorage if available
-    const savedCompanyId = localStorage.getItem("autoSiteCompanyId");
-    if (savedCompanyId && !isNaN(Number(savedCompanyId))) {
-      setCompanyId(Number(savedCompanyId));
-    }
-
-    // Wait for userID to be available after Google auth
-    const attemptLoadForm = async () => {
-      // Check if user just logged out - if so, show defaults immediately
-      const isLoggedOut = localStorage.getItem('autoSiteLoggedOut') === 'true';
-      if (isLoggedOut) {
-        console.log('[AutoSite] User logged out, showing defaults');
-        setCurrentStep(0);
-        setFormData(defaultFormData);
-        setCompanyId(0);
-        localStorage.removeItem("autoSiteCompanyId");
-        localStorage.removeItem('autoSiteLoggedOut'); // Clear the flag
-        setIsFormDataLoaded(true);
-        return;
-      }
-
-      // console.log('[AutoSite] Starting form load attempt...');
-
-      let userID = localStorage.getItem('userID');
-      let attempts = 0;
-      const maxAttempts = 15; // Increased from 10 to 15
-
-      // Wait for userID to be available (especially important after OAuth)
-      while (!userID && attempts < maxAttempts) {
-        // console.log(`[AutoSite] Waiting for userID, attempt ${attempts + 1}/${maxAttempts}`);
-        await new Promise(resolve => setTimeout(resolve, 300)); // Increased from 200ms to 300ms
-        userID = localStorage.getItem('userID');
-        attempts++;
-      }
-
-      if (!userID) {
-        console.warn('[AutoSite] No userID found after waiting, initializing defaults');
-        setCurrentStep(0);
-        setFormData(defaultFormData);
-        setCompanyId(0);
-        localStorage.removeItem("autoSiteCompanyId");
-        setIsFormDataLoaded(true); // Mark as loaded even with defaults
-        return;
-      }
-
-      // Set loading state for authenticated users
-      setIsFormDataLoaded(false);
-
-      // console.log('[AutoSite] Found userID:', userID, 'loading form data...');
-
+    const loadUserForm = async () => {
       try {
-        const response = await fetch(`/api/load-form`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: "include",
-          body: JSON.stringify({ user_id: userID })
+        // Check if user is authenticated by calling /api/me
+        const authResponse = await fetch('/api/me', {
+          method: 'GET',
+          credentials: 'include'
         });
 
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
+        if (!authResponse.ok) {
+          // User not authenticated, show default form
+          setCurrentStep(0);
+          setFormData(defaultFormData);
+          setCompanyId(0);
+          setIsFormDataLoaded(true);
+          return;
         }
 
-        const data = await response.json();
-        // console.log('[AutoSite] Form data loaded for user', userID, ':', {
-        //   step_number: data.step_number,
-        //   has_form_data: !!data.form_data && Object.keys(data.form_data).length > 0,
-        //   has_company: !!data.company,
-        //   debug: data.debug
-        // });
+        const authData = await authResponse.json();
 
-        // Always use the step_number from the database, no fallbacks to localStorage
-        const dbStepNumber = data.step_number || 0;
+        if (!authData.authenticated || !authData.user?.id) {
+          // User not authenticated, show default form
+          setCurrentStep(0);
+          setFormData(defaultFormData);
+          setCompanyId(0);
+          setIsFormDataLoaded(true);
+          return;
+        }
+
+        // User is authenticated, load their form data
+        const formResponse = await fetch('/api/load-form', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({}) // user_id will be taken from session
+        });
+
+        if (!formResponse.ok) {
+          throw new Error(`Failed to load form data: ${formResponse.status}`);
+        }
+
+        const formData = await formResponse.json();
+
+        // Set step from database
+        const dbStepNumber = formData.step_number || 0;
         setCurrentStep(dbStepNumber);
-        // console.log('[AutoSite] Set current step to:', dbStepNumber);
 
-        // Robustly parse form_data if string
+        // Parse and set form data
         let parsedFormData = defaultFormData;
-        if (typeof data.form_data === "string") {
+        if (typeof formData.form_data === "string") {
           try {
-            const parsed = JSON.parse(data.form_data);
+            const parsed = JSON.parse(formData.form_data);
             parsedFormData = Object.keys(parsed).length ? parsed : defaultFormData;
           } catch {
             console.warn('[AutoSite] Failed to parse form_data string');
             parsedFormData = defaultFormData;
           }
-        } else if (data.form_data && Object.keys(data.form_data).length) {
-          parsedFormData = data.form_data;
-        } else {
-          parsedFormData = defaultFormData;
+        } else if (formData.form_data && Object.keys(formData.form_data).length) {
+          parsedFormData = formData.form_data;
         }
+
         setFormData(parsedFormData);
 
-        // Restore products and campaigns arrays if present in loaded form_data
+        // Restore products and campaigns if present
         if (parsedFormData.products && Array.isArray(parsedFormData.products)) {
           setProducts(parsedFormData.products);
         }
@@ -851,47 +650,32 @@ export default function AutoSite() {
           setCampaigns(parsedFormData.campaigns);
         }
 
-        // Set companyId from backend if available
-        if (data.company && data.company.id) {
-          setCompanyId(data.company.id);
-          localStorage.setItem("autoSiteCompanyId", String(data.company.id));
-          // console.log('[AutoSite] Set companyId from database:', data.company.id);
+        // Set company ID if available
+        if (formData.company && formData.company.id) {
+          setCompanyId(formData.company.id);
         } else {
-          // Clear company ID if no company exists
           setCompanyId(0);
-          localStorage.removeItem("autoSiteCompanyId");
-          // console.log('[AutoSite] No company found, cleared companyId');
         }
 
-        // Mark form data as loaded
-        setIsFormDataLoaded(true);
       } catch (error) {
-        console.error('[AutoSite] Failed to load form for user', userID, ':', error);
+        console.error('[AutoSite] Error loading form data:', error);
+        // On error, show default form
         setCurrentStep(0);
         setFormData(defaultFormData);
         setCompanyId(0);
-        localStorage.removeItem("autoSiteCompanyId");
-        setIsFormDataLoaded(true); // Mark as loaded even on error
+      } finally {
+        setIsFormDataLoaded(true);
       }
     };
 
-    attemptLoadForm();
+    loadUserForm();
   }, []);
 
   const updateFormData = (field: keyof FormData, value: any) => {
-    setFormData(prev => {
-      const updated = { ...prev, [field]: value };
-      localStorage.setItem("autoSiteFormData", JSON.stringify(updated));
-      return updated;
-    });
+    setFormData(prev => ({ ...prev, [field]: value }));
   };
 
   const saveStep = async (stepNumber, data) => {
-    const userID = localStorage.getItem('userID');
-    if (!userID) {
-      console.warn('[saveStep] missing userID; aborting');
-      return;
-    }
     // Always include products and campaigns arrays in form_data
     const formDataToSave = {
       ...data,
@@ -903,7 +687,7 @@ export default function AutoSite() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ step_number: stepNumber, form_data: formDataToSave, user_id: userID })
+        body: JSON.stringify({ step_number: stepNumber, form_data: formDataToSave })
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
@@ -913,8 +697,6 @@ export default function AutoSite() {
           description: j.error || 'Could not save progress. Please try again.',
           variant: 'destructive'
         });
-      } else {
-        // console.log('[saveStep] success for step', stepNumber);
       }
     } catch (e) {
       console.warn('[saveStep] network error', e);
@@ -931,7 +713,6 @@ export default function AutoSite() {
       const newStep = currentStep + 1;
       await saveStep(newStep, formData);
       setCurrentStep(newStep);
-      localStorage.setItem("autoSiteCurrentStep", String(newStep));
     }
   };
 
@@ -985,7 +766,6 @@ export default function AutoSite() {
         }
         // If domain does not exist, proceed as normal
         setCurrentStep(newStep);
-        localStorage.setItem("autoSiteCurrentStep", String(newStep));
       } catch (error) {
         toast({
           title: "Error",
@@ -1002,36 +782,29 @@ export default function AutoSite() {
 
   const prevStep = () => {
     if (currentStep > 0) {
-      setCurrentStep(prev => {
-        const newStep = prev - 1;
-        localStorage.setItem("autoSiteCurrentStep", String(newStep));
-        return newStep;
-      });
+      setCurrentStep(prev => prev - 1);
     }
-
-
   };
 
   const saveCompanyDetails = async () => {
     setIsLoading(true);
     setErrorMessage("");
     const newStep = currentStep + 1;
-    const userID = localStorage.getItem('userID');
     try {
-      // Always use latest formData including phone and template_type_id
-      const payload = { ...formData, user_id: userID, phone: formData.phone, template_type_id: formData.template_type_id };
+      // Send formData with credentials for authentication
+      const payload = { ...formData, phone: formData.phone, template_type_id: formData.template_type_id };
       const apiUrl = `${apiBase}/api/company-details`;
       const response = await fetch(apiUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
+        credentials: "include",
         body: JSON.stringify(payload),
       });
       const data = await response.json();
       if (response.ok && data.success) {
         setCompanyId(data.companyId);
-        localStorage.setItem("autoSiteCompanyId", String(data.companyId));
         await saveStep(newStep, { ...formData, phone: formData.phone, template_type_id: formData.template_type_id });
         setCurrentStep(newStep);
       } else {
@@ -1155,12 +928,7 @@ export default function AutoSite() {
         setDeployedUrl(simulatedUrl);
         setSiteUrl(simulatedUrl);
         setPreviewUrl(simulatedUrl);
-        localStorage.setItem('autoSiteDeployedUrl', simulatedUrl);
-        localStorage.setItem('autoSiteSiteUrl', simulatedUrl);
-        localStorage.setItem('autoSitePreviewUrl', simulatedUrl);
         nextStep();
-        localStorage.removeItem('autoSiteCurrentStep');
-        localStorage.removeItem('autoSiteFormData');
       }, 600);
     } finally {
       setIsDeploying(false);
@@ -1172,7 +940,6 @@ export default function AutoSite() {
     setIsSuccess(true); // Always show Congratulations after payment
     setCurrentStep(9); // Show Congratulations page
     // Removed deploy-to-hostinger API call for now
-    localStorage.setItem("autoSiteIsSuccess", "true");
   };
 
   // Handle payment failure
@@ -2101,8 +1868,6 @@ export default function AutoSite() {
         const handleMakeAnotherWebsite = () => {
           setCurrentStep(0);
           setFormData(defaultFormData);
-          localStorage.setItem("autoSiteCurrentStep", "0");
-          localStorage.setItem("autoSiteFormData", JSON.stringify(defaultFormData));
           setBuildId("");
           setBuildStatus("");
           setPreviewUrl("");

@@ -670,7 +670,7 @@ app.get('/api/auth/google/callback', (req, res, next) => {
 
             const isNew = (info as any)?.createdNewUser ? '1' : '0';
 
-            
+
             (req as any).session.save((saveErr) => {
                 if (saveErr) {
                     console.error('[OAuth] Session save error:', saveErr);
@@ -784,40 +784,45 @@ app.get('/api/business-sectors', async (_req, res) => {
 
 // Form progress routes
 app.post('/api/save-step', async (req, res) => {
-    let { step_number, form_data, user_id } = req.body || {};
-    if (!user_id && (req as any).user?.id) user_id = (req as any).user.id;
-    if (typeof step_number !== 'number' || form_data == null || !user_id) return res.status(400).json({ error: 'Missing required fields (user_id, step_number, form_data)' });
+    let { step_number, form_data } = req.body || {};
+    // Get user_id from authenticated session
+    const user_id = (req as any).user?.id;
+    if (typeof step_number !== 'number' || form_data == null || !user_id) {
+        return res.status(400).json({ error: 'Missing required fields or user not authenticated' });
+    }
     try {
-      await db.promise().query(
-        `INSERT INTO user_form_progress (user_id, step_number, form_data) VALUES (?,?,?)
+        await db.promise().query(
+            `INSERT INTO user_form_progress (user_id, step_number, form_data) VALUES (?,?,?)
          ON DUPLICATE KEY UPDATE step_number=VALUES(step_number), form_data=VALUES(form_data)`,
-        [user_id, step_number, JSON.stringify(form_data)]
-      );
-      res.json({ success: true });
+            [user_id, step_number, JSON.stringify(form_data)]
+        );
+        res.json({ success: true });
     } catch (e) {
-      console.error('[save-step] DB error', e);
-      res.status(500).json({ error: 'DB error' });
+        console.error('[save-step] DB error', e);
+        res.status(500).json({ error: 'DB error' });
     }
 });
 
 // Previous GET + query param version commented out
 // app.get('/api/load-form', async (req,res)=>{ ... })
 app.post('/api/load-form', async (req, res) => {
-    const userId = req.body?.user_id;
-    if (!userId) return res.status(400).json({ error: 'Missing user_id' });
+    // Get user_id from authenticated session or fallback to request body for backward compatibility
+    const userId = (req as any).user?.id || req.body?.user_id;
+    if (!userId) return res.status(400).json({ error: 'User not authenticated' });
     try {
-      const [progressRows] = await db.promise().query('SELECT step_number, form_data FROM user_form_progress WHERE user_id = ? LIMIT 1', [userId]);
-      let step_number = 0; let form_data: any = {};
-      if (Array.isArray(progressRows) && (progressRows as any[]).length > 0) {
-        const row: any = (progressRows as any[])[0];
-        step_number = row.step_number;
-        try { form_data = typeof row.form_data === 'string' ? JSON.parse(row.form_data) : row.form_data; } catch { form_data = {}; }
-      }
-      const [companyRows] = await db.promise().query('SELECT * FROM company_mast WHERE user_id = ? LIMIT 1', [userId]);
-      const company = Array.isArray(companyRows) && (companyRows as any[]).length ? (companyRows as any[])[0] : null;
-      res.json({ step_number, form_data, company });
-    } catch {
-      res.status(500).json({ error: 'DB error' });
+        const [progressRows] = await db.promise().query('SELECT step_number, form_data FROM user_form_progress WHERE user_id = ? LIMIT 1', [userId]);
+        let step_number = 0; let form_data: any = {};
+        if (Array.isArray(progressRows) && (progressRows as any[]).length > 0) {
+            const row: any = (progressRows as any[])[0];
+            step_number = row.step_number;
+            try { form_data = typeof row.form_data === 'string' ? JSON.parse(row.form_data) : row.form_data; } catch { form_data = {}; }
+        }
+        const [companyRows] = await db.promise().query('SELECT * FROM company_mast WHERE user_id = ? LIMIT 1', [userId]);
+        const company = Array.isArray(companyRows) && (companyRows as any[]).length ? (companyRows as any[])[0] : null;
+        res.json({ step_number, form_data, company });
+    } catch (e) {
+        console.error('[load-form] DB error', e);
+        res.status(500).json({ error: 'DB error' });
     }
 });
 
@@ -942,7 +947,11 @@ app.post('/api/domain-check', async (req, res) => {
 app.post('/api/company-details', async (req, res) => {
     const data = req.body || {};
     try {
-        const user_id = data.user_id;
+        // Get user_id from authenticated session
+        const user_id = (req as any).user?.id;
+        if (!user_id) {
+            return res.status(401).json({ error: 'User not authenticated' });
+        }
         let template_type_id: number | null = null;
         if (data.template_type_id !== undefined && data.template_type_id !== null && !isNaN(Number(data.template_type_id))) template_type_id = Number(data.template_type_id);
         if (!data.companyName || !data.email || !data.phone || !data.domain || !data.businessSector || !data.location) {

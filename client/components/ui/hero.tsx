@@ -1564,9 +1564,9 @@ export function Hero() {
               variant="outline"
               size="lg"
               className="border-2 border-orange-300 dark:border-orange-400 text-orange-600 dark:text-orange-400 hover:border-orange-500 hover:text-orange-700 dark:hover:text-orange-300 hover:bg-orange-50 dark:hover:bg-orange-950/20 px-8 py-4 text-lg font-semibold transition-all duration-300"
-              onClick={() => navigate('/sales-force-automation')}
+              onClick={() => navigate('/auto-site')}
             >
-              Explore Solutions
+              Website Builder
               <ArrowRight className="w-5 h-5 ml-2" />
             </Button>
           </motion.div>

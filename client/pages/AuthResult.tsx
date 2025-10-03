@@ -46,11 +46,41 @@ export default function AuthResult() {
                     }
                 }
 
-                if (!userId) {
-                    throw new Error('Session authentication failed - no user ID from /api/me');
+                // Fallback: Use URL parameters if session didn't work
+                if (!userId && urlUserId) {
+                    userId = decodeURIComponent(urlUserId);
+                    console.log('[AuthResult] Using fallback user ID from URL:', userId);
+
+                    // Verify this user exists in database by trying to save a dummy form step
+                    try {
+                        const verifyResponse = await fetch('/api/save-step', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            credentials: 'include',
+                            body: JSON.stringify({
+                                step_number: 0,
+                                form_data: {},
+                                user_id: userId
+                            })
+                        });
+
+                        if (!verifyResponse.ok) {
+                            throw new Error('User verification failed');
+                        }
+                        console.log('[AuthResult] User verification successful');
+                    } catch (verifyError) {
+                        console.error('[AuthResult] User verification failed:', verifyError);
+                        throw new Error('Invalid user credentials');
+                    }
                 }
 
-                console.log('[AuthResult] SUCCESS - Session authentication completed for user:', userId);
+                if (!userId) {
+                    throw new Error('No user ID available from session or URL parameters');
+                }
+
+                // Set userID in localStorage (same as regular login/signup)
+                localStorage.setItem('userID', userId);
+                console.log('[AuthResult] SUCCESS - userID set in localStorage:', userId);
 
                 if (isNew) {
                     // New user - redirect to home page

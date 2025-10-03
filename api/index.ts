@@ -175,20 +175,19 @@ if (MySQLStore && dbConfig) {
     console.warn('[Session] MySQLStore not available or dbConfig missing, using MemoryStore');
 }
 const crossSite = process.env.CROSS_SITE === 'true';
-const isProduction = process.env.NODE_ENV === 'production';
-const sessionCookieConfig = {
-  maxAge: 86400000, // 24 hours
-  sameSite: (crossSite || isProduction) ? 'none' as const : 'lax' as const,
-  secure: (crossSite || isProduction),
-  httpOnly: true
-};app.use(session({
+app.use(session({
     secret: process.env.SESSION_SECRET || 'change_me',
     resave: false,
     saveUninitialized: false,
     store: sessionStore,
     name: 'mauto.sid', // Custom session name
     rolling: true, // Reset expiration on activity
-    cookie: sessionCookieConfig
+    cookie: {
+        maxAge: 86400000, // 24 hours
+        sameSite: (crossSite ? 'none' : 'lax') as any,
+        secure: process.env.NODE_ENV === 'production' || crossSite,
+        httpOnly: true
+    }
 }));
 
 passport.use(new LocalStrategy({ usernameField: 'email', passwordField: 'password' }, async (email, password, done) => {
@@ -201,22 +200,10 @@ passport.use(new LocalStrategy({ usernameField: 'email', passwordField: 'passwor
         done(null, user);
     } catch (e) { done(e); }
 }));
-passport.serializeUser((u: any, d) => {
-    console.log('[Passport] Serializing user:', u.id);
-    d(null, u.id);
-});
+passport.serializeUser((u: any, d) => d(null, u.id));
 passport.deserializeUser(async (id: number, d) => {
-    console.log('[Passport] Deserializing user ID:', id);
-    try { 
-        const [rows] = await db.promise().query('SELECT * FROM users WHERE id = ? LIMIT 1', [id]); 
-        const user = Array.isArray(rows) && rows.length ? rows[0] : null;
-        console.log('[Passport] Deserialized user:', user ? `${(user as any).id} (${(user as any).email_id})` : 'null');
-        d(null, user);
-    }
-    catch (e) { 
-        console.error('[Passport] Deserialize error:', e);
-        d(e); 
-    }
+    try { const [rows] = await db.promise().query('SELECT * FROM users WHERE id = ? LIMIT 1', [id]); d(null, Array.isArray(rows) && rows.length ? rows[0] : null); }
+    catch (e) { d(e); }
 });
 app.use(passport.initialize());
 app.use(passport.session());
@@ -680,33 +667,21 @@ app.get('/api/auth/google/callback', (req, res, next) => {
             console.log('[OAuth] Session created successfully for user:', user.id);
             console.log('[OAuth] Session ID:', (req as any).sessionID);
             console.log('[OAuth] User object in session:', JSON.stringify(user, null, 2));
-            console.log('[OAuth] Session passport object:', (req as any).session?.passport);
 
             const isNew = (info as any)?.createdNewUser ? '1' : '0';
 
-            // Manually ensure passport session is set correctly
-            if (!(req as any).session.passport) {
-                (req as any).session.passport = {};
-            }
-            (req as any).session.passport.user = user.id;
-            console.log('[OAuth] Manually set passport session user ID:', user.id);
 
             (req as any).session.save((saveErr) => {
                 if (saveErr) {
                     console.error('[OAuth] Session save error:', saveErr);
-                    return res.redirect('/login?error=session_save_failed');
                 }
-                console.log('[OAuth] Session save successful');
-                console.log('[OAuth] Final session passport object:', (req as any).session?.passport);
+                console.log('[OAuth] Session save result - error:', saveErr ? 'YES' : 'NO');
 
-                // Small delay to ensure session is persisted before redirect
-                setTimeout(() => {
-                    // Always redirect - AuthResult will handle session verification
-                    // Pass user ID as backup in case session doesn't work in serverless
-                    const userId = encodeURIComponent(String(user.id));
-                    const email = encodeURIComponent(user.email_id || user.email || '');
-                    res.redirect(`/auth/result?new=${isNew}&uid=${userId}&email=${email}`);
-                }, 100);
+                // Always redirect - AuthResult will handle session verification
+                // Pass user ID as backup in case session doesn't work in serverless
+                const userId = encodeURIComponent(String(user.id));
+                const email = encodeURIComponent(user.email_id || user.email || '');
+                res.redirect(`/auth/result?new=${isNew}&uid=${userId}&email=${email}`);
             });
 
             //manual changes
@@ -744,50 +719,6 @@ app.get('/api/debug/session', (req, res) => {
     });
 });
 
-// Test session persistence endpoint
-app.post('/api/debug/test-session', async (req, res) => {
-    const session = (req as any).session;
-    const sessionId = (req as any).sessionID;
-    
-    // Try to manually set a user in the session
-    const testUserId = 1; // Use a test user ID
-    
-    try {
-        // Get a test user from database
-        const [rows] = await db.promise().query('SELECT * FROM users WHERE id = ? LIMIT 1', [testUserId]);
-        const testUser = Array.isArray(rows) && rows.length ? rows[0] : null;
-        
-        if (testUser) {
-            const user = testUser as any;
-            // Manually create passport session
-            if (!session.passport) {
-                session.passport = {};
-            }
-            session.passport.user = user.id;
-            
-            // Save session
-            session.save((err) => {
-                if (err) {
-                    console.error('[Test Session] Save error:', err);
-                    return res.status(500).json({ error: 'Session save failed', details: err.message });
-                }
-                
-                res.json({
-                    success: true,
-                    message: 'Test session created',
-                    sessionId,
-                    userId: user.id,
-                    userEmail: user.email_id
-                });
-            });
-        } else {
-            res.status(404).json({ error: 'No test user found with ID 1' });
-        }
-    } catch (error) {
-        res.status(500).json({ error: 'Database error', details: error.message });
-    }
-});
-
 // OAuth debug endpoint for production troubleshooting
 app.get('/api/auth/google/debug', (req, res) => {
     res.json({
@@ -811,19 +742,8 @@ app.get('/api/me', (req, res) => {
     const isAuth = req.isAuthenticated?.();
     const user = (req as any).user;
     const cookies = req.headers.cookie;
-    const session = (req as any).session;
 
-    console.log('[/api/me] Request details:', {
-        sessionId,
-        hasSession: !!session,
-        sessionKeys: session ? Object.keys(session) : [],
-        passportSession: session?.passport,
-        hasUser: !!user,
-        userId: user?.id,
-        isAuthenticatedFunc: typeof req.isAuthenticated === 'function',
-        isAuthResult: isAuth,
-        cookies: cookies ? 'present' : 'missing'
-    });
+
 
     if (req.isAuthenticated && req.isAuthenticated()) {
         const u: any = (req as any).user;
@@ -832,7 +752,7 @@ app.get('/api/me', (req, res) => {
             return res.json({
                 authenticated: false,
                 error: 'User data incomplete',
-                debug: { sessionId, user: u, hasSession: !!session }
+                debug: { sessionId, user: u, hasSession: !!(req as any).session }
             });
         }
         const userData = {
@@ -850,8 +770,7 @@ app.get('/api/me', (req, res) => {
             hasIsAuthenticated: typeof req.isAuthenticated === 'function',
             isAuthResult: isAuth,
             hasUser: !!user,
-            hasSession: !!session,
-            sessionPassport: session?.passport,
+            hasSession: !!(req as any).session,
             cookies: !!cookies
         }
     });

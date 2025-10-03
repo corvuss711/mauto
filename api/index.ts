@@ -660,35 +660,35 @@ app.get('/api/auth/google/callback', (req, res, next) => {
             return res.redirect(`/${redirectPage}?error=google_auth_failed&code=${encodeURIComponent(errorCode)}&message=${encodeURIComponent(userMessage)}`);
         }
         req.login(user, (e) => {
-            // if (e) {
-            //     console.error('[OAuth Login Error]', e);
-            //     return res.redirect('/login?error=session_failed');
-            // }
-            // console.log('[OAuth] Session created successfully for user:', user.id);
-            // console.log('[OAuth] Session ID:', (req as any).sessionID);
-            // console.log('[OAuth] User object in session:', JSON.stringify(user, null, 2));
+            if (e) {
+                console.error('[OAuth Login Error]', e);
+                return res.redirect('/login?error=session_failed');
+            }
+            console.log('[OAuth] Session created successfully for user:', user.id);
+            console.log('[OAuth] Session ID:', (req as any).sessionID);
+            console.log('[OAuth] User object in session:', JSON.stringify(user, null, 2));
 
-            // const isNew = (info as any)?.createdNewUser ? '1' : '0';
+            const isNew = (info as any)?.createdNewUser ? '1' : '0';
 
-            // Force session save before redirect (important for serverless)
-            // (req as any).session.save((saveErr) => {
-            //     if (saveErr) {
-            //         console.error('[OAuth] Session save error:', saveErr);
-            //     }
-            //     console.log('[OAuth] Session save result - error:', saveErr ? 'YES' : 'NO');
+            
+            (req as any).session.save((saveErr) => {
+                if (saveErr) {
+                    console.error('[OAuth] Session save error:', saveErr);
+                }
+                console.log('[OAuth] Session save result - error:', saveErr ? 'YES' : 'NO');
 
-            //     // Always redirect - AuthResult will handle session verification
-            //     // Pass user ID as backup in case session doesn't work in serverless
-            //     const userId = encodeURIComponent(String(user.id));
-            //     const email = encodeURIComponent(user.email_id || user.email || '');
-            //     res.redirect(`/auth/result?new=${isNew}&uid=${userId}&email=${email}`);
-            // });
+                // Always redirect - AuthResult will handle session verification
+                // Pass user ID as backup in case session doesn't work in serverless
+                const userId = encodeURIComponent(String(user.id));
+                const email = encodeURIComponent(user.email_id || user.email || '');
+                res.redirect(`/auth/result?new=${isNew}&uid=${userId}&email=${email}`);
+            });
 
             //manual changes
-            if (e) return res.redirect('/login?error=session_failed');
-            // If handler set a flag on req for new user, propagate via query string
-            const isNew = (info as any)?.createdNewUser ? '1' : '0';
-            res.redirect(`/auth/result?new=${isNew}`);
+            // if (e) return res.redirect('/login?error=session_failed');
+            // // If handler set a flag on req for new user, propagate via query string
+            // const isNew = (info as any)?.createdNewUser ? '1' : '0';
+            // res.redirect(`/auth/result?new=${isNew}`);
         });
     })(req, res, next);
 });

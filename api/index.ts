@@ -126,10 +126,7 @@ pool.getConnection((err, conn) => {
 });
 
 const app = express();
-app.use(cors({
-    origin: ['https://mauto-six.vercel.app'], // Add more domains if needed
-    credentials: true
-}));
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
 // Serve existing repo-seeded uploads (read-only) and dynamic tmp uploads via unified handler
@@ -178,19 +175,20 @@ if (MySQLStore && dbConfig) {
     console.warn('[Session] MySQLStore not available or dbConfig missing, using MemoryStore');
 }
 const crossSite = process.env.CROSS_SITE === 'true';
-app.use(session({
+const isProduction = process.env.NODE_ENV === 'production';
+const sessionCookieConfig = {
+  maxAge: 86400000, // 24 hours
+  sameSite: (crossSite || isProduction) ? 'none' as const : 'lax' as const,
+  secure: (crossSite || isProduction),
+  httpOnly: true
+};app.use(session({
     secret: process.env.SESSION_SECRET || 'change_me',
     resave: false,
     saveUninitialized: false,
     store: sessionStore,
     name: 'mauto.sid', // Custom session name
     rolling: true, // Reset expiration on activity
-    cookie: {
-        maxAge: 86400000, // 24 hours
-        sameSite: (crossSite ? 'none' : 'lax') as any,
-        secure: process.env.NODE_ENV === 'production' || crossSite,
-        httpOnly: true
-    }
+    cookie: sessionCookieConfig
 }));
 
 passport.use(new LocalStrategy({ usernameField: 'email', passwordField: 'password' }, async (email, password, done) => {

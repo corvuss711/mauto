@@ -9,25 +9,52 @@ export default function AuthResult() {
     const [isProcessing, setIsProcessing] = useState(true);
 
     useEffect(() => {
+
+
         const processOAuthResult = async () => {
             try {
-                // Only rely on session-based authentication
+                // Mark session as present
+                localStorage.setItem('manacle_session', 'true');
+
+                // Check URL parameters for fallback user info (in case session doesn't work)
                 const params = new URLSearchParams(location.search);
+                const urlUserId = params.get('uid');
+                const urlEmail = params.get('email');
                 const isNew = params.get('new') === '1';
+
+
+
+                // First try to get user data from the session
 
                 const response = await fetch('/api/me', {
                     credentials: 'include',
-                    headers: { 'Cache-Control': 'no-cache' }
+                    headers: {
+                        'Cache-Control': 'no-cache'
+                    }
                 });
-                if (!response.ok) throw new Error('Failed to fetch user session');
-                const userData = await response.json();
-                if (!userData.authenticated || !userData.user?.id) {
-                    throw new Error('User not authenticated');
+
+                let userData = null;
+                let userId = null;
+
+                if (response.ok) {
+                    userData = await response.json();
+                    console.log('[AuthResult] /api/me response:', userData);
+
+                    if (userData.authenticated && userData.user?.id) {
+                        userId = String(userData.user.id);
+                        console.log('[AuthResult] Got user ID from session:', userId);
+                    }
                 }
-                const userId = String(userData.user.id);
-                // Optionally set userID in localStorage for legacy code
-                localStorage.setItem('userID', userId);
+
+                if (!userId) {
+                    throw new Error('Session authentication failed - no user ID from /api/me');
+                }
+
+                console.log('[AuthResult] SUCCESS - Session authentication completed for user:', userId);
+
                 if (isNew) {
+                    // New user - redirect to home page
+                    console.log('[AuthResult] New user detected, redirecting to home');
                     toast({
                         title: 'Welcome to Manacle!',
                         description: 'Your account has been created successfully.',
@@ -37,30 +64,41 @@ export default function AuthResult() {
                         navigate('/?new=1', { replace: true });
                     }, 1000);
                 } else {
+                    // Existing user - redirect to auto-site
+                    console.log('[AuthResult] Existing user detected, redirecting to auto-site');
                     toast({
                         title: 'Welcome back!',
                         description: 'You have been signed in successfully.',
                         variant: 'default'
                     });
+
+                    // Trigger user login event to handle form state
                     window.dispatchEvent(new Event('user-login'));
+
                     setTimeout(() => {
                         navigate('/auto-site', { replace: true });
                     }, 800);
                 }
+
             } catch (error) {
                 console.error('[AuthResult] Error processing OAuth result:', error);
                 setIsProcessing(false);
+
                 toast({
                     title: 'Authentication Error',
                     description: 'Failed to complete sign in. Please try again.',
                     variant: 'destructive'
                 });
+
+                // Redirect to login page after a delay
                 setTimeout(() => {
                     navigate('/login', { replace: true });
                 }, 2000);
             }
         };
+
         processOAuthResult();
+
     }, [navigate, location.search, toast]);
 
     if (isProcessing) {

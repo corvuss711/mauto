@@ -84,11 +84,11 @@ function parseMysqlUrl(url?: string) {
     return { host: m[3], user: m[1], password: m[2], port: Number(m[4]), database: m[5] };
 }
 let dbConfig;
-try { 
-    dbConfig = parseMysqlUrl(process.env.MYSQL_URL); 
+try {
+    dbConfig = parseMysqlUrl(process.env.MYSQL_URL);
     console.log('[DB] Using MYSQL_URL connection:', dbConfig.host, dbConfig.database);
-} catch { 
-    dbConfig = { host: 'localhost', user: 'root', password: '', port: 3306, database: 'manacle_blogs' }; 
+} catch {
+    dbConfig = { host: 'localhost', user: 'root', password: '', port: 3306, database: 'manacle_blogs' };
     console.log('[DB] Using fallback connection:', dbConfig.host, dbConfig.database);
 }
 
@@ -179,7 +179,7 @@ if (MySQLStore && dbConfig) {
             database: dbConfig.database,
             user: dbConfig.user.substring(0, 3) + '...'
         });
-        
+
         sessionStore = new MySQLStore({
             ...dbConfig,
             createDatabaseTable: true,
@@ -260,13 +260,13 @@ passport.serializeUser((u: any, d) => {
 
 passport.deserializeUser(async (id: number, d) => {
     console.log('[Passport] Deserializing user:', id);
-    try { 
+    try {
         const [rows] = await db.promise().query('SELECT * FROM users WHERE id = ? LIMIT 1', [id]);
         const user = Array.isArray(rows) && rows.length ? rows[0] : null;
         console.log('[Passport] Deserialized user:', user ? `ID: ${(user as any).id}` : 'null');
         d(null, user);
     }
-    catch (e) { 
+    catch (e) {
         console.error('[Passport] Deserialize error:', e);
         d(null, null); // Return null instead of error to prevent session destruction
     }
@@ -279,7 +279,7 @@ app.use(async (req, res, next) => {
     const sessionId = (req as any).sessionID;
     const isAuth = req.isAuthenticated?.();
     const user = (req as any).user;
-    
+
     // Debug session state for authentication-critical endpoints only
     if (req.path.includes('/save-step') || req.path.includes('/load-form') || req.path.includes('/company-details') || req.path.includes('/me')) {
         console.log(`[${req.method} ${req.path}] Session debug:`, {
@@ -290,7 +290,7 @@ app.use(async (req, res, next) => {
             hasCookies: !!req.headers.cookie
         });
     }
-    
+
     if (req.isAuthenticated && req.isAuthenticated()) {
         try {
             const userId = req.user && (req.user as any).id;
@@ -326,7 +326,7 @@ async function handleGetPlans(req: express.Request, res: express.Response) {
     try {
         // console.log('📤 Proxying request to external API:', req.body);
 
-        const response = await fetch('http://122.176.112.254/www-demo-msell-in/public/api/get-plan', {
+        const response = await fetch('http://salesforce.msell.in/public/api/get-plan', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -352,7 +352,7 @@ async function handleProcessPayment(req: express.Request, res: express.Response)
     try {
 
 
-        const response = await fetch('http://122.176.112.254/www-demo-msell-in/public/api/process-payment', {
+        const response = await fetch('http://salesforce.msell.in/public/api/process-payment', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -405,7 +405,7 @@ async function handleOtpRequest(req: express.Request, res: express.Response) {
             });
         }
 
-        const response = await fetch('http://122.176.112.254/www-demo-msell-in/public/api/otp_send_status', {
+        const response = await fetch('http://salesforce.msell.in/public/api/otp_send_status', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -791,7 +791,7 @@ app.get('/api/debug/session', async (req, res) => {
                 'SELECT data FROM sessions WHERE session_id = ? AND expires > NOW()',
                 [sessionId]
             );
-            
+
             if (Array.isArray(sessionRows) && sessionRows.length > 0) {
                 const sessionData = (sessionRows as any[])[0].data;
                 if (sessionData) {
@@ -881,12 +881,12 @@ app.get('/api/me', async (req, res) => {
         console.log('[/api/me] SUCCESS - Returning user data:', userData);
         return res.json({ authenticated: true, user: userData });
     }
-    
+
     // Serverless fallback: Try multiple methods to find authenticated user
     if (sessionId) {
         try {
             console.log('[/api/me] Attempting session store fallback for sessionId:', sessionId);
-            
+
             // Method 1: Try session store if available
             if (sessionStore) {
                 try {
@@ -894,17 +894,17 @@ app.get('/api/me', async (req, res) => {
                         'SELECT data FROM sessions WHERE session_id = ? AND expires > NOW()',
                         [sessionId]
                     );
-                    
+
                     if (Array.isArray(sessionRows) && sessionRows.length > 0) {
                         const sessionData = (sessionRows as any[])[0].data;
                         console.log('[/api/me] Found session data in store:', !!sessionData);
-                        
+
                         if (sessionData) {
                             try {
                                 const parsed = JSON.parse(sessionData);
                                 const userId = parsed.passport?.user;
                                 console.log('[/api/me] Parsed userId from session store:', userId);
-                                
+
                                 if (userId) {
                                     const [userRows] = await db.promise().query('SELECT * FROM users WHERE id = ?', [userId]);
                                     if (Array.isArray(userRows) && userRows.length > 0) {
@@ -929,12 +929,12 @@ app.get('/api/me', async (req, res) => {
                     console.error('[/api/me] Session store query error:', sessionError);
                 }
             }
-            
+
             // Method 2: Check if session exists in memory store (fallback case)
             if ((req as any).session && (req as any).session.passport && (req as any).session.passport.user) {
                 const userId = (req as any).session.passport.user;
                 console.log('[/api/me] Found userId in session object:', userId);
-                
+
                 try {
                     const [userRows] = await db.promise().query('SELECT * FROM users WHERE id = ?', [userId]);
                     if (Array.isArray(userRows) && userRows.length > 0) {
@@ -953,12 +953,12 @@ app.get('/api/me', async (req, res) => {
                     console.error('[/api/me] User lookup error:', userError);
                 }
             }
-            
+
         } catch (fallbackError) {
             console.error('[/api/me] All fallback methods failed:', fallbackError);
         }
     }
-    
+
     console.log('[/api/me] Not authenticated - returning false');
     res.json({
         authenticated: false,
@@ -987,7 +987,7 @@ app.post('/api/save-step', async (req, res) => {
     let user_id = (req as any).user?.id;
     const sessionId = (req as any).sessionID;
     const isAuth = req.isAuthenticated?.();
-    
+
     // Enhanced logging for debugging authentication issues
     console.log('[save-step] Request debug:', {
         sessionId,
@@ -998,12 +998,12 @@ app.post('/api/save-step', async (req, res) => {
         hasFormData: !!form_data,
         cookies: req.headers.cookie
     });
-    
+
     // Serverless fallback: Try multiple methods to get authenticated user
     if (!user_id && sessionId) {
         try {
             console.log('[save-step] Attempting session fallback for sessionId:', sessionId);
-            
+
             // Method 1: Try session store if available
             if (sessionStore) {
                 try {
@@ -1011,7 +1011,7 @@ app.post('/api/save-step', async (req, res) => {
                         'SELECT data FROM sessions WHERE session_id = ? AND expires > NOW()',
                         [sessionId]
                     );
-                    
+
                     if (Array.isArray(sessionRows) && sessionRows.length > 0) {
                         const sessionData = (sessionRows as any[])[0].data;
                         if (sessionData) {
@@ -1028,18 +1028,18 @@ app.post('/api/save-step', async (req, res) => {
                     console.error('[save-step] Session store query error:', sessionError);
                 }
             }
-            
+
             // Method 2: Check session object directly
             if (!user_id && (req as any).session && (req as any).session.passport && (req as any).session.passport.user) {
                 user_id = (req as any).session.passport.user;
                 console.log('[save-step] Retrieved userId from session object:', user_id);
             }
-            
+
         } catch (fallbackError) {
             console.error('[save-step] All fallback methods failed:', fallbackError);
         }
     }
-    
+
     if (typeof step_number !== 'number' || form_data == null || !user_id) {
         console.error('[save-step] Validation failed:', {
             stepNumberType: typeof step_number,
@@ -1049,7 +1049,7 @@ app.post('/api/save-step', async (req, res) => {
             isAuthenticated: isAuth,
             sessionId
         });
-        return res.status(400).json({ 
+        return res.status(400).json({
             error: 'Missing required fields or user not authenticated',
             debug: {
                 stepNumberValid: typeof step_number === 'number',
@@ -1080,7 +1080,7 @@ app.post('/api/load-form', async (req, res) => {
     // Get user_id from authenticated session or fallback to request body for backward compatibility
     let userId = (req as any).user?.id || req.body?.user_id;
     const sessionId = (req as any).sessionID;
-    
+
     // Serverless fallback: Try to get user from session store if passport fails
     if (!userId && sessionId && sessionStore) {
         try {
@@ -1089,7 +1089,7 @@ app.post('/api/load-form', async (req, res) => {
                 'SELECT data FROM sessions WHERE session_id = ? AND expires > NOW()',
                 [sessionId]
             );
-            
+
             if (Array.isArray(sessionRows) && sessionRows.length > 0) {
                 const sessionData = (sessionRows as any[])[0].data;
                 if (sessionData) {
@@ -1106,7 +1106,7 @@ app.post('/api/load-form', async (req, res) => {
             console.error('[load-form] Session store fallback error:', fallbackError);
         }
     }
-    
+
     if (!userId) return res.status(400).json({ error: 'User not authenticated' });
     try {
         const [progressRows] = await db.promise().query('SELECT step_number, form_data FROM user_form_progress WHERE user_id = ? LIMIT 1', [userId]);
@@ -1249,7 +1249,7 @@ app.post('/api/company-details', async (req, res) => {
         // Get user_id from authenticated session
         let user_id = (req as any).user?.id;
         const sessionId = (req as any).sessionID;
-        
+
         // Serverless fallback: Try to get user from session store if passport fails
         if (!user_id && sessionId && sessionStore) {
             try {
@@ -1258,7 +1258,7 @@ app.post('/api/company-details', async (req, res) => {
                     'SELECT data FROM sessions WHERE session_id = ? AND expires > NOW()',
                     [sessionId]
                 );
-                
+
                 if (Array.isArray(sessionRows) && sessionRows.length > 0) {
                     const sessionData = (sessionRows as any[])[0].data;
                     if (sessionData) {
@@ -1275,7 +1275,7 @@ app.post('/api/company-details', async (req, res) => {
                 console.error('[company-details] Session store fallback error:', fallbackError);
             }
         }
-        
+
         if (!user_id) {
             return res.status(401).json({ error: 'User not authenticated' });
         }
@@ -1391,7 +1391,7 @@ app.post('/api/times-edited', async (req, res) => {
 
 async function handleGetServicesList(req: express.Request, res: express.Response) {
     try {
-        const response = await fetch('http://122.176.112.254/www-demo-msell-in/public/api/get-services-list', {
+        const response = await fetch('http://salesforce.msell.in/public/api/get-services-list', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -1431,7 +1431,7 @@ async function handleCalculateCustomPlan(req: express.Request, res: express.Resp
 
         console.log('[Calculate Custom Plan] Request payload:', requestBody);
 
-        const response = await fetch('http://122.176.112.254/www-demo-msell-in/public/api/calculate-customized-services-price', {
+        const response = await fetch('http://salesforce.msell.in/public/api/calculate-customized-services-price', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -1569,7 +1569,7 @@ async function handleCreateCustomizedPlan(req: express.Request, res: express.Res
 
         console.log('[Create Customized Plan] Request payload:', requestBody);
 
-        const response = await fetch('http://122.176.112.254/www-demo-msell-in/public/api/create-customized-plan', {
+        const response = await fetch('http://salesforce.msell.in/public/api/create-customized-plan', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -1607,7 +1607,7 @@ app.post("/api/save-trial-user", async (req, res) => {
         console.log('[Save Trial User Proxy] Request body:', req.body);
 
         // Make request to external API
-        const response = await fetch('http://122.176.112.254/www-demo-msell-in/public/api/save-trial-user', {
+        const response = await fetch('http://salesforce.msell.in/public/api/save-trial-user', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

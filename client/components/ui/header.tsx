@@ -24,6 +24,7 @@ export function Header() {
   const [lastScrollY, setLastScrollY] = useState(0);
   // Force mobile (hamburger) view when horizontal space is tight or in portrait orientation at certain widths
   const [forceMobileNav, setForceMobileNav] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const dropdownRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -498,18 +499,18 @@ Gallery", description: "View all our projects", href: "/gallery" },
                   <Button
                     size="sm"
                     className="bg-gradient-to-r from-red-500 to-orange-500 text-white text-xs md:text-xs lg:text-sm xl:text-sm px-3 md:px-3 lg:px-4 xl:px-4 py-1.5 md:py-1.5 lg:py-2 xl:py-2"
-                    onClick={() => {
-                      // Dispatch logout event BEFORE removing session data
+                    disabled={loggingOut}
+                    onClick={async () => {
+                      setLoggingOut(true);
                       window.dispatchEvent(new CustomEvent('user-logout'));
-
-                      // Remove session flag and call logout API
                       localStorage.removeItem('manacle_session');
-                      apiFetch('/api/logout').then(() => {
-                        window.location.href = '/login';
-                      });
+                      try {
+                        await apiFetch('/api/logout');
+                      } catch {}
+                      window.location.href = '/login';
                     }}
                   >
-                    Logout
+                    {loggingOut ? 'Logging out...' : 'Logout'}
                   </Button>
                 ) : (
                   <>

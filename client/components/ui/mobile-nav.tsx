@@ -77,6 +77,8 @@ export const MobileNav: React.FC<MobileNavProps> = ({
 
     // Local state for mobile dropdown (decoupled from desktop header's dropdown state)
     const [openDropdown, setOpenDropdown] = useState<string | null>(clickedDropdown);
+    // Logging out state for logout button UX
+    const [loggingOut, setLoggingOut] = useState(false);
 
     // Sync external reset when menu closes
     useEffect(() => {
@@ -186,34 +188,33 @@ export const MobileNav: React.FC<MobileNavProps> = ({
                     </div>
 
                     {/* Auth Buttons */}
-                    {/* <div className="mt-5 pt-5 border-t border-glass-border flex flex-col space-y-2">
+                    <div className="mt-5 pt-5 border-t border-glass-border flex flex-col space-y-2">
                         {isAuthenticated ? (
                             <Button
                                 className="w-full bg-gradient-to-r from-red-500 to-orange-500 text-white"
-                                onClick={() => {
-                                    // Dispatch logout event BEFORE removing session data
+                                disabled={loggingOut}
+                                onClick={async () => {
+                                    setLoggingOut(true);
                                     window.dispatchEvent(new CustomEvent('user-logout'));
-
-                                    localStorage.removeItem('manacle_session');
-                                    apiFetch('/api/logout').then(() => {
-                                        // Hard redirect to ensure clean state
-                                        window.location.href = '/login';
-                                    });
+                                    try {
+                                        await apiFetch('/api/logout');
+                                    } catch {}
+                                    window.location.href = '/login';
                                 }}
                             >
-                                Logout
+                                {loggingOut ? 'Logging out...' : 'Logout'}
                             </Button>
                         ) : (
                             <>
-                                <Link to="/login" className="w-full" onClick={() => { }}>
+                                <Link to="/login" className="w-full">
                                     <Button className="w-full bg-gradient-to-r from-primary to-accent">Login</Button>
                                 </Link>
-                                <Link to="/signup" className="w-full" onClick={() => { }}>
+                                <Link to="/signup" className="w-full">
                                     <Button className="w-full bg-gradient-to-r from-[#8A2BE2] to-[#4169E1] text-white">Sign Up</Button>
                                 </Link>
                             </>
                         )}
-                    </div> */}
+                    </div>
                 </div>
             </div>
             {/* Animations (utility) */}
